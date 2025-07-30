@@ -1,0 +1,392 @@
+/* ===== Seven-Segment LCD Display Styling ===== */
+
+.compact-lcd {
+  transform: scale(0.7);
+  transform-origin: center center;
+  margin: -10px;
+}
+
+.lcd-display-container {
+  background-color: #121212;
+  padding: 10px;
+  border-radius: 6px;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.8);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #333;
+  gap: 8px;
+  position: relative;
+}
+
+.lcd-digit {
+  position: relative;
+  width: 20px;
+  height: 35px;
+  margin: 0 2px;
+}
+
+.segment {
+  position: absolute;
+  background-color: rgba(0, 0, 0, 0.15);
+  transition: background-color 0.2s;
+}
+
+.segment.on {
+  background-color: #FF5F90;
+  box-shadow: 0 0 8px #FF5F90;
+}
+
+.segment-a, .segment-d, .segment-g {
+  width: 16px;
+  height: 3px;
+  left: 2px;
+}
+
+.segment-a { top: 0; }
+.segment-g { top: 16px; }
+.segment-d { bottom: 0; }
+
+.segment-b, .segment-c, .segment-e, .segment-f {
+  width: 3px;
+  height: 14px;
+}
+
+.segment-b, .segment-c { right: 0; }
+.segment-e, .segment-f { left: 0; }
+
+.segment-b, .segment-f { top: 2px; }
+.segment-c, .segment-e { bottom: 2px; }
+
+.lcd-colon {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  height: 35px;
+  width: 8px;
+  padding: 0 2px;
+}
+
+.colon-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background-color: rgba(255, 95, 144, 0.15);
+}
+
+.colon-dot.on {
+  background-color: #FF5F90;
+  box-shadow: 0 0 8px #FF5F90;
+}
+
+@keyframes lcd-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.animate-lcd-pulse {
+  animation: lcd-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes expand-chat {
+  from { opacity: 0; transform: translateY(20px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes collapse-chat {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(20px) scale(0.95); }
+}
+
+.animate-expand-chat {
+  animation: expand-chat 0.3s ease-out forwards;
+}
+
+.animate-collapse-chat {
+  animation: collapse-chat 0.3s ease-in forwards;
+}
+
+.bot-message {
+  background-color: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  max-width: 80%;
+  line-height: 1.4;
+  font-size: 0.95rem;
+  font-family: 'Inter', sans-serif;
+  text-align: left;
+}
+
+/* ✅ MARKDOWN STYLING ADDED FOR CODE BLOCKS */
+.bot-message pre {
+  background-color: #1e1e1e;
+  color: #f8f8f2;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  font-family: 'Fira Code', monospace;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.bot-message code {
+  background-color: #f4f4f4;
+  color: #d63384;
+  padding: 0.2rem 0.4rem;
+  border-radius: 0.3rem;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.85rem;
+}
+
+.bot-message pre code {
+  background-color: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+.bot-message h1,
+.bot-message h2,
+.bot-message h3 {
+  font-weight: bold;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.bot-message p {
+  margin: 0.4rem 0;
+}
+
+.bot-message strong {
+  font-weight: 600;
+}
+
+.bot-message ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.bot-message ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.bot-message li {
+  margin-bottom: 0.3rem;
+  line-height: 1.5;
+}
+
+/* ✅ ADDITION FOR RTL MARKDOWN */
+.bot-message[dir="rtl"] {
+  direction: rtl;
+  text-align: right;
+}
+
+.bot-message[dir="rtl"] ul,
+.bot-message[dir="rtl"] ol {
+  padding-right: 1.5rem;
+  padding-left: 0;
+  text-align: right;
+}
+
+.bot-message[dir="rtl"] li {
+  direction: rtl;
+  text-align: right;
+}
+
+.user-message {
+  background-color: #FF5F90;
+  color: white;
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  max-width: 80%;
+  white-space: pre-wrap;         /* 🟣 Fixes newline preservation */
+  overflow-wrap: break-word;     /* 🔵 Wraps long words */
+  font-family: 'Inter', sans-serif;
+  line-height: 1.4;
+  font-size: 0.95rem;
+  text-align: left;
+}
+
+.user-message[dir="rtl"] {
+  text-align: right;
+}
+
+.loading-message {
+  background-color: #e5e7eb;
+  color: #4b5563;
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  max-width: 80%;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.digits-container {
+  display: flex;
+  position: relative;
+}
+
+.absolute-colon {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 8px;
+  height: 35px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  align-items: center;
+}
+
+/* ✅ MULTILINE TEXTAREA INPUT FIX */
+textarea {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+textarea.auto-expand {
+  overflow: hidden;
+  resize: none;
+  min-height: 2.5rem;
+  max-height: 12rem;
+  line-height: 1.4;
+  transition: height 0.15s ease-in-out;
+}
+
+/* === NEW: Circular Timer Button Styles === */
+@property --progress-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 360deg;
+}
+
+@keyframes countdown-animation {
+  from { --progress-angle: 360deg; }
+  to   { --progress-angle: 0deg; }
+}
+
+.timer-button {
+  width: 2.25rem;  /* 36px */
+  height: 2.25rem; /* 36px */
+  border-radius: 50%;
+ background-image: conic-gradient(#9ca3af var(--progress-angle), #e5e7eb 0deg);
+  animation: countdown-animation 3s linear forwards;
+}
+
+.record-timer-button {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background-image: conic-gradient(#9ca3af var(--progress-angle), #e5e7eb 0deg);
+  animation: countdown-animation 3s linear forwards;
+}
+
+/* ✨ MODIFIED: On hover, we ONLY pause the animation */
+.timer-button:hover,
+.record-timer-button:hover {
+  animation-play-state: paused;
+}
+
+/* === NEW: Model Selector Styles === */
+.model-selector {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-color: #f9fafb; /* bg-gray-50 */
+  border: 1px solid #d1d5db; /* border-gray-300 */
+  border-radius: 0.375rem; /* rounded-md */
+  padding: 0.5rem 2.5rem 0.5rem 0.75rem; /* p-2 pl-3 pr-10 */
+  font-size: 0.875rem; /* text-sm */
+  line-height: 1.25rem;
+  font-weight: 500;
+  color: #374151; /* text-gray-700 */
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.5rem center;
+  background-repeat: no-repeat;
+  background-size: 1.25em 1.25em;
+  transition: border-color 0.2s;
+}
+
+.model-selector:hover {
+  border-color: #9ca3af; /* border-gray-400 */
+}
+
+.model-selector:focus {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  border-color: #FF5F90;
+  box-shadow: 0 0 0 2px rgba(255, 95, 144, 0.4);
+}
+
+.model-selector:disabled {
+  background-color: #e5e7eb; /* bg-gray-200 */
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* === ✅ NEW: Brain Icon Style === */
+.model-icon {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+@media (max-width: 480px) {
+  .chat-action-buttons {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.65rem;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* This pushes the button group away from the dropdown */
+  .chat-action-buttons button:first-child {
+    margin-left: 0.9rem; /* adjust for the comfy gap you want */
+  }
+
+  .chat-action-buttons button {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    margin: 0;
+    box-sizing: border-box;
+  }
+
+  .chat-action-buttons svg {
+    width: 25px;
+    height: 25px;
+    display: block;
+    margin: 0 auto;
+    padding: 0;
+  }
+
+  textarea {
+    flex: 1 1 0%;
+    min-width: 0;
+    width: 100%;
+    margin: 0;
+    font-size: 1.1rem;
+    padding: 0.65rem 1rem;
+    border-radius: 1.4rem;
+    box-sizing: border-box;
+  }
+
+  .model-selector {
+    width: 100%;
+    min-width: 0;
+    margin-top: 0.5rem;
+  }
+}
