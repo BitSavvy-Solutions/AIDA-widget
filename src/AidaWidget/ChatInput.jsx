@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { HiPaperAirplane, HiOutlineMicrophone, HiStop, HiArrowPath, HiXMark, HiCpuChip } from 'react-icons/hi2';
-import { useTranslation } from 'react-i18next';
 
 const ChatInput = ({
     currentMessage,
@@ -21,9 +20,9 @@ const ChatInput = ({
     cancelAutoRecordTimer, 
     setIsRecordTimerPaused,
     selectedModel,
-    setSelectedModel
+    setSelectedModel,
+    translations // Use the translations prop instead of the hook
 }) => {
-    const { t } = useTranslation();
     const [isHoveringSend, setIsHoveringSend] = useState(false);
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
 
@@ -34,48 +33,48 @@ const ChatInput = ({
     };
 
     const renderSendButton = () => {
-    if (autoSendCountdown !== null) {
+        if (autoSendCountdown !== null) {
+            return (
+                <button
+                    onClick={cancelAutoSendTimer}
+                    onMouseEnter={() => {
+                        setIsHoveringSend(true);
+                        setIsSendTimerPaused(true);
+                    }}
+                    onMouseLeave={() => {
+                        setIsHoveringSend(false);
+                        setIsSendTimerPaused(false);
+                    }}
+                    className="ml-2 flex items-center justify-center timer-button"
+                    style={{ animationPlayState: isHoveringSend ? 'paused' : 'running' }}
+                    aria-label="Cancel auto-send"
+                >
+                    {isHoveringSend ? (
+                        <HiXMark className="h-5 w-5 text-white" />
+                    ) : (
+                        <span className="text-gray-900 font-bold text-base">
+                            {autoSendCountdown}
+                        </span>
+                    )}
+                </button>
+            );
+        }
+
+        const isDisabled = isLoading || isTranscribing || !currentMessage.trim();
+
         return (
             <button
-                onClick={cancelAutoSendTimer}
-                onMouseEnter={() => {
-                    setIsHoveringSend(true);
-                    setIsSendTimerPaused(true);
-                }}
-                onMouseLeave={() => {
-                    setIsHoveringSend(false);
-                    setIsSendTimerPaused(false);
-                }}
-                className="ml-2 flex items-center justify-center timer-button"
-                style={{ animationPlayState: isHoveringSend ? 'paused' : 'running' }}
-                aria-label="Cancel auto-send"
+                onClick={handleSendMessage}
+                disabled={isDisabled}
+                className={`ml-2 p-2 rounded-full transition-opacity disabled:opacity-50 ${
+                    isDisabled ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-900 hover:bg-gray-700'
+                }`}
+                aria-label="Send Message"
             >
-                {isHoveringSend ? (
-                    <HiXMark className="h-5 w-5 text-white" />
-                ) : (
-                    <span className="text-gray-900 font-bold text-base">
-                        {autoSendCountdown}
-                    </span>
-                )}
+                <HiPaperAirplane className={`w-5 h-5 ${isDisabled ? 'text-gray-500' : 'text-white'}`} />
             </button>
         );
-    }
-
-    const isDisabled = isLoading || isTranscribing || !currentMessage.trim();
-
-    return (
-        <button
-            onClick={handleSendMessage}
-            disabled={isDisabled}
-            className={`ml-2 p-2 rounded-full transition-opacity disabled:opacity-50 ${
-                isDisabled ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-900 hover:bg-gray-700'
-            }`}
-            aria-label="Send Message"
-        >
-            <HiPaperAirplane className={`w-5 h-5 ${isDisabled ? 'text-gray-500' : 'text-white'}`} />
-        </button>
-    );
-};
+    };
 
     const renderRecordButton = () => {
         if (autoRecordCountdown !== null) {
@@ -120,7 +119,7 @@ const ChatInput = ({
                         value={currentMessage}
                         onChange={(e) => setCurrentMessage(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder={isTranscribing ? t('chat.transcribing') : (t('chat.inputPlaceholder') || "Type your message...")}
+                        placeholder={isTranscribing ? translations.transcribing : (translations.inputPlaceholder || "Type your message...")}
                         disabled={isLoading || isTranscribing}
                         dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'}
                         rows={1}

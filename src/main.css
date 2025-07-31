@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* You can add any other base styles for your dev page here */
+body {
+  font-family: sans-serif;
+  padding: 1rem;
+}

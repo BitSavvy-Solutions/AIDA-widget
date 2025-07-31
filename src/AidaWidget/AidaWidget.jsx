@@ -3,11 +3,29 @@ import SevenSegmentDisplay from './SevenSegmentDisplay';
 import ChatHeader from './ChatHeader';
 import ChatDisplay from './ChatDisplay';
 import ChatInput from './ChatInput';
-import './ChatbotWidget.css';
+import './AidaWidget.css';
 import { franc } from 'franc';
-import i18n from '../../i18n';
 
-const ChatbotWidget = () => {
+// Define default props to make the widget configurable and robust
+const defaultProps = {
+    apiConfig: {
+        chatUrl: "https://aitut-agentbackend.azurewebsites.net/iverse_agent",
+        transcriptionUrl: "https://aitut-agentbackend.azurewebsites.net/transcribe_audio",
+    },
+    user: {
+        email: "anonymous@example.com",
+    },
+    language: 'en',
+    translations: {
+        transcribing: 'Transcribing...',
+        inputPlaceholder: 'Type your message...'
+    }
+};
+
+const AidaWidget = (props) => {
+    // Merge incoming props with defaults
+    const { apiConfig, user, language, translations } = { ...defaultProps, ...props };
+
     // --- STATE AND REFS ---
     const [isOpen, setIsOpen] = useState(false);
     const [isClosing, setIsClosing] = useState(false);
@@ -26,7 +44,7 @@ const ChatbotWidget = () => {
     const [isSendTimerPaused, setIsSendTimerPaused] = useState(false);
     const [autoRecordCountdown, setAutoRecordCountdown] = useState(null);
     const [isRecordTimerPaused, setIsRecordTimerPaused] = useState(false);
-    const [selectedModel, setSelectedModel] = useState('openai/gpt-4o'); // ✨ NEW: Model state
+    const [selectedModel, setSelectedModel] = useState('openai/gpt-4o');
 
     const lastInputWasVoiceRef = useRef(false);
     const messagesEndRef = useRef(null);
@@ -40,14 +58,13 @@ const ChatbotWidget = () => {
     const isMobile = window.innerWidth <= 768;
     
     // --- API & CONFIG ---
-    const apiUrl = "https://aitut-agentbackend.azurewebsites.net/iverse_agent";
-    const transcriptionApiUrl = "https://aitut-agentbackend.azurewebsites.net/transcribe_audio";
+    const { chatUrl, transcriptionUrl } = apiConfig;
     const supportedLanguages = ["en", "fr", "ar", "hi", "tl", "uk", "sa", "ny"];
     const langMap = {
       eng: "en", fra: "fr", ara: "ar", hin: "hi",
       tgl: "tl", ukr: "uk", san: "sa", nya: "ny"
     };
-    const siteLanguage = i18n.language || 'en';
+    const siteLanguage = language || 'en';
   
     const getLocalizedGreeting = (lang) => {
         switch (lang) {
@@ -190,19 +207,19 @@ const ChatbotWidget = () => {
         startLoadingAnimation();
 
         const detectedLang = franc(userMessage.text);
-        const language = supportedLanguages.includes(langMap[detectedLang]) ? langMap[detectedLang] : "en";
+        const detectedLanguageCode = supportedLanguages.includes(langMap[detectedLang]) ? langMap[detectedLang] : "en";
         
         try {
-            const response = await fetch(apiUrl, {
+            const response = await fetch(chatUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     user_input: userMessage.text,
                     message_history: [...messages, userMessage].map(m => ({ type: m.sender === 'user' ? 'human' : 'ai', content: m.text })).slice(0, -1),
-                    email: "anonymous@example.com",
+                    email: user.email,
                     page_path: window.location.pathname,
-                    language: language,
-                    model: selectedModel, // ✅ MODIFIED: Pass selected model to backend
+                    language: detectedLanguageCode,
+                    model: selectedModel,
                 }),
             });
             if (!response.ok || !response.body) throw new Error(`HTTP error! status: ${response.status}`);
@@ -234,11 +251,8 @@ const ChatbotWidget = () => {
         } finally {
             stopLoadingAnimation();
             setIsLoading(false); 
-            // if (lastInputWasVoiceRef.current) {
-            //     startAutoRecordTimer();
-            // }
         }
-    }, [messages, currentMessage, isLoading, selectedModel]); // ✅ MODIFIED: Add selectedModel to dependencies
+    }, [messages, currentMessage, isLoading, selectedModel, chatUrl, user.email]);
     
     useEffect(() => {
         if (isSendTimerPaused || autoSendCountdown === null) return;
@@ -279,12 +293,6 @@ const ChatbotWidget = () => {
         setIsSendTimerPaused(false);
     }, [cancelAutoSendTimer]);
     
-    const startAutoRecordTimer = useCallback(() => {
-        cancelAutoRecordTimer();
-        setAutoRecordCountdown(3);
-        setIsRecordTimerPaused(false);
-    }, [cancelAutoRecordTimer]);
-
     const transcribeAudioBlob = async (audioBlob) => {
         if (audioBlob.size === 0) return;
         const formData = new FormData();
@@ -292,7 +300,7 @@ const ChatbotWidget = () => {
         setIsTranscribing(true);
 
         try {
-            const response = await fetch(transcriptionApiUrl, { method: 'POST', body: formData });
+            const response = await fetch(transcriptionUrl, { method: 'POST', body: formData });
             if (!response.ok) throw new Error(`Transcription failed: ${response.statusText}`);
             const result = await response.json();
             const data = typeof result._HttpResponse__body === 'string' ? JSON.parse(result._HttpResponse__body) : result;
@@ -332,14 +340,16 @@ const ChatbotWidget = () => {
         } else {
             setIsOpen(true);
             startBlinking();
-               if (isMobile) setIsFullscreen(true); 
+            if (isMobile) setIsFullscreen(true); 
             const stored = JSON.parse(sessionStorage.getItem('chatMessages'));
             if (!stored || stored.length === 0) {
                 const greeting = { id: `bot-${Date.now()}`, text: getLocalizedGreeting(siteLanguage), sender: 'bot' };
                 setMessages([greeting]);
             }
         }
-    }, [isOpen, isRecording, siteLanguage, startBlinking, stopBlinking, stopRecording, cancelAutoSendTimer, cancelAutoRecordTimer]);
+    }, [isOpen, isRecording, siteLanguage, startBlinking, stopBlinking, stopRecording, cancelAutoSendTimer, cancelAutoRecordTimer, isMobile]);
+
+
 
     const handleRecordButtonClick = () => {
         if (isLoading || isTranscribing) return;
@@ -356,7 +366,10 @@ const ChatbotWidget = () => {
     
     // --- RENDER ---
     return (
-        <div className={`fixed bottom-5 right-5 z-50 ${isFullscreen ? 'inset-0 w-full h-full' : ''}`}>
+        <div className={`z-50 ${isFullscreen 
+            ? 'fixed inset-0 w-full h-full' 
+            : 'fixed bottom-5 right-5'
+        }`}>
             {!isOpen && (<button onClick={toggleChat} className="bg-gray-900 text-white rounded-lg p-2 flex"><div className="compact-lcd"><SevenSegmentDisplay text={displayText} className="animate-lcd-pulse" /></div></button>)}
             {isOpen && (
                 <div className={`bg-white rounded-xl shadow-2xl flex flex-col ${isFullscreen ? 'w-full h-full' : 'w-80 sm:w-96 h-[500px]'} border ${isClosing ? 'animate-collapse-chat' : 'animate-expand-chat'}`}>
@@ -380,8 +393,9 @@ const ChatbotWidget = () => {
                         autoRecordCountdown={autoRecordCountdown}
                         cancelAutoRecordTimer={cancelAutoRecordTimer}
                         setIsRecordTimerPaused={setIsRecordTimerPaused}
-                        selectedModel={selectedModel} // ✅ MODIFIED: Pass state down
-                        setSelectedModel={setSelectedModel} // ✅ MODIFIED: Pass setter down
+                        selectedModel={selectedModel}
+                        setSelectedModel={setSelectedModel}
+                        translations={translations}
                     />
                 </div>
             )}
@@ -389,4 +403,4 @@ const ChatbotWidget = () => {
     );
 };
 
-export default ChatbotWidget;
+export default AidaWidget;

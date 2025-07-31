@@ -1,6 +1,6 @@
 // src/components/SevenSegmentDisplay.jsx
 import React from 'react';
-import './ChatbotWidget.css';
+import './AidaWidget.css';
 
 /*
  Seven-segment display layout:

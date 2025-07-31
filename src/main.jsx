@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import AidaWidget from './AidaWidget/ChatbotWidget';
+import './main.css';
+import AidaWidget from './AidaWidget/AidaWidget';
 
 /**
  * This is the public API for the AidaWidget.
@@ -10,7 +11,15 @@ import AidaWidget from './AidaWidget/ChatbotWidget';
  * @param {object} props - The props to pass to the AidaWidget component.
  */
 function render(selector, props) {
-  const rootElement = document.querySelector(selector);
+  let rootElement = document.querySelector(selector);
+  
+  // If element doesn't exist, create it and append to body
+  if (!rootElement) {
+    rootElement = document.createElement('div');
+    rootElement.id = selector.replace('#', '');
+    document.body.appendChild(rootElement);
+  }
+  
   if (rootElement) {
     const root = ReactDOM.createRoot(rootElement);
     root.render(
@@ -25,9 +34,18 @@ function render(selector, props) {
 
 // --- FOR LOCAL DEVELOPMENT ONLY ---
 // This will run automatically when you run `npm run dev`
-// It looks for a div with id="root" in your local index.html
 if (import.meta.env.DEV) {
-  render('#root', {
+  // Create a floating container instead of using existing #root
+  const widgetContainerId = 'aida-widget-container';
+  
+  // Create container if it doesn't exist
+  if (!document.getElementById(widgetContainerId)) {
+    const container = document.createElement('div');
+    container.id = widgetContainerId;
+    document.body.appendChild(container);
+  }
+  
+  render(`#${widgetContainerId}`, {
     // You can put default props here for testing
     language: 'en',
     user: { email: 'dev-user@example.com' },
