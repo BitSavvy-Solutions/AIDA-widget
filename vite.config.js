@@ -7,6 +7,14 @@ import { copyFileSync, mkdirSync, existsSync } from 'fs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
+  define: {
+    // Replace process.env.NODE_ENV in the browser build
+    'process.env.NODE_ENV': JSON.stringify('production'),
+    // Add fallbacks for other process references
+    'process.env': JSON.stringify({}),
+    'process.platform': JSON.stringify(''),
+    'process.versions': JSON.stringify({})
+  },
   plugins: [
     react(),
     {
@@ -36,5 +44,10 @@ export default defineConfig({
       formats: ['umd'],
     },
     minify: false,
+    sourcemap: true,
+    rollupOptions: {
+      // Bundle all dependencies to avoid browser compatibility issues
+      external: [], // Empty means include everything
+    }
   },
 });
