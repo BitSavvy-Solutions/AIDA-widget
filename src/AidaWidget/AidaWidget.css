@@ -198,6 +198,31 @@
   text-align: right;
 }
 
+
+.bot-message table,
+.user-message table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.5rem;
+  overflow-x: auto;
+  display: block;
+}
+
+.bot-message th,
+.bot-message td,
+.user-message th,
+.user-message td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+.bot-message th,
+.user-message th {
+  background-color: #f2f2f2;
+  font-weight: bold;
+}
+
 .user-message {
   background-color: #FF5F90;
   color: white;
@@ -214,6 +239,64 @@
 
 .user-message[dir="rtl"] {
   text-align: right;
+}
+
+
+.user-message strong {
+  font-weight: 600;
+}
+
+.user-message em {
+  font-style: italic;
+}
+
+.user-message code {
+  background-color: #fff0f5;
+  color: #1a1a1a;
+  padding: 0.2rem 0.4rem;
+  border-radius: 0.3rem;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.85rem;
+}
+
+.user-message pre {
+  background-color: #1e1e1e;
+  color: #f8f8f2;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  font-family: 'Fira Code', monospace;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.user-message pre code {
+  background-color: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+.user-message p {
+  margin: 0.4rem 0;
+}
+
+.user-message ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.user-message ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.user-message li {
+  margin-bottom: 0.3rem;
+  line-height: 1.5;
 }
 
 .loading-message {
@@ -335,6 +418,17 @@ textarea.auto-expand {
   width: 28px;
   height: 28px;
   object-fit: contain;
+}
+
+.markdown-link {
+  color: #1a1a1a;
+  text-decoration: underline;
+  transition: color 0.2s ease;
+}
+
+.markdown-link:hover {
+  color: #2563eb; /* Tailwind blue-600 */
+  cursor: pointer;
 }
 
 @media (max-width: 480px) {
