@@ -45,6 +45,7 @@ const AidaWidget = (props) => {
     const [autoRecordCountdown, setAutoRecordCountdown] = useState(null);
     const [isRecordTimerPaused, setIsRecordTimerPaused] = useState(false);
     const [selectedModel, setSelectedModel] = useState('openai/gpt-4o');
+    const [editingMessageId, setEditingMessageId] = useState(null);
 
     const lastInputWasVoiceRef = useRef(false);
     const messagesEndRef = useRef(null);
@@ -199,6 +200,71 @@ const AidaWidget = (props) => {
         cancelAutoSendTimer();
         cancelAutoRecordTimer();
 
+        // If editing an existing user message, update it and re-run assistant
+        if (editingMessageId) {
+            const trimmed = messageText.trim();
+            const idx = messages.findIndex(m => m.id === editingMessageId);
+            if (idx === -1) return; // safety
+            const userMessage = { ...messages[idx], text: trimmed, edited: true };
+            const historyBefore = messages.slice(0, idx);
+            const botMessageId = `bot-${Date.now()}`;
+
+            // Replace thread after the edited user message and add fresh bot placeholder
+            setMessages([...historyBefore, userMessage, { id: botMessageId, text: '', sender: 'bot' }]);
+            setCurrentMessage('');
+            setEditingMessageId(null);
+            setIsLoading(true);
+            startLoadingAnimation();
+
+            const detectedLang = franc(userMessage.text);
+            const detectedLanguageCode = supportedLanguages.includes(langMap[detectedLang]) ? langMap[detectedLang] : "en";
+
+            try {
+                const response = await fetch(chatUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_input: userMessage.text,
+                        message_history: historyBefore.map(m => ({ type: m.sender === 'user' ? 'human' : 'ai', content: m.text })),
+                        email: user.email,
+                        page_path: window.location.pathname,
+                        language: detectedLanguageCode,
+                        model: selectedModel,
+                    }),
+                });
+                if (!response.ok || !response.body) throw new Error(`HTTP error! status: ${response.status}`);
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let accumulated = '';
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    accumulated += decoder.decode(value, { stream: true });
+                    const parts = accumulated.split('\n\n');
+                    accumulated = parts.pop();
+                    for (const part of parts) {
+                        if (part.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(part.substring(6));
+                                if (data.delta_content) setMessages(p => p.map(m => m.id === botMessageId ? { ...m, text: m.text + data.delta_content } : m));
+                            } catch (e) {
+                                console.error("Stream parse error:", part.substring(6), e);
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error("Chatbot API error:", error);
+                setMessages(p => p.map(m => m.id === botMessageId ? { ...m, text: "Oops! I couldn't connect. Please try again." } : m));
+                setDisplayText("ERR:0");
+            } finally {
+                stopLoadingAnimation();
+                setIsLoading(false);
+            }
+            return;
+        }
+
         const userMessage = { id: `user-${Date.now()}`, text: messageText.trim(), sender: 'user' };
         const botMessageId = `bot-${Date.now()}`;
         setMessages(prev => [...prev, userMessage, { id: botMessageId, text: '', sender: 'bot' }]);
@@ -252,7 +318,7 @@ const AidaWidget = (props) => {
             stopLoadingAnimation();
             setIsLoading(false); 
         }
-    }, [messages, currentMessage, isLoading, selectedModel, chatUrl, user.email]);
+    }, [messages, currentMessage, isLoading, selectedModel, chatUrl, user.email, editingMessageId]);
     
     useEffect(() => {
         if (isSendTimerPaused || autoSendCountdown === null) return;
@@ -374,12 +440,26 @@ const AidaWidget = (props) => {
             {isOpen && (
                 <div className={`bg-white rounded-xl shadow-2xl flex flex-col ${isFullscreen ? 'w-full h-full' : 'w-80 sm:w-96 h-[500px]'} border ${isClosing ? 'animate-collapse-chat' : 'animate-expand-chat'}`}>
                     <ChatHeader displayText={displayText} resetChat={() => setMessages([])} toggleFullscreen={() => setIsFullscreen(p => !p)} toggleChat={toggleChat} />
-                    <ChatDisplay messages={messages} messagesEndRef={messagesEndRef} siteLanguage={siteLanguage} />
+                    <ChatDisplay
+                        messages={messages}
+                        messagesEndRef={messagesEndRef}
+                        siteLanguage={siteLanguage}
+                        onStartEdit={(id, text) => {
+                            setCurrentMessage(text);
+                            setEditingMessageId(id);
+                            setTimeout(() => inputRef.current?.focus(), 0);
+                        }}
+                    />
                     <ChatInput
                         currentMessage={currentMessage}
                         setCurrentMessage={handleInputChange}
                         handleSendMessage={() => stableHandleSendMessage()}
-                        handleKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), stableHandleSendMessage())}
+                        handleKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                stableHandleSendMessage();
+                            }
+                        }}
                         handleRecordButtonClick={handleRecordButtonClick}
                         inputRef={inputRef}
                         isLoading={isLoading}
@@ -396,6 +476,8 @@ const AidaWidget = (props) => {
                         selectedModel={selectedModel}
                         setSelectedModel={setSelectedModel}
                         translations={translations}
+                        isEditing={Boolean(editingMessageId)}
+                        cancelEdit={() => { setEditingMessageId(null); setCurrentMessage(''); }}
                     />
                 </div>
             )}

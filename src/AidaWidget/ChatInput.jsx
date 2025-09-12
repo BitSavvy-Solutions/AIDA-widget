@@ -21,7 +21,9 @@ const ChatInput = ({
     setIsRecordTimerPaused,
     selectedModel,
     setSelectedModel,
-    translations // Use the translations prop instead of the hook
+    translations, // Use the translations prop instead of the hook
+    isEditing = false,
+    cancelEdit
 }) => {
     const [isHoveringSend, setIsHoveringSend] = useState(false);
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
@@ -106,6 +108,15 @@ const ChatInput = ({
 
     return (
         <div className="p-4 border-t border-gray-200 bg-white rounded-b-xl">
+            {isEditing && (
+                <div className="mb-2 -mt-1 flex items-center justify-between rounded-md bg-amber-50 border border-amber-200 px-3 py-1.5 text-amber-800 text-sm">
+                    <span>Editing message — press Enter to save</span>
+                    <button onClick={cancelEdit} className="flex items-center gap-1 text-amber-800 hover:text-amber-900" aria-label="Cancel edit">
+                        <HiXMark className="h-4 w-4" />
+                        Cancel
+                    </button>
+                </div>
+            )}
             {/* Text Input Area */}
             <div className="flex items-end rounded-lg border border-gray-300 bg-gray-50 px-3 py-1 mb-3">
                 {isRecording ? (
@@ -119,7 +130,7 @@ const ChatInput = ({
                         value={currentMessage}
                         onChange={(e) => setCurrentMessage(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder={isTranscribing ? translations.transcribing : (translations.inputPlaceholder || "Type your message...")}
+                        placeholder={isEditing ? "Edit your message..." : isTranscribing ? translations.transcribing : (translations.inputPlaceholder || "Type your message...")}
                         disabled={isLoading || isTranscribing}
                         dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'}
                         rows={1}
