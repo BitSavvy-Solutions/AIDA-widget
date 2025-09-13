@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { HiPaperAirplane, HiOutlineMicrophone, HiStop, HiArrowPath, HiXMark, HiCpuChip } from 'react-icons/hi2';
 
 const ChatInput = ({
@@ -23,10 +23,15 @@ const ChatInput = ({
     setSelectedModel,
     translations, // Use the translations prop instead of the hook
     isEditing = false,
-    cancelEdit
+    cancelEdit,
+    onImagesSelected,
+    pendingImages = [],
+    onRemovePendingImage,
+    hasPendingImages = false
 }) => {
     const [isHoveringSend, setIsHoveringSend] = useState(false);
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
+    const imageInputRef = useRef(null);
 
     const formatTime = (seconds) => {
         const minutes = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -62,7 +67,7 @@ const ChatInput = ({
             );
         }
 
-        const isDisabled = isLoading || isTranscribing || !currentMessage.trim();
+        const isDisabled = isLoading || isTranscribing || (!currentMessage.trim() && !hasPendingImages);
 
         return (
             <button
@@ -106,6 +111,38 @@ const ChatInput = ({
         );
     };
 
+    const renderImageButton = () => (
+        <>
+            <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                    const files = Array.from(e.target.files || []);
+                    if (files.length && onImagesSelected) onImagesSelected(files);
+                    // Allow re-selecting the same file
+                    e.target.value = '';
+                }}
+            />
+            <button
+                type="button"
+                onClick={() => imageInputRef.current?.click()}
+                disabled={isLoading || isTranscribing || isEditing}
+                className="ml-2 p-2 rounded-full bg-gray-900 text-white transition-opacity hover:bg-gray-700 disabled:opacity-50 flex items-center justify-center"
+                aria-label="Add image"
+                title="Add image"
+            >
+                {/* Icon only (no inner square), sized to match other buttons */}
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 16l4.5-4.5 3.2 3.2 3.8-4.6 4.5 5.9" />
+                    <circle cx="9.2" cy="8.8" r="1.4" fill="currentColor" />
+                </svg>
+            </button>
+        </>
+    );
+
     return (
         <div className="p-4 border-t border-gray-200 bg-white rounded-b-xl">
             {isEditing && (
@@ -117,6 +154,26 @@ const ChatInput = ({
                     </button>
                 </div>
             )}
+            {/* Selected image previews */}
+            {pendingImages.length > 0 && (
+                <div className="mb-2 flex flex-wrap gap-2">
+                    {pendingImages.map(img => (
+                        <div key={img.id} className="relative w-16 h-16 border border-gray-200 rounded-md overflow-hidden">
+                            <img src={img.src} alt={img.name || 'upload'} className="w-full h-full object-cover" />
+                            <button
+                                type="button"
+                                onClick={() => onRemovePendingImage && onRemovePendingImage(img.id)}
+                                className="absolute -top-2 -right-2 bg-white border border-gray-300 rounded-full p-0.5 shadow hover:bg-gray-50"
+                                aria-label="Remove image"
+                                title="Remove image"
+                            >
+                                <HiXMark className="w-4 h-4 text-gray-700" />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+
             {/* Text Input Area */}
             <div className="flex items-end rounded-lg border border-gray-300 bg-gray-50 px-3 py-1 mb-3">
                 {isRecording ? (
@@ -159,6 +216,7 @@ const ChatInput = ({
 
                 {/* Right side: Action Buttons */}
                 <div className="flex items-center chat-action-buttons">
+                    {renderImageButton()}
                     {renderRecordButton()}
                     {renderSendButton()}
                 </div>

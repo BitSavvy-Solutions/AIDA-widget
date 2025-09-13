@@ -45,6 +45,7 @@ const AidaWidget = (props) => {
     const [autoRecordCountdown, setAutoRecordCountdown] = useState(null);
     const [isRecordTimerPaused, setIsRecordTimerPaused] = useState(false);
     const [selectedModel, setSelectedModel] = useState('openai/gpt-4o');
+    const [pendingImages, setPendingImages] = useState([]); // [{ id, src, name, type }]
     const [editingMessageId, setEditingMessageId] = useState(null);
 
     const lastInputWasVoiceRef = useRef(false);
@@ -195,7 +196,8 @@ const AidaWidget = (props) => {
     
     const stableHandleSendMessage = useCallback(async (messageToSend = null) => {
         const messageText = messageToSend ?? currentMessage;
-        if (!messageText.trim() || isLoading) return;
+        const hasImages = pendingImages && pendingImages.length > 0;
+        if ((!messageText.trim() && !hasImages) || isLoading) return;
 
         cancelAutoSendTimer();
         cancelAutoRecordTimer();
@@ -205,6 +207,7 @@ const AidaWidget = (props) => {
             const trimmed = messageText.trim();
             const idx = messages.findIndex(m => m.id === editingMessageId);
             if (idx === -1) return; // safety
+            // For simplicity, keep original images during edit; do not attach new pending images
             const userMessage = { ...messages[idx], text: trimmed, edited: true };
             const historyBefore = messages.slice(0, idx);
             const botMessageId = `bot-${Date.now()}`;
@@ -220,17 +223,28 @@ const AidaWidget = (props) => {
             const detectedLanguageCode = supportedLanguages.includes(langMap[detectedLang]) ? langMap[detectedLang] : "en";
 
             try {
+                // Choose a vision-capable model automatically if images are present
+                const hasEditImages = Array.isArray(userMessage.images) && userMessage.images.length > 0;
+                const visionModels = new Set(['openai/gpt-4o', 'google/gemini-flash-1.5', 'google/gemini-pro-vision']);
+                const modelToUse = hasEditImages && !visionModels.has(selectedModel) ? 'google/gemini-flash-1.5' : selectedModel;
+
+                const payload = {
+                    user_input: userMessage.text,
+                    message_history: historyBefore.map(m => ({ type: m.sender === 'user' ? 'human' : 'ai', content: m.text })),
+                    email: user.email,
+                    page_path: window.location.pathname,
+                    language: detectedLanguageCode,
+                    model: modelToUse,
+                    images: userMessage.images || []
+                };
+                if (hasEditImages) {
+                    payload.image_data_url = userMessage.images[0]?.src;
+                }
+
                 const response = await fetch(chatUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        user_input: userMessage.text,
-                        message_history: historyBefore.map(m => ({ type: m.sender === 'user' ? 'human' : 'ai', content: m.text })),
-                        email: user.email,
-                        page_path: window.location.pathname,
-                        language: detectedLanguageCode,
-                        model: selectedModel,
-                    }),
+                    body: JSON.stringify(payload),
                 });
                 if (!response.ok || !response.body) throw new Error(`HTTP error! status: ${response.status}`);
 
@@ -265,10 +279,9 @@ const AidaWidget = (props) => {
             return;
         }
 
-        const userMessage = { id: `user-${Date.now()}`, text: messageText.trim(), sender: 'user' };
+        const userMessage = { id: `user-${Date.now()}`, text: messageText.trim(), sender: 'user', images: hasImages ? pendingImages : [] };
         const botMessageId = `bot-${Date.now()}`;
         setMessages(prev => [...prev, userMessage, { id: botMessageId, text: '', sender: 'bot' }]);
-        setCurrentMessage('');
         setIsLoading(true);
         startLoadingAnimation();
 
@@ -276,19 +289,34 @@ const AidaWidget = (props) => {
         const detectedLanguageCode = supportedLanguages.includes(langMap[detectedLang]) ? langMap[detectedLang] : "en";
         
         try {
+            // Ensure a vision-capable model when sending an image
+            const visionModels = new Set(['openai/gpt-4o', 'google/gemini-flash-1.5', 'google/gemini-pro-vision']);
+            const modelToUse = hasImages && !visionModels.has(selectedModel) ? 'google/gemini-flash-1.5' : selectedModel;
+
+            const payload = {
+                user_input: userMessage.text,
+                message_history: [...messages, userMessage]
+                    .map(m => ({ type: m.sender === 'user' ? 'human' : 'ai', content: m.text }))
+                    .slice(0, -1),
+                email: user.email,
+                page_path: window.location.pathname,
+                language: detectedLanguageCode,
+                model: modelToUse,
+                images: userMessage.images || []
+            };
+            if (hasImages) {
+                payload.image_data_url = userMessage.images[0]?.src;
+            }
+
             const response = await fetch(chatUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    user_input: userMessage.text,
-                    message_history: [...messages, userMessage].map(m => ({ type: m.sender === 'user' ? 'human' : 'ai', content: m.text })).slice(0, -1),
-                    email: user.email,
-                    page_path: window.location.pathname,
-                    language: detectedLanguageCode,
-                    model: selectedModel,
-                }),
+                body: JSON.stringify(payload),
             });
             if (!response.ok || !response.body) throw new Error(`HTTP error! status: ${response.status}`);
+            // Clear input and staged images after a successful send
+            setCurrentMessage('');
+            setPendingImages([]);
             
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
@@ -318,7 +346,7 @@ const AidaWidget = (props) => {
             stopLoadingAnimation();
             setIsLoading(false); 
         }
-    }, [messages, currentMessage, isLoading, selectedModel, chatUrl, user.email, editingMessageId]);
+    }, [messages, currentMessage, isLoading, selectedModel, chatUrl, user.email, editingMessageId, pendingImages]);
     
     useEffect(() => {
         if (isSendTimerPaused || autoSendCountdown === null) return;
@@ -429,6 +457,38 @@ const AidaWidget = (props) => {
         cancelAutoRecordTimer();
         lastInputWasVoiceRef.current = false;
     };
+
+    // --- IMAGE UPLOAD HELPERS ---
+    const handleImagesSelected = async (files) => {
+        if (!files || files.length === 0) return;
+        const readAsDataURL = (file) => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+        const results = [];
+        for (const file of files) {
+            try {
+                const src = await readAsDataURL(file);
+                results.push({ id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, src, name: file.name, type: file.type });
+            } catch (e) {
+                console.error('Failed to read image', file?.name, e);
+            }
+        }
+        if (results.length > 0) {
+            setPendingImages(prev => [...prev, ...results]);
+            // Ensure a vision-capable model is selected when images are attached
+            const visionModels = new Set(['openai/gpt-4o', 'google/gemini-flash-1.5', 'google/gemini-pro-vision']);
+            if (!visionModels.has(selectedModel)) {
+                setSelectedModel('openai/gpt-4o');
+            }
+        }
+    };
+
+    const removePendingImage = (id) => {
+        setPendingImages(prev => prev.filter(img => img.id !== id));
+    };
     
     // --- RENDER ---
     return (
@@ -478,6 +538,10 @@ const AidaWidget = (props) => {
                         translations={translations}
                         isEditing={Boolean(editingMessageId)}
                         cancelEdit={() => { setEditingMessageId(null); setCurrentMessage(''); }}
+                        onImagesSelected={handleImagesSelected}
+                        pendingImages={pendingImages}
+                        onRemovePendingImage={removePendingImage}
+                        hasPendingImages={pendingImages.length > 0}
                     />
                 </div>
             )}

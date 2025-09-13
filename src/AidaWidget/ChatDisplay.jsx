@@ -80,6 +80,14 @@ const ChatDisplay = ({ messages, messagesEndRef, siteLanguage, onStartEdit }) =>
                             className={`${message.sender === 'user' ? 'user-message rounded-l-xl' : 'bot-message rounded-r-xl'}`}
                             dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'}
                         >
+                            {/* Attached images (if any) */}
+                            {Array.isArray(message.images) && message.images.length > 0 && (
+                                <div className="space-y-2 mb-2">
+                                    {message.images.map((img) => (
+                                        <img key={img.id || img.src} src={img.src} alt={img.name || 'uploaded'} className="rounded-lg border border-gray-200 max-w-full max-h-64 object-contain" />
+                                    ))}
+                                </div>
+                            )}
                             <ReactMarkdown
                                 remarkPlugins={[remarkGfm]}
                                 components={{
