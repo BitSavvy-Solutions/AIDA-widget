@@ -238,7 +238,8 @@ const AidaWidget = (props) => {
                     images: userMessage.images || []
                 };
                 if (hasEditImages) {
-                    payload.image_data_url = userMessage.images[0]?.src;
+                    const urls = (userMessage.images || []).map(img => img.src).filter(Boolean);
+                    if (urls.length > 0) payload.image_data_urls = urls;
                 }
 
                 const response = await fetch(chatUrl, {
@@ -305,7 +306,8 @@ const AidaWidget = (props) => {
                 images: userMessage.images || []
             };
             if (hasImages) {
-                payload.image_data_url = userMessage.images[0]?.src;
+                const urls = (userMessage.images || []).map(img => img.src).filter(Boolean);
+                if (urls.length > 0) payload.image_data_urls = urls;
             }
 
             const response = await fetch(chatUrl, {
@@ -467,22 +469,21 @@ const AidaWidget = (props) => {
             reader.onerror = reject;
             reader.readAsDataURL(file);
         });
-        const results = [];
-        for (const file of files) {
-            try {
+        try {
+            const results = await Promise.all(Array.from(files).map(async (file) => {
                 const src = await readAsDataURL(file);
-                results.push({ id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, src, name: file.name, type: file.type });
-            } catch (e) {
-                console.error('Failed to read image', file?.name, e);
+                return { id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, src, name: file.name, type: file.type };
+            }));
+            if (results.length > 0) {
+                setPendingImages(prev => [...prev, ...results]);
+                // Ensure a vision-capable model is selected when images are attached
+                const visionModels = new Set(['openai/gpt-4o', 'google/gemini-flash-1.5', 'google/gemini-pro-vision']);
+                if (!visionModels.has(selectedModel)) {
+                    setSelectedModel('openai/gpt-4o');
+                }
             }
-        }
-        if (results.length > 0) {
-            setPendingImages(prev => [...prev, ...results]);
-            // Ensure a vision-capable model is selected when images are attached
-            const visionModels = new Set(['openai/gpt-4o', 'google/gemini-flash-1.5', 'google/gemini-pro-vision']);
-            if (!visionModels.has(selectedModel)) {
-                setSelectedModel('openai/gpt-4o');
-            }
+        } catch (e) {
+            console.error('Failed to read image(s)', e);
         }
     };
 

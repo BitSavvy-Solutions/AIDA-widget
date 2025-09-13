@@ -156,7 +156,7 @@ const ChatInput = ({
             )}
             {/* Selected image previews */}
             {pendingImages.length > 0 && (
-                <div className="mb-2 flex flex-wrap gap-2">
+                <div className="mb-2 flex gap-2 overflow-x-auto no-scrollbar py-1">
                     {pendingImages.map(img => (
                         <div key={img.id} className="relative w-16 h-16 border border-gray-200 rounded-md overflow-hidden">
                             <img src={img.src} alt={img.name || 'upload'} className="w-full h-full object-cover" />

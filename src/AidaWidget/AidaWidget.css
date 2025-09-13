@@ -484,3 +484,12 @@ textarea.auto-expand {
     margin-top: 0.5rem;
   }
 }
+
+/* Hide horizontal scrollbar for image preview strip */
+.no-scrollbar {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
