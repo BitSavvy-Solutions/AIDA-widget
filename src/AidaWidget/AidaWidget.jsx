@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import SevenSegmentDisplay from './SevenSegmentDisplay';
 import ChatHeader from './ChatHeader';
+import ChatHistoryPanel from './ChatHistoryPanel';
 import ChatDisplay from './ChatDisplay';
 import ChatInput from './ChatInput';
 import './AidaWidget.css';
@@ -67,6 +68,31 @@ const AidaWidget = (props) => {
     const timerIntervalRef = useRef(null);
     const [isAtBottom, setIsAtBottom] = useState(true);
     const [autoScrollPaused, setAutoScrollPaused] = useState(false);
+    const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+    const HISTORY_KEY = 'aida-chat-history';
+    const [historyItems, setHistoryItems] = useState(() => {
+        try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch { return []; }
+    });
+
+    const persistHistory = (items) => {
+        setHistoryItems(items);
+        try { localStorage.setItem(HISTORY_KEY, JSON.stringify(items)); } catch {}
+    };
+
+    const buildTitleFromMessages = (msgs) => {
+        const firstUser = (msgs || []).find(m => m.sender === 'user' && (m.text || '').trim());
+        const base = firstUser ? firstUser.text.trim() : 'Untitled chat';
+        return base.length > 60 ? base.slice(0, 57) + '…' : base;
+    };
+
+    const saveCurrentChatToHistory = () => {
+        if (!messages || messages.length === 0) return; // nothing to save
+        const id = `chat-${Date.now()}`;
+        const title = buildTitleFromMessages(messages) || `Chat ${new Date().toLocaleString()}`;
+        const entry = { id, title, createdAt: Date.now(), messages };
+        const next = [entry, ...historyItems].slice(0, 50);
+        persistHistory(next);
+    };
 
     const isMobile = window.innerWidth <= 768;
     
@@ -528,11 +554,27 @@ const AidaWidget = (props) => {
                 >
                     <ChatHeader
                         displayText={displayText}
-                        resetChat={() => setMessages([])}
+                        resetChat={() => { saveCurrentChatToHistory(); setMessages([]); sessionStorage.setItem('chatMessages', JSON.stringify([])); }}
                         toggleFullscreen={() => setIsFullscreen(p => !p)}
                         toggleChat={toggleChat}
                         theme={theme}
                         onToggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
+                        onToggleHistory={() => setIsHistoryOpen(v => !v)}
+                    />
+                    <ChatHistoryPanel
+                        theme={theme}
+                        open={isHistoryOpen}
+                        onClose={() => setIsHistoryOpen(false)}
+                        sessions={historyItems}
+                        onSelect={(s) => {
+                            setMessages(s.messages || []);
+                            sessionStorage.setItem('chatMessages', JSON.stringify(s.messages || []));
+                            setIsHistoryOpen(false);
+                        }}
+                        onDelete={(id) => {
+                            const filtered = historyItems.filter(h => h.id !== id);
+                            persistHistory(filtered);
+                        }}
                     />
                     <ChatDisplay
                         messages={messages}

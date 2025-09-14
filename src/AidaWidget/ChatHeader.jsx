@@ -1,8 +1,8 @@
 import React from 'react';
-import { HiXMark, HiArrowsPointingOut, HiPlus, HiOutlineSun, HiOutlineMoon } from 'react-icons/hi2';
+import { HiXMark, HiArrowsPointingOut, HiPlus, HiOutlineSun, HiOutlineMoon, HiClock } from 'react-icons/hi2';
 import SevenSegmentDisplay from './SevenSegmentDisplay';
 
-const ChatHeader = ({ displayText, resetChat, toggleFullscreen, toggleChat, theme = 'dark', onToggleTheme }) => {
+const ChatHeader = ({ displayText, resetChat, toggleFullscreen, toggleChat, theme = 'dark', onToggleTheme, onToggleHistory }) => {
     const isDark = theme === 'dark';
     // Use a solid dark shade so it looks identical in both themes
     const headerColors = 'bg-[#0f172a] text-white backdrop-blur-md border-b border-white/10';
@@ -20,6 +20,11 @@ const ChatHeader = ({ displayText, resetChat, toggleFullscreen, toggleChat, them
                         ) : (
                             <HiOutlineSun className="w-5 h-5" />
                         )}
+                    </button>
+                )}
+                {onToggleHistory && (
+                    <button onClick={onToggleHistory} className={`p-1 rounded-full ${hoverColor}`} aria-label="Open chat history" title="Chat history">
+                        <HiClock className="w-5 h-5" />
                     </button>
                 )}
                 <button onClick={resetChat} className={`p-1 rounded-full ${hoverColor}`} aria-label="Reset Chat">
