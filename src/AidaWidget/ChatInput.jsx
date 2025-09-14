@@ -13,6 +13,7 @@ const ChatInput = ({
     isRecording,
     elapsedTime,
     siteLanguage,
+    theme = 'dark',
     autoSendCountdown,
     cancelAutoSendTimer,
     setIsSendTimerPaused,
@@ -32,6 +33,7 @@ const ChatInput = ({
     const [isHoveringSend, setIsHoveringSend] = useState(false);
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
     const imageInputRef = useRef(null);
+    const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
 
     const formatTime = (seconds) => {
         const minutes = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -59,7 +61,7 @@ const ChatInput = ({
                     {isHoveringSend ? (
                         <HiXMark className="h-5 w-5 text-white" />
                     ) : (
-                        <span className="text-gray-900 font-bold text-base">
+                        <span className={`${theme === 'dark' ? 'text-white' : 'text-gray-900'} font-bold text-base`}>
                             {autoSendCountdown}
                         </span>
                     )}
@@ -74,11 +76,13 @@ const ChatInput = ({
                 onClick={handleSendMessage}
                 disabled={isDisabled}
                 className={`ml-2 p-2 rounded-full transition-opacity disabled:opacity-50 ${
-                    isDisabled ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-900 hover:bg-gray-700'
+                    theme === 'dark'
+                        ? (isDisabled ? 'bg-gray-600 cursor-not-allowed' : 'bg-gray-700 hover:bg-gray-600')
+                        : (isDisabled ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-900 hover:bg-gray-700')
                 }`}
                 aria-label="Send Message"
             >
-                <HiPaperAirplane className={`w-5 h-5 ${isDisabled ? 'text-gray-500' : 'text-white'}`} />
+                <HiPaperAirplane className={`w-5 h-5 ${isDisabled ? (theme === 'dark' ? 'text-gray-300' : 'text-gray-500') : 'text-white'}`} />
             </button>
         );
     };
@@ -94,7 +98,7 @@ const ChatInput = ({
                     style={{ animationPlayState: isHoveringRecord ? 'paused' : 'running' }}
                     aria-label="Cancel auto-record"
                 >
-                    {isHoveringRecord ? <HiXMark className="h-5 w-5 text-white" /> : <span className="text-gray-900 font-bold text-base">{autoRecordCountdown}</span>}
+                    {isHoveringRecord ? <HiXMark className="h-5 w-5 text-white" /> : <span className="text-white font-bold text-base">{autoRecordCountdown}</span>}
                 </button>
             );
         }
@@ -103,7 +107,7 @@ const ChatInput = ({
             <button
                 onClick={handleRecordButtonClick}
                 disabled={isLoading || isTranscribing || autoSendCountdown !== null}
-                className="ml-2 p-2 rounded-full bg-gray-900 text-white transition-opacity disabled:opacity-50"
+                className={`ml-2 p-2 rounded-full text-white transition-opacity disabled:opacity-50 ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-900 hover:bg-gray-700'}`}
                 aria-label={isRecording ? "Stop Recording" : "Start Recording"}
             >
                 {isTranscribing ? <HiArrowPath className="w-5 h-5 animate-spin" /> : isRecording ? <HiStop className="w-5 h-5 text-red-500" /> : <HiOutlineMicrophone className="w-5 h-5" />}
@@ -130,7 +134,7 @@ const ChatInput = ({
                 type="button"
                 onClick={() => imageInputRef.current?.click()}
                 disabled={isLoading || isTranscribing || isEditing}
-                className="ml-2 p-2 rounded-full bg-gray-900 text-white transition-opacity hover:bg-gray-700 disabled:opacity-50 flex items-center justify-center"
+                className={`ml-2 p-2 rounded-full text-white transition-opacity disabled:opacity-50 flex items-center justify-center ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-900 hover:bg-gray-700'}`}
                 aria-label="Add image"
                 title="Add image"
             >
@@ -144,7 +148,7 @@ const ChatInput = ({
     );
 
     return (
-        <div className="p-4 border-t border-gray-200 bg-white rounded-b-xl">
+        <div className={`p-4 rounded-b-xl ${theme === 'dark' ? 'border-t border-gray-800 bg-gray-900 text-gray-100' : 'border-t border-gray-200 bg-white text-gray-900'}`}>
             {isEditing && (
                 <div className="mb-2 -mt-1 flex items-center justify-between rounded-md bg-amber-50 border border-amber-200 px-3 py-1.5 text-amber-800 text-sm">
                     <span>Editing message — press Enter to save</span>
@@ -175,7 +179,7 @@ const ChatInput = ({
             )}
 
             {/* Text Input Area */}
-            <div className="flex items-end rounded-lg border border-gray-300 bg-gray-50 px-3 py-1 mb-3">
+            <div className={`flex items-end rounded-lg px-3 py-1 mb-3 ${theme === 'dark' ? 'border border-gray-700 bg-gray-800' : 'border border-gray-300 bg-gray-50'}` }>
                 {isRecording ? (
                     <div className="flex-1 flex items-center justify-center text-red-500 font-mono text-lg space-x-3 h-[42px]">
                         <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
@@ -191,16 +195,17 @@ const ChatInput = ({
                         disabled={isLoading || isTranscribing}
                         dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'}
                         rows={1}
-                        className="flex-1 bg-transparent px-0 py-2 resize-none focus:outline-none max-h-40 overflow-y-auto whitespace-pre-wrap leading-tight auto-expand"
+                        className={`flex-1 bg-transparent px-0 py-2 resize-none focus:outline-none max-h-40 overflow-y-auto whitespace-pre-wrap leading-tight auto-expand ${theme === 'dark' ? 'text-gray-100 placeholder-gray-400' : ''}`}
                     />
                 )}
             </div>
             
             {/* Toolbar for controls */}
             <div className="flex items-center justify-between">
-                {/* Left side: Model selector */}
-                <div className="flex items-center">
-                    <HiCpuChip className="h-6 w-6 text-gray-500 mr-2" aria-hidden="true" />
+                {/* Left side: Model selector (responsive) */}
+                {/* Desktop/regular: show dropdown */}
+                <div className="hidden sm:flex items-center">
+                    <HiCpuChip className="h-5 w-5 text-gray-500 mr-1" aria-hidden="true" />
                     <select
                         value={selectedModel}
                         onChange={(e) => setSelectedModel(e.target.value)}
@@ -212,6 +217,44 @@ const ChatInput = ({
                         <option value="google/gemini-flash-1.5">Gemini Flash</option>
                         <option value="google/gemini-2.5-pro">Gemini 2.5 Pro (Thinking)</option>
                     </select>
+                </div>
+
+                {/* Compact mode: hide dropdown, show icon with popover menu */}
+                <div className="relative sm:hidden flex items-center">
+                    <button
+                        type="button"
+                        onClick={() => setIsModelMenuOpen((p) => !p)}
+                        disabled={isLoading || isRecording || isTranscribing}
+                        className={`p-2 rounded-full disabled:opacity-50 ${theme === 'dark' ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`}
+                        aria-haspopup="menu"
+                        aria-expanded={isModelMenuOpen}
+                        aria-label="Select AI Model"
+                        title="Select AI Model"
+                    >
+                        <HiCpuChip className="h-6 w-6" />
+                    </button>
+                    {isModelMenuOpen && (
+                        <div
+                            className={`absolute z-50 left-0 bottom-full mb-2 w-48 rounded-md shadow-lg overflow-hidden ${theme === 'dark' ? 'bg-gray-800 border border-gray-700 text-gray-100' : 'bg-white border border-gray-200 text-gray-900'}`}
+                            role="menu"
+                        >
+                            {[
+                                { value: 'openai/gpt-4o', label: 'GPT-4.0' },
+                                { value: 'google/gemini-flash-1.5', label: 'Gemini Flash' },
+                                { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro (Thinking)' },
+                            ].map((opt) => (
+                                <button
+                                    key={opt.value}
+                                    type="button"
+                                    onClick={() => { setSelectedModel(opt.value); setIsModelMenuOpen(false); }}
+                                    className={`w-full text-left px-3 py-2 text-sm ${theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-50'} ${selectedModel === opt.value ? (theme === 'dark' ? 'bg-gray-700 font-medium' : 'bg-gray-100 font-medium') : ''}`}
+                                    role="menuitem"
+                                >
+                                    {opt.label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {/* Right side: Action Buttons */}

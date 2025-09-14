@@ -30,6 +30,13 @@ const AidaWidget = (props) => {
     const [isOpen, setIsOpen] = useState(false);
     const [isClosing, setIsClosing] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
+    const [theme, setTheme] = useState(() => {
+        try {
+            return localStorage.getItem('aida-theme') || 'dark';
+        } catch (_) {
+            return 'dark';
+        }
+    });
     const [displayText, setDisplayText] = useState("AI:DA");
     const [messages, setMessages] = useState(
       JSON.parse(sessionStorage.getItem('chatMessages')) || []
@@ -50,12 +57,16 @@ const AidaWidget = (props) => {
 
     const lastInputWasVoiceRef = useRef(false);
     const messagesEndRef = useRef(null);
+    const shouldAutoScrollRef = useRef(true); // auto-scroll unless user scrolls up
+    const programmaticScrollRef = useRef(false);
     const inputRef = useRef(null);
     const loadingIntervalRef = useRef(null);
     const blinkTimerRef = useRef(null);
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
     const timerIntervalRef = useRef(null);
+    const [isAtBottom, setIsAtBottom] = useState(true);
+    const [autoScrollPaused, setAutoScrollPaused] = useState(false);
 
     const isMobile = window.innerWidth <= 768;
     
@@ -87,6 +98,10 @@ const AidaWidget = (props) => {
     }, [isLoading, isTranscribing, isOpen]);
 
     useEffect(() => {
+        try { localStorage.setItem('aida-theme', theme); } catch (_) {}
+    }, [theme]);
+
+    useEffect(() => {
         if (inputRef.current) {
             inputRef.current.style.height = 'auto'; 
             inputRef.current.style.height = `${inputRef.current.scrollHeight}px`;
@@ -106,12 +121,17 @@ const AidaWidget = (props) => {
     }, [eyeState, isOpen, isLoading]);
 
     const scrollToBottom = () => {
+        programmaticScrollRef.current = true;
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        setTimeout(() => {
+            programmaticScrollRef.current = false;
+        }, 400);
     };
 
     useEffect(() => {
-        if (isOpen) scrollToBottom();
+        if (isOpen && shouldAutoScrollRef.current) scrollToBottom();
     }, [messages, isOpen]);
+
 
     useEffect(() => () => { // General cleanup
         if (loadingIntervalRef.current) clearInterval(loadingIntervalRef.current);
@@ -499,12 +519,41 @@ const AidaWidget = (props) => {
         }`}>
             {!isOpen && (<button onClick={toggleChat} className="bg-gray-900 text-white rounded-lg p-2 flex"><div className="compact-lcd"><SevenSegmentDisplay text={displayText} className="animate-lcd-pulse" /></div></button>)}
             {isOpen && (
-                <div className={`bg-white rounded-xl shadow-2xl flex flex-col ${isFullscreen ? 'w-full h-full' : 'w-80 sm:w-96 h-[500px]'} border ${isClosing ? 'animate-collapse-chat' : 'animate-expand-chat'}`}>
-                    <ChatHeader displayText={displayText} resetChat={() => setMessages([])} toggleFullscreen={() => setIsFullscreen(p => !p)} toggleChat={toggleChat} />
+                <div
+                    data-theme={theme}
+                    className={`${theme === 'dark'
+                        ? 'bg-gray-900 text-gray-100 border border-gray-800'
+                        : 'bg-white text-gray-900 border border-gray-200'
+                    } rounded-xl shadow-2xl flex flex-col ${isFullscreen ? 'w-full h-full' : 'w-80 sm:w-96 h-[500px]'} ${isClosing ? 'animate-collapse-chat' : 'animate-expand-chat'}`}
+                >
+                    <ChatHeader
+                        displayText={displayText}
+                        resetChat={() => setMessages([])}
+                        toggleFullscreen={() => setIsFullscreen(p => !p)}
+                        toggleChat={toggleChat}
+                        theme={theme}
+                        onToggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
+                    />
                     <ChatDisplay
                         messages={messages}
                         messagesEndRef={messagesEndRef}
                         siteLanguage={siteLanguage}
+                        theme={theme}
+                        programmaticScrollRef={programmaticScrollRef}
+                        onScrollStateChange={(atBottom) => {
+                            setIsAtBottom(atBottom);
+                            if (atBottom) {
+                                setAutoScrollPaused(false);
+                            }
+                            shouldAutoScrollRef.current = atBottom && !autoScrollPaused;
+                        }}
+                        onUserScrollAway={() => {
+                            if (isLoading) {
+                                setAutoScrollPaused(true);
+                                shouldAutoScrollRef.current = false;
+                            }
+                        }}
+                        shouldAutoScroll={isAtBottom && !autoScrollPaused}
                         onStartEdit={(id, text) => {
                             setCurrentMessage(text);
                             setEditingMessageId(id);
@@ -514,6 +563,7 @@ const AidaWidget = (props) => {
                     <ChatInput
                         currentMessage={currentMessage}
                         setCurrentMessage={handleInputChange}
+                        theme={theme}
                         handleSendMessage={() => stableHandleSendMessage()}
                         handleKeyDown={(e) => {
                             if (e.key === 'Enter' && !e.shiftKey) {

@@ -107,15 +107,16 @@
 }
 
 .bot-message {
-  background-color: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.75rem;
-  padding: 0.75rem;
+  background-color: transparent; /* remove chat bubble */
+  border: none;                  /* no border like ChatGPT */
+  border-radius: 0;              /* no rounded container */
+  padding: 0;                    /* text sits flush like ChatGPT */
   max-width: 80%;
-  line-height: 1.4;
+  line-height: 1.6;
   font-size: 0.95rem;
   font-family: 'Inter', sans-serif;
   text-align: left;
+  color: inherit; /* inherit from theme */
 }
 
 /* ✅ MARKDOWN STYLING ADDED FOR CODE BLOCKS */
@@ -133,12 +134,17 @@
 }
 
 .bot-message code {
-  background-color: #f4f4f4;
+  background-color: rgba(0, 0, 0, 0.04);
   color: #d63384;
   padding: 0.2rem 0.4rem;
   border-radius: 0.3rem;
   font-family: 'Fira Code', monospace;
   font-size: 0.85rem;
+}
+
+[data-theme='dark'] .bot-message code {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: #f472b6; /* pink-400 */
 }
 
 .bot-message pre code {
@@ -156,7 +162,7 @@
 }
 
 .bot-message p {
-  margin: 0.4rem 0;
+  margin: 0.6rem 0; /* a bit more breathing room like ChatGPT */
 }
 
 .bot-message strong {
@@ -382,17 +388,17 @@ textarea.auto-expand {
   appearance: none;
   background-color: #f9fafb; /* bg-gray-50 */
   border: 1px solid #d1d5db; /* border-gray-300 */
-  border-radius: 0.375rem; /* rounded-md */
-  padding: 0.5rem 2.5rem 0.5rem 0.75rem; /* p-2 pl-3 pr-10 */
-  font-size: 0.875rem; /* text-sm */
-  line-height: 1.25rem;
+  border-radius: 0.25rem; /* smaller rounded */
+  padding: 0.375rem 2rem 0.375rem 0.5rem; /* tighter paddings */
+  font-size: 0.75rem; /* text-xs */
+  line-height: 1rem;
   font-weight: 500;
   color: #374151; /* text-gray-700 */
   cursor: pointer;
   background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
-  background-position: right 0.5rem center;
+  background-position: right 0.35rem center;
   background-repeat: no-repeat;
-  background-size: 1.25em 1.25em;
+  background-size: 1.1em 1.1em;
   transition: border-color 0.2s;
 }
 
@@ -421,15 +427,12 @@ textarea.auto-expand {
 }
 
 .markdown-link {
-  color: #1a1a1a;
+  color: inherit;
   text-decoration: underline;
   transition: color 0.2s ease;
 }
-
-.markdown-link:hover {
-  color: #2563eb; /* Tailwind blue-600 */
-  cursor: pointer;
-}
+[data-theme='dark'] .markdown-link:hover { color: #93c5fd; cursor: pointer; }
+[data-theme='light'] .markdown-link:hover { color: #2563eb; cursor: pointer; }
 
 @media (max-width: 480px) {
   .chat-action-buttons {
@@ -493,3 +496,44 @@ textarea.auto-expand {
 .no-scrollbar::-webkit-scrollbar {
   display: none; /* Chrome, Safari, Opera */
 }
+
+/* Assistant thinking dots (pre-stream) */
+.thinking-dots {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 0.25rem 0;
+  color: #6b7280; /* gray-500 */
+}
+
+.thinking-dots .dot {
+  width: 6px;
+  height: 6px;
+  background-color: currentColor;
+  border-radius: 9999px;
+  opacity: 0.6;
+  animation: dotPulse 1s infinite ease-in-out;
+}
+
+.thinking-dots .dot:nth-child(2) { animation-delay: .2s; }
+.thinking-dots .dot:nth-child(3) { animation-delay: .4s; }
+
+@keyframes dotPulse {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+/* Glossy header overlay */
+.glass-header {
+  position: relative;
+}
+.glass-header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+  background: linear-gradient(to bottom, rgba(255,255,255,0.18), rgba(255,255,255,0.06));
+}
+/* Use the exact same sheen in both themes */

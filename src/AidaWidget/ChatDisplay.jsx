@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -48,8 +48,61 @@ const CodeBlock = ({ inline, className, children, ...props }) => {
     );
 };
 
-const ChatDisplay = ({ messages, messagesEndRef, siteLanguage, onStartEdit }) => {
+const ChatDisplay = ({ messages, messagesEndRef, siteLanguage, onStartEdit, onScrollStateChange, onUserScrollAway, programmaticScrollRef, shouldAutoScroll = true, theme = 'dark' }) => {
     const [copiedId, setCopiedId] = useState(null);
+    const containerRef = useRef(null);
+
+    // Observe the anchor at the bottom; when it's visible at all, we are at-bottom
+    useEffect(() => {
+        const root = containerRef.current;
+        const target = messagesEndRef?.current;
+        if (!root || !target || !onScrollStateChange) return;
+        const observer = new IntersectionObserver(
+            (entries) => {
+                const entry = entries[0];
+                onScrollStateChange(Boolean(entry && entry.isIntersecting));
+            },
+            { root, threshold: 0 }
+        );
+        observer.observe(target);
+        return () => observer.disconnect();
+    }, [messagesEndRef, onScrollStateChange]);
+
+    // Ensure we remain pinned to the bottom while streaming if allowed
+    useEffect(() => {
+        if (!shouldAutoScroll) return;
+        const el = containerRef.current;
+        if (!el) return;
+        if (programmaticScrollRef) programmaticScrollRef.current = true;
+        // Jump to bottom to keep up with streaming content
+        el.scrollTop = el.scrollHeight;
+        // Inform parent that we're at bottom after programmatic scroll
+        if (onScrollStateChange) onScrollStateChange(true);
+        // Clear programmatic flag on next frame
+        requestAnimationFrame(() => {
+            if (programmaticScrollRef) programmaticScrollRef.current = false;
+        });
+    }, [messages, shouldAutoScroll, programmaticScrollRef]);
+
+    // Detect user scrolling away from bottom to signal parent to pause auto-scroll while streaming
+    useEffect(() => {
+        const el = containerRef.current;
+        if (!el || !onUserScrollAway) return;
+        let prevDistance = 0;
+        const threshold = 24; // px increase away from bottom counts as intent
+        const onScroll = () => {
+            if (programmaticScrollRef && programmaticScrollRef.current) return;
+            const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+            if (distance - prevDistance > threshold) onUserScrollAway();
+            prevDistance = distance;
+        };
+        // initialize distance
+        prevDistance = el.scrollHeight - el.scrollTop - el.clientHeight;
+        el.addEventListener('scroll', onScroll, { passive: true });
+        return () => el.removeEventListener('scroll', onScroll);
+    }, [onUserScrollAway, programmaticScrollRef]);
+
+    // No manual-scroll override listener in this version
 
     const handleCopy = async (text, id) => {
         try {
@@ -67,17 +120,12 @@ const ChatDisplay = ({ messages, messagesEndRef, siteLanguage, onStartEdit }) =>
     }, [copiedId]);
 
     return (
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+        <div ref={containerRef} className={`relative flex-1 overflow-y-auto p-4 space-y-4 ${theme === 'dark' ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
             {messages.map((message) => (
                 <div key={message.id} className={`flex ${message.sender === 'user' ? 'justify-end pl-10' : 'justify-start pr-10'}`}>
-                    {message.sender === 'bot' && (
-                        <div className="w-8 h-8 bg-gray-900 rounded-full flex items-center justify-center mr-2 flex-shrink-0">
-                            <span className="text-[#FF5F90] text-xs font-mono">| |</span>
-                        </div>
-                    )}
                     <div className={`flex flex-col w-full ${message.sender === 'user' ? 'items-end' : 'items-start'}`}>
                         <div
-                            className={`${message.sender === 'user' ? 'user-message rounded-l-xl' : 'bot-message rounded-r-xl'}`}
+                            className={`${message.sender === 'user' ? 'user-message rounded-l-xl' : 'bot-message'}`}
                             dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'}
                         >
                             {/* Attached images (if any) */}
@@ -88,21 +136,31 @@ const ChatDisplay = ({ messages, messagesEndRef, siteLanguage, onStartEdit }) =>
                                     ))}
                                 </div>
                             )}
-                            <ReactMarkdown
-                                remarkPlugins={[remarkGfm]}
-                                components={{
-                                    code: CodeBlock,
-                                    a({ href, children }) {
-                                        return (
-                                            <a href={href} target="_blank" rel="noopener noreferrer" className="markdown-link">
-                                                {children}
-                                            </a>
-                                        );
-                                    }
-                                }}
-                            >
-                                {message.text}
-                            </ReactMarkdown>
+                            {message.text && message.text.trim() !== '' ? (
+                                <ReactMarkdown
+                                    remarkPlugins={[remarkGfm]}
+                                    components={{
+                                        code: CodeBlock,
+                                        a({ href, children }) {
+                                            return (
+                                                <a href={href} target="_blank" rel="noopener noreferrer" className="markdown-link">
+                                                    {children}
+                                                </a>
+                                            );
+                                        }
+                                    }}
+                                >
+                                    {message.text}
+                                </ReactMarkdown>
+                            ) : (
+                                message.sender === 'bot' ? (
+                                    <div className="thinking-dots" role="status" aria-live="polite" aria-label="Assistant is thinking">
+                                        <span className="dot" />
+                                        <span className="dot" />
+                                        <span className="dot" />
+                                    </div>
+                                ) : null
+                            )}
                         </div>
                         <div className="mt-1 flex items-center gap-2 select-none">
                             <button
