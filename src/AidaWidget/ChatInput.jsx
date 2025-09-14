@@ -35,6 +35,12 @@ const ChatInput = ({
     const imageInputRef = useRef(null);
     const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
 
+    const modelLabels = {
+        'openai/gpt-4o': 'GPT-4.0',
+        'google/gemini-flash-1.5': 'Gemini Flash',
+        'google/gemini-2.5-pro': 'Gemini 2.5 Pro',
+    };
+
     const formatTime = (seconds) => {
         const minutes = Math.floor(seconds / 60).toString().padStart(2, '0');
         const secs = (seconds % 60).toString().padStart(2, '0');
@@ -233,6 +239,12 @@ const ChatInput = ({
                     >
                         <HiCpuChip className="h-6 w-6" />
                     </button>
+                    <span
+                        className={`ml-2 text-xs ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'} max-w-[96px] truncate`}
+                        aria-hidden="true"
+                    >
+                        {modelLabels[selectedModel] || 'Model'}
+                    </span>
                     {isModelMenuOpen && (
                         <div
                             className={`absolute z-50 left-0 bottom-full mb-2 w-48 rounded-md shadow-lg overflow-hidden ${theme === 'dark' ? 'bg-gray-800 border border-gray-700 text-gray-100' : 'bg-white border border-gray-200 text-gray-900'}`}

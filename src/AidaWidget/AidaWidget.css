@@ -229,6 +229,19 @@
   font-weight: bold;
 }
 
+/* Dark theme table fixes: visible headers and clearer borders */
+[data-theme='dark'] .bot-message th,
+[data-theme='dark'] .user-message th {
+  background-color: #1f2937; /* gray-800 */
+  color: #e5e7eb;           /* gray-200 text */
+  border-color: #374151;    /* gray-700 border */
+}
+
+[data-theme='dark'] .bot-message td,
+[data-theme='dark'] .user-message td {
+  border-color: #374151;    /* gray-700 border */
+}
+
 .user-message {
   background-color: #FF5F90;
   color: white;
