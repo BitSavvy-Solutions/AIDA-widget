@@ -19,7 +19,7 @@ const ChatHistoryPanel = ({ theme = 'dark', open = false, onClose, sessions = []
   }, [open, onClose]);
 
   return (
-    <div className="absolute inset-0 z-40 pointer-events-none">
+    <div className="absolute inset-0 z-40 pointer-events-none overflow-hidden">
       {/* Dim background; clickable only when open */}
       <div
         className={`absolute inset-0 transition-opacity duration-200 ${open ? 'opacity-40 pointer-events-auto' : 'opacity-0 pointer-events-none'} ${isDark ? 'bg-black' : 'bg-black'}`}
