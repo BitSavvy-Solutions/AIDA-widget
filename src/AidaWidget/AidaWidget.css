@@ -133,6 +133,8 @@
   margin-bottom: 0.5rem;
 }
 
+/* react-syntax-highlighter container (PreTag="div") */
+
 .bot-message code {
   background-color: rgba(0, 0, 0, 0.04);
   color: #d63384;

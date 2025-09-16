@@ -70,9 +70,15 @@ const AidaWidget = (props) => {
     const [autoScrollPaused, setAutoScrollPaused] = useState(false);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const HISTORY_KEY = 'aida-chat-history';
+    const PROMPT_STORAGE_KEY = 'aida-custom-prompt';
     const [historyItems, setHistoryItems] = useState(() => {
         try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch { return []; }
     });
+    const [customPrompt, setCustomPrompt] = useState(() => {
+        try { return localStorage.getItem(PROMPT_STORAGE_KEY) || ''; } catch { return ''; }
+    });
+    const [promptDraft, setPromptDraft] = useState('');
+    const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
 
     // Remove heavy fields (e.g., base64 images) before persisting to storage
     const sanitizeMessagesForStorage = (msgs) => (msgs || []).map(({ images, ...m }) => m);
@@ -131,6 +137,10 @@ const AidaWidget = (props) => {
     }, [theme]);
 
     useEffect(() => {
+        try { localStorage.setItem(PROMPT_STORAGE_KEY, customPrompt); } catch (_) {}
+    }, [customPrompt]);
+
+    useEffect(() => {
         if (inputRef.current) {
             inputRef.current.style.height = 'auto'; 
             inputRef.current.style.height = `${inputRef.current.scrollHeight}px`;
@@ -173,6 +183,15 @@ const AidaWidget = (props) => {
     }, []);
 
     // --- CORE LOGIC FUNCTIONS ---
+    const buildMessageHistoryPayload = useCallback((history = []) => {
+        const trimmedPrompt = (customPrompt || '').trim();
+        const baseHistory = (history || []).map(m => ({
+            type: m.sender === 'user' ? 'human' : 'ai',
+            content: m.text || ''
+        }));
+        return trimmedPrompt ? [{ type: 'human', content: trimmedPrompt }, ...baseHistory] : baseHistory;
+    }, [customPrompt]);
+
     const cancelAutoSendTimer = useCallback(() => {
         setAutoSendCountdown(null);
         setIsSendTimerPaused(false);
@@ -283,7 +302,7 @@ const AidaWidget = (props) => {
 
                 const payload = {
                     user_input: userMessage.text,
-                    message_history: historyBefore.map(m => ({ type: m.sender === 'user' ? 'human' : 'ai', content: m.text })),
+                    message_history: buildMessageHistoryPayload(historyBefore),
                     email: user.email,
                     page_path: window.location.pathname,
                     language: detectedLanguageCode,
@@ -349,9 +368,7 @@ const AidaWidget = (props) => {
 
             const payload = {
                 user_input: userMessage.text,
-                message_history: [...messages, userMessage]
-                    .map(m => ({ type: m.sender === 'user' ? 'human' : 'ai', content: m.text }))
-                    .slice(0, -1),
+                message_history: buildMessageHistoryPayload(messages),
                 email: user.email,
                 page_path: window.location.pathname,
                 language: detectedLanguageCode,
@@ -401,7 +418,7 @@ const AidaWidget = (props) => {
             stopLoadingAnimation();
             setIsLoading(false); 
         }
-    }, [messages, currentMessage, isLoading, selectedModel, chatUrl, user.email, editingMessageId, pendingImages]);
+    }, [messages, currentMessage, isLoading, selectedModel, chatUrl, user.email, editingMessageId, pendingImages, buildMessageHistoryPayload]);
     
     useEffect(() => {
         if (isSendTimerPaused || autoSendCountdown === null) return;
@@ -597,6 +614,44 @@ const AidaWidget = (props) => {
         setPendingImages(prev => prev.filter(img => img.id !== id));
     };
     
+    const openPromptConfigurator = useCallback(() => {
+        setPromptDraft(customPrompt);
+        setIsPromptModalOpen(true);
+    }, [customPrompt]);
+
+    const closePromptConfigurator = useCallback(() => {
+        setPromptDraft(customPrompt);
+        setIsPromptModalOpen(false);
+    }, [customPrompt]);
+
+    const handlePromptSave = useCallback(() => {
+        setCustomPrompt(promptDraft.trim());
+        setIsPromptModalOpen(false);
+    }, [promptDraft]);
+
+    useEffect(() => {
+        if (!isPromptModalOpen) return;
+        const onKeyDown = (event) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                closePromptConfigurator();
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [isPromptModalOpen, closePromptConfigurator]);
+
+    const promptModalSurface = theme === 'dark'
+        ? 'bg-slate-900 text-gray-100 border border-white/10'
+        : 'bg-white text-gray-900 border border-gray-200';
+    const promptModalMutedText = theme === 'dark' ? 'text-gray-400' : 'text-gray-500';
+    const promptModalTextArea = theme === 'dark'
+        ? 'bg-slate-950 border border-white/10 text-gray-100 placeholder-gray-500'
+        : 'bg-white border border-gray-300 text-gray-900 placeholder-gray-400';
+    const promptModalCancelClasses = theme === 'dark'
+        ? 'text-gray-400 hover:text-gray-200 focus:ring-white/30'
+        : 'text-gray-500 hover:text-gray-700 focus:ring-blue-200';
+
     // --- RENDER ---
     return (
         <div className={`z-50 ${isFullscreen 
@@ -624,6 +679,7 @@ const AidaWidget = (props) => {
                         theme={theme}
                         onToggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
                         onToggleHistory={() => setIsHistoryOpen(v => !v)}
+                        onDisplayClick={openPromptConfigurator}
                     />
                     <ChatHistoryPanel
                         theme={theme}
@@ -701,6 +757,42 @@ const AidaWidget = (props) => {
                         onRemovePendingImage={removePendingImage}
                         hasPendingImages={pendingImages.length > 0}
                     />
+                </div>
+            )}
+            {isPromptModalOpen && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/50" onClick={closePromptConfigurator} />
+                    <div className={`relative z-10 w-11/12 max-w-md ${promptModalSurface} rounded-xl shadow-2xl p-5`}
+                        role="dialog"
+                        aria-modal="true"
+                    >
+                        <h2 className="text-lg font-semibold">Custom instructions</h2>
+                        <p className={`text-sm mt-1 ${promptModalMutedText}`}>
+                            This text is sent as the first message in every conversation to give Aida extra context.
+                        </p>
+                        <textarea
+                            value={promptDraft}
+                            onChange={(e) => setPromptDraft(e.target.value)}
+                            className={`w-full min-h-[140px] mt-4 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 ${promptModalTextArea}`}
+                            placeholder="Add hidden guidance for Aida here..."
+                        />
+                        <div className="mt-4 flex justify-end space-x-2">
+                            <button
+                                type="button"
+                                onClick={closePromptConfigurator}
+                                className={`px-4 py-2 text-sm rounded-lg border border-transparent bg-transparent focus:outline-none focus:ring-2 ${promptModalCancelClasses}`}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handlePromptSave}
+                                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                Save
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

@@ -2,15 +2,25 @@ import React from 'react';
 import { HiXMark, HiArrowsPointingOut, HiPlus, HiOutlineSun, HiOutlineMoon, HiClock } from 'react-icons/hi2';
 import SevenSegmentDisplay from './SevenSegmentDisplay';
 
-const ChatHeader = ({ displayText, resetChat, toggleFullscreen, toggleChat, theme = 'dark', onToggleTheme, onToggleHistory }) => {
-    const isDark = theme === 'dark';
+const ChatHeader = ({ displayText, resetChat, toggleFullscreen, toggleChat, theme = 'dark', onToggleTheme, onToggleHistory, onDisplayClick }) => {
     // Use a solid dark shade so it looks identical in both themes
     const headerColors = 'bg-[#0f172a] text-white backdrop-blur-md border-b border-white/10';
     const hoverColor = 'hover:bg-white/10';
     return (
         <div className={`${headerColors} glass-header p-4 flex justify-between items-center rounded-t-xl`}>
             <div className="flex items-center">
-                <SevenSegmentDisplay text={displayText} className="mr-3" />
+                {onDisplayClick ? (
+                    <button
+                        type="button"
+                        onClick={onDisplayClick}
+                        className="mr-3 p-0 bg-transparent border-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 rounded-md"
+                        aria-label="Configure instructions"
+                    >
+                        <SevenSegmentDisplay text={displayText} />
+                    </button>
+                ) : (
+                    <SevenSegmentDisplay text={displayText} className="mr-3" />
+                )}
             </div>
             <div className="flex items-center space-x-2">
                 {onToggleTheme && (
