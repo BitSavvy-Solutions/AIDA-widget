@@ -74,6 +74,9 @@ const AidaWidget = (props) => {
         try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch { return []; }
     });
 
+    // Remove heavy fields (e.g., base64 images) before persisting to storage
+    const sanitizeMessagesForStorage = (msgs) => (msgs || []).map(({ images, ...m }) => m);
+
     const persistHistory = (items) => {
         setHistoryItems(items);
         try { localStorage.setItem(HISTORY_KEY, JSON.stringify(items)); } catch {}
@@ -89,7 +92,7 @@ const AidaWidget = (props) => {
         if (!messages || messages.length === 0) return; // nothing to save
         const id = `chat-${Date.now()}`;
         const title = buildTitleFromMessages(messages) || `Chat ${new Date().toLocaleString()}`;
-        const entry = { id, title, createdAt: Date.now(), messages };
+        const entry = { id, title, createdAt: Date.now(), messages: sanitizeMessagesForStorage(messages) };
         const next = [entry, ...historyItems].slice(0, 50);
         persistHistory(next);
     };
@@ -135,7 +138,11 @@ const AidaWidget = (props) => {
     }, [currentMessage]);
 
     useEffect(() => {
-        sessionStorage.setItem('chatMessages', JSON.stringify(messages));
+        try {
+            sessionStorage.setItem('chatMessages', JSON.stringify(sanitizeMessagesForStorage(messages)));
+        } catch (e) {
+            console.warn('Skipping chatMessages persist:', e);
+        }
     }, [messages]);
 
     useEffect(() => {
@@ -509,17 +516,70 @@ const AidaWidget = (props) => {
     // --- IMAGE UPLOAD HELPERS ---
     const handleImagesSelected = async (files) => {
         if (!files || files.length === 0) return;
+        // Helper: read file to data URL
         const readAsDataURL = (file) => new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = () => resolve(reader.result);
             reader.onerror = reject;
             reader.readAsDataURL(file);
         });
+        // Helper: estimate bytes from data URL
+        const estimateBytes = (dataUrl) => {
+            const base64 = String(dataUrl || '').split(',')[1] || '';
+            return Math.ceil(base64.length * 0.75);
+        };
+        // Compress/resize large images to reduce payload size
+        const compressDataURL = async (dataUrl, { maxDim = 1280, quality = 0.85, minQuality = 0.5, targetMaxBytes = 3 * 1024 * 1024 }) => {
+            // Draw on canvas and export to JPEG at decreasing quality if needed
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            const load = () => new Promise((resolve, reject) => {
+                img.onload = () => resolve();
+                img.onerror = (e) => reject(e);
+                img.src = dataUrl;
+            });
+            try { await load(); } catch (_) { return dataUrl; }
+
+            let w = img.naturalWidth || img.width;
+            let h = img.naturalHeight || img.height;
+            const scale = Math.min(1, maxDim / Math.max(w, h));
+            w = Math.max(1, Math.round(w * scale));
+            h = Math.max(1, Math.round(h * scale));
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            let q = quality;
+            let out = canvas.toDataURL('image/jpeg', q);
+            // Iteratively reduce quality until under target or minQuality reached
+            while (estimateBytes(out) > targetMaxBytes && q > minQuality) {
+                q = Math.max(minQuality, q - 0.1);
+                out = canvas.toDataURL('image/jpeg', q);
+            }
+            return out;
+        };
+
         try {
-            const results = await Promise.all(Array.from(files).map(async (file) => {
-                const src = await readAsDataURL(file);
-                return { id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, src, name: file.name, type: file.type };
-            }));
+            const results = [];
+            for (const file of Array.from(files)) {
+                // Convert to DataURL
+                const original = await readAsDataURL(file);
+                // Decide whether to compress
+                const shouldCompress = (() => {
+                    const bigByBytes = (file.size || 0) > 1 * 1024 * 1024; // >1MB
+                    const notJPEG = !(file.type || '').includes('jpeg');
+                    return bigByBytes || notJPEG;
+                })();
+                const processed = shouldCompress ? await compressDataURL(original, {}) : original;
+                const bytes = estimateBytes(processed);
+                const MAX_BYTES_ALLOWED = 5 * 1024 * 1024; // 5MB safety cap
+                if (bytes > MAX_BYTES_ALLOWED) {
+                    alert(`Image \"${file.name}\" is too large after compression (${(bytes/1024/1024).toFixed(2)} MB). Please choose a smaller image.`);
+                    continue; // skip oversized image
+                }
+                results.push({ id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, src: processed, name: file.name, type: file.type });
+            }
             if (results.length > 0) {
                 setPendingImages(prev => [...prev, ...results]);
                 // Ensure a vision-capable model is selected when images are attached
@@ -554,7 +614,11 @@ const AidaWidget = (props) => {
                 >
                     <ChatHeader
                         displayText={displayText}
-                        resetChat={() => { saveCurrentChatToHistory(); setMessages([]); sessionStorage.setItem('chatMessages', JSON.stringify([])); }}
+                        resetChat={() => { 
+                            saveCurrentChatToHistory(); 
+                            setMessages([]); 
+                            try { sessionStorage.setItem('chatMessages', JSON.stringify([])); } catch (_) {}
+                        }}
                         toggleFullscreen={() => setIsFullscreen(p => !p)}
                         toggleChat={toggleChat}
                         theme={theme}
@@ -567,8 +631,9 @@ const AidaWidget = (props) => {
                         onClose={() => setIsHistoryOpen(false)}
                         sessions={historyItems}
                         onSelect={(s) => {
-                            setMessages(s.messages || []);
-                            sessionStorage.setItem('chatMessages', JSON.stringify(s.messages || []));
+                            const restored = s.messages || [];
+                            setMessages(restored);
+                            try { sessionStorage.setItem('chatMessages', JSON.stringify(sanitizeMessagesForStorage(restored))); } catch (e) { console.warn('Skipping chatMessages persist:', e); }
                             setIsHistoryOpen(false);
                         }}
                         onDelete={(id) => {
