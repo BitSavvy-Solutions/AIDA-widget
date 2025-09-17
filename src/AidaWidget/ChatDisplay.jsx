@@ -48,7 +48,7 @@ const CodeBlock = ({ inline, className, children, ...props }) => {
     );
 };
 
-const ChatDisplay = ({ messages, messagesEndRef, siteLanguage, onStartEdit, onScrollStateChange, onUserScrollAway, programmaticScrollRef, shouldAutoScroll = true, theme = 'dark' }) => {
+const ChatDisplay = ({ messages, messagesEndRef, siteLanguage, onStartEdit, onScrollStateChange, onUserScrollAway, programmaticScrollRef, shouldAutoScroll = true, theme = 'dark', onImagePreview }) => {
     const [copiedId, setCopiedId] = useState(null);
     const containerRef = useRef(null);
 
@@ -132,7 +132,19 @@ const ChatDisplay = ({ messages, messagesEndRef, siteLanguage, onStartEdit, onSc
                             {Array.isArray(message.images) && message.images.length > 0 && (
                                 <div className="space-y-2 mb-2">
                                     {message.images.map((img) => (
-                                        <img key={img.id || img.src} src={img.src} alt={img.name || 'uploaded'} className="rounded-lg border border-gray-200 max-w-full max-h-64 object-contain" />
+                                        <button
+                                            key={img.id || img.src}
+                                            type="button"
+                                            onClick={() => onImagePreview && onImagePreview({ ...img, messageId: message.id })}
+                                            className="block"
+                                            aria-label="Open image"
+                                        >
+                                            <img
+                                                src={img.src}
+                                                alt={img.name || 'uploaded'}
+                                                className="rounded-lg border border-gray-200 max-w-full max-h-64 object-contain transition-transform hover:scale-[1.02]"
+                                            />
+                                        </button>
                                     ))}
                                 </div>
                             )}

@@ -55,6 +55,7 @@ const AidaWidget = (props) => {
     const [selectedModel, setSelectedModel] = useState('openai/gpt-4o');
     const [pendingImages, setPendingImages] = useState([]); // [{ id, src, name, type }]
     const [editingMessageId, setEditingMessageId] = useState(null);
+    const [imagePreview, setImagePreview] = useState(null);
 
     const lastInputWasVoiceRef = useRef(false);
     const messagesEndRef = useRef(null);
@@ -70,9 +71,13 @@ const AidaWidget = (props) => {
     const [autoScrollPaused, setAutoScrollPaused] = useState(false);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const HISTORY_KEY = 'aida-chat-history';
+    const HISTORY_PROJECTS_KEY = 'aida-history-projects';
     const PROMPT_STORAGE_KEY = 'aida-custom-prompt';
     const [historyItems, setHistoryItems] = useState(() => {
         try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch { return []; }
+    });
+    const [historyProjects, setHistoryProjects] = useState(() => {
+        try { return JSON.parse(localStorage.getItem(HISTORY_PROJECTS_KEY)) || []; } catch { return []; }
     });
     const [customPrompt, setCustomPrompt] = useState(() => {
         try { return localStorage.getItem(PROMPT_STORAGE_KEY) || ''; } catch { return ''; }
@@ -86,6 +91,11 @@ const AidaWidget = (props) => {
     const persistHistory = (items) => {
         setHistoryItems(items);
         try { localStorage.setItem(HISTORY_KEY, JSON.stringify(items)); } catch {}
+    };
+
+    const persistProjects = (projects) => {
+        setHistoryProjects(projects);
+        try { localStorage.setItem(HISTORY_PROJECTS_KEY, JSON.stringify(projects)); } catch {}
     };
 
     const buildTitleFromMessages = (msgs) => {
@@ -126,6 +136,11 @@ const AidaWidget = (props) => {
             default: return "Hey hey! 👋 I'm Aida, your sparkly smart digital assistant 🤖💖 How can I help you today? 😄";
         }
     };
+
+    const handleDeleteProject = useCallback((projectId) => {
+  const updatedProjects = historyProjects.filter(project => project.id !== projectId);
+  persistProjects(updatedProjects);
+}, [historyProjects]);
     
     // --- EFFECT HOOKS ---
     useEffect(() => {
@@ -191,6 +206,129 @@ const AidaWidget = (props) => {
         }));
         return trimmedPrompt ? [{ type: 'human', content: trimmedPrompt }, ...baseHistory] : baseHistory;
     }, [customPrompt]);
+
+    const handleShareHistory = useCallback(async (session) => {
+        if (!session) return;
+        const title = session.title || 'Aida chat';
+        const timestamp = new Date(session.createdAt || Date.now()).toLocaleString();
+        const messageLines = (session.messages || [])
+            .map((msg) => {
+                const speaker = msg.sender === 'bot' ? 'Aida' : 'You';
+                return `${speaker}: ${msg.text || ''}`.trim();
+            })
+            .filter((line) => line.length > 0);
+        const shareText = [`Chat: ${title}`, `Saved: ${timestamp}`, '', ...messageLines].join('\n');
+
+        try {
+            if (typeof navigator !== 'undefined' && navigator.share) {
+                await navigator.share({ title, text: shareText });
+                return;
+            }
+        } catch (err) {
+            if (err?.name === 'AbortError') return;
+            console.warn('Native share failed, falling back to clipboard.', err);
+        }
+
+        const tryClipboardWrite = async () => {
+            if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(shareText);
+                alert('Chat copied to clipboard.');
+                return true;
+            }
+            return false;
+        };
+
+        const clipboardHandled = await tryClipboardWrite().catch(() => false);
+        if (clipboardHandled) return;
+
+        try {
+            if (typeof document !== 'undefined') {
+                const textarea = document.createElement('textarea');
+                textarea.value = shareText;
+                textarea.setAttribute('readonly', '');
+                textarea.style.position = 'absolute';
+                textarea.style.left = '-9999px';
+                document.body.appendChild(textarea);
+                textarea.select();
+                const successful = document.execCommand('copy');
+                document.body.removeChild(textarea);
+                if (successful) {
+                    alert('Chat copied to clipboard.');
+                    return;
+                }
+            }
+        } catch (err) {
+            console.error('Fallback clipboard copy failed', err);
+        }
+
+        alert('Unable to share this chat automatically. You can copy the text manually.');
+    }, []);
+
+    const handleRenameHistory = useCallback((id, nextTitle) => {
+        const trimmed = (nextTitle || '').trim();
+        const updated = historyItems.map((item) => (
+            item.id === id ? { ...item, title: trimmed || 'Untitled chat' } : item
+        ));
+        persistHistory(updated);
+    }, [historyItems]);
+
+    const handleCreateProject = useCallback((projectName) => {
+        const trimmed = (projectName || '').trim();
+        if (!trimmed) return false;
+        const exists = historyProjects.some((project) => (project.name || '').toLowerCase() === trimmed.toLowerCase());
+        if (exists) return false;
+        const newProject = {
+            id: `project-${Date.now()}`,
+            name: trimmed,
+            chatIds: [],
+        };
+        const updated = [newProject, ...historyProjects];
+        persistProjects(updated);
+        return true;
+    }, [historyProjects]);
+
+    const handleAssignChatToProject = useCallback((projectId, chatId) => {
+        if (!projectId || !chatId) return;
+        const chatExists = historyItems.some((item) => item.id === chatId);
+        if (!chatExists) return;
+        const updated = historyProjects.map((project) => {
+            if (project.id !== projectId) return project;
+            const existing = Array.isArray(project.chatIds) ? project.chatIds : [];
+            if (existing.includes(chatId)) return project;
+            return { ...project, chatIds: [...existing, chatId] };
+        });
+        persistProjects(updated);
+    }, [historyProjects, historyItems]);
+
+    const handleRenameProject = useCallback((projectId, nextName) => {
+        const trimmed = (nextName || '').trim();
+        if (!trimmed) return;
+        const updated = historyProjects.map(project => (
+            project.id === projectId ? { ...project, name: trimmed } : project
+        ));
+        persistProjects(updated);
+    }, [historyProjects]);
+
+    const handleDeleteHistoryItem = useCallback((chatId) => {
+        const filteredHistory = historyItems.filter(h => h.id !== chatId);
+        persistHistory(filteredHistory);
+        const updatedProjects = historyProjects.map(project => ({
+            ...project,
+            chatIds: (project.chatIds || []).filter(id => id !== chatId)
+        }));
+        persistProjects(updatedProjects);
+    }, [historyItems, historyProjects]);
+
+    const handleRemoveChatFromProject = useCallback((projectId, chatId) => {
+        const updatedProjects = historyProjects.map(project => {
+            if (project.id !== projectId) return project;
+            return {
+                ...project,
+                chatIds: (project.chatIds || []).filter(id => id !== chatId)
+            };
+        });
+        persistProjects(updatedProjects);
+    }, [historyProjects]);
 
     const cancelAutoSendTimer = useCallback(() => {
         setAutoSendCountdown(null);
@@ -652,6 +790,18 @@ const AidaWidget = (props) => {
         ? 'text-gray-400 hover:text-gray-200 focus:ring-white/30'
         : 'text-gray-500 hover:text-gray-700 focus:ring-blue-200';
 
+    useEffect(() => {
+        if (!imagePreview) return;
+        const onEsc = (event) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                setImagePreview(null);
+            }
+        };
+        window.addEventListener('keydown', onEsc);
+        return () => window.removeEventListener('keydown', onEsc);
+    }, [imagePreview]);
+
     // --- RENDER ---
     return (
         <div className={`z-50 ${isFullscreen 
@@ -686,22 +836,27 @@ const AidaWidget = (props) => {
                         open={isHistoryOpen}
                         onClose={() => setIsHistoryOpen(false)}
                         sessions={historyItems}
+                        projects={historyProjects}
+                        onCreateProject={handleCreateProject}
+                        onAssignChatToProject={handleAssignChatToProject}
+                        onRemoveChatFromProject={handleRemoveChatFromProject}
+                        onShare={handleShareHistory}
+                        onDeleteProject={handleDeleteProject} 
+                        onRename={handleRenameHistory}
                         onSelect={(s) => {
                             const restored = s.messages || [];
                             setMessages(restored);
                             try { sessionStorage.setItem('chatMessages', JSON.stringify(sanitizeMessagesForStorage(restored))); } catch (e) { console.warn('Skipping chatMessages persist:', e); }
                             setIsHistoryOpen(false);
                         }}
-                        onDelete={(id) => {
-                            const filtered = historyItems.filter(h => h.id !== id);
-                            persistHistory(filtered);
-                        }}
+                        onDelete={handleDeleteHistoryItem}
                     />
                     <ChatDisplay
                         messages={messages}
                         messagesEndRef={messagesEndRef}
                         siteLanguage={siteLanguage}
                         theme={theme}
+                        onImagePreview={(img) => setImagePreview(img)}
                         programmaticScrollRef={programmaticScrollRef}
                         onScrollStateChange={(atBottom) => {
                             setIsAtBottom(atBottom);
@@ -792,6 +947,33 @@ const AidaWidget = (props) => {
                                 Save
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+            {imagePreview && (
+                <div className="fixed inset-0 z-[65] flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/80" onClick={() => setImagePreview(null)} />
+                    <div className="relative z-10 max-w-4xl max-h-[90vh] w-full px-6">
+                        <div className="flex justify-end mb-2">
+                            <button
+                                type="button"
+                                onClick={() => setImagePreview(null)}
+                                className={`${theme === 'dark' ? 'text-white/80 hover:text-white' : 'text-gray-700 hover:text-gray-900'} p-2`}
+                                aria-label="Close image preview"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div className={`rounded-xl overflow-hidden border ${theme === 'dark' ? 'border-white/10 bg-black/60' : 'border-gray-200 bg-white'}`}>
+                            <img
+                                src={imagePreview.src}
+                                alt={imagePreview.name || 'uploaded'}
+                                className="w-full h-auto max-h-[80vh] object-contain bg-black"
+                            />
+                        </div>
+                        {imagePreview.name && (
+                            <p className={`mt-3 text-center text-sm truncate ${theme === 'dark' ? 'text-white/80' : 'text-gray-700'}`}>{imagePreview.name}</p>
+                        )}
                     </div>
                 </div>
             )}
