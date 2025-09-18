@@ -72,6 +72,7 @@ const AidaWidget = (props) => {
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const HISTORY_KEY = 'aida-chat-history';
     const HISTORY_PROJECTS_KEY = 'aida-history-projects';
+    const CURRENT_SESSION_KEY = 'aida-current-session-id';
     const PROMPT_STORAGE_KEY = 'aida-custom-prompt';
     const [historyItems, setHistoryItems] = useState(() => {
         try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch { return []; }
@@ -84,6 +85,9 @@ const AidaWidget = (props) => {
     });
     const [promptDraft, setPromptDraft] = useState('');
     const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
+    const [currentSessionId, setCurrentSessionId] = useState(() => {
+        try { return sessionStorage.getItem(CURRENT_SESSION_KEY) || null; } catch { return null; }
+    });
 
     // Remove heavy fields (e.g., base64 images) before persisting to storage
     const sanitizeMessagesForStorage = (msgs) => (msgs || []).map(({ images, ...m }) => m);
@@ -103,6 +107,26 @@ const AidaWidget = (props) => {
         const base = firstUser ? firstUser.text.trim() : 'Untitled chat';
         return base.length > 60 ? base.slice(0, 57) + '…' : base;
     };
+
+    const createNewSession = (msgs) => {
+        const id = `chat-${Date.now()}`;
+        const title = buildTitleFromMessages(msgs) || `Chat ${new Date().toLocaleString()}`;
+        const entry = { id, title, createdAt: Date.now(), messages: sanitizeMessagesForStorage(msgs) };
+        const next = [entry, ...historyItems].slice(0, 200);
+        persistHistory(next);
+        setCurrentSessionId(id);
+        try { sessionStorage.setItem(CURRENT_SESSION_KEY, id); } catch {}
+        return id;
+    };
+
+    const updateCurrentSession = (msgs) => {
+        if (!currentSessionId) return;
+        const title = buildTitleFromMessages(msgs) || 'Untitled chat';
+        const updated = historyItems.map(h => h.id === currentSessionId ? { ...h, title, messages: sanitizeMessagesForStorage(msgs) } : h);
+        persistHistory(updated);
+    };
+
+    
 
     const saveCurrentChatToHistory = () => {
         if (!messages || messages.length === 0) return; // nothing to save
@@ -423,7 +447,13 @@ const AidaWidget = (props) => {
             const botMessageId = `bot-${Date.now()}`;
 
             // Replace thread after the edited user message and add fresh bot placeholder
-            setMessages([...historyBefore, userMessage, { id: botMessageId, text: '', sender: 'bot' }]);
+            const nextThread = [...historyBefore, userMessage, { id: botMessageId, text: '', sender: 'bot' }];
+            setMessages(nextThread);
+            if (!currentSessionId) {
+                createNewSession(nextThread);
+            } else {
+                updateCurrentSession(nextThread);
+            }
             setCurrentMessage('');
             setEditingMessageId(null);
             setIsLoading(true);
@@ -492,7 +522,16 @@ const AidaWidget = (props) => {
 
         const userMessage = { id: `user-${Date.now()}`, text: messageText.trim(), sender: 'user', images: hasImages ? pendingImages : [] };
         const botMessageId = `bot-${Date.now()}`;
-        setMessages(prev => [...prev, userMessage, { id: botMessageId, text: '', sender: 'bot' }]);
+        setMessages(prev => {
+            const next = [...prev, userMessage, { id: botMessageId, text: '', sender: 'bot' }];
+            // Auto-create or update the session snapshot immediately
+            if (!currentSessionId) {
+                createNewSession(next);
+            } else {
+                updateCurrentSession(next);
+            }
+            return next;
+        });
         setIsLoading(true);
         startLoadingAnimation();
 
@@ -541,7 +580,12 @@ const AidaWidget = (props) => {
                     if (part.startsWith('data: ')) {
                         try {
                             const data = JSON.parse(part.substring(6));
-                            if (data.delta_content) setMessages(p => p.map(m => m.id === botMessageId ? { ...m, text: m.text + data.delta_content } : m));
+                            if (data.delta_content) setMessages(p => {
+                                const updated = p.map(m => m.id === botMessageId ? { ...m, text: m.text + data.delta_content } : m);
+                                // Throttle-less incremental save; lightweight localStorage write
+                                if (currentSessionId) updateCurrentSession(updated);
+                                return updated;
+                            });
                         } catch (e) {
                             console.error("Stream parse error:", part.substring(6), e);
                         }
@@ -847,6 +891,9 @@ const AidaWidget = (props) => {
                             const restored = s.messages || [];
                             setMessages(restored);
                             try { sessionStorage.setItem('chatMessages', JSON.stringify(sanitizeMessagesForStorage(restored))); } catch (e) { console.warn('Skipping chatMessages persist:', e); }
+                            // Continue autosaving into this existing session
+                            setCurrentSessionId(s.id);
+                            try { sessionStorage.setItem(CURRENT_SESSION_KEY, s.id); } catch {}
                             setIsHistoryOpen(false);
                         }}
                         onDelete={handleDeleteHistoryItem}
