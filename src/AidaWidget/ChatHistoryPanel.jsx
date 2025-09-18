@@ -192,6 +192,20 @@ const ChatHistoryPanel = ({
 
   const projectsList = Array.isArray(projects) ? projects : [];
 
+  // Gather all chat IDs currently assigned to any project
+const assignedChatIds = useMemo(() => {
+  const ids = new Set();
+  (projects || []).forEach(project => {
+    (project.chatIds || []).forEach(id => ids.add(id));
+  });
+  return ids;
+}, [projects]);
+
+// Filter sessions to only those not assigned to any project
+const unassignedSessions = useMemo(() => {
+  return (sessions || []).filter(s => !assignedChatIds.has(s.id));
+}, [sessions, assignedChatIds]);
+
   return (
     <div className="absolute inset-0 z-40 pointer-events-none overflow-hidden">
       {/* Dim background; clickable only when open */}
@@ -418,9 +432,9 @@ const ChatHistoryPanel = ({
             </div>
           </div>
           {sessions.length === 0 && (
-            <div className="text-xs opacity-70 px-2 py-3">No saved chats yet.</div>
+          <div className="text-xs opacity-70 px-2 py-3">No saved chats yet.</div>
           )}
-          {sessions.map((s) => {
+          {unassignedSessions.map((s) => {
             const matched = isMatch(s);
             const isEditing = editingId === s.id;
             const displayTitle = (s.title || '').trim() || 'Untitled chat';
