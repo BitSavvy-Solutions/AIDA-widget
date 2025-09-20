@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { HiPaperAirplane, HiOutlineMicrophone, HiStop, HiArrowPath, HiXMark, HiCpuChip } from 'react-icons/hi2';
+import { HiPaperAirplane, HiOutlineMicrophone, HiStop, HiArrowPath, HiXMark, HiCpuChip, HiOutlineGlobeAlt } from 'react-icons/hi2';
 
 const ChatInput = ({
     currentMessage,
@@ -28,7 +28,9 @@ const ChatInput = ({
     onImagesSelected,
     pendingImages = [],
     onRemovePendingImage,
-    hasPendingImages = false
+    hasPendingImages = false,
+    isWebSearchEnabled,
+    setIsWebSearchEnabled,
 }) => {
     const [isHoveringSend, setIsHoveringSend] = useState(false);
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
@@ -38,7 +40,9 @@ const ChatInput = ({
     const modelLabels = {
         'openai/gpt-4o': 'GPT-4.0',
         'google/gemini-flash-1.5': 'Gemini Flash',
-        'google/gemini-2.5-pro': 'Gemini 2.5 Pro',
+        'google/gemini-pro': 'Gemini Pro',
+        'deepseek/deepseek-chat-v3.1': 'Deepseek Chat',
+        'deepseek/deepseek-r1': 'Deepseek Reasoner',
     };
 
     const formatTime = (seconds) => {
@@ -208,25 +212,24 @@ const ChatInput = ({
             
             {/* Toolbar for controls */}
             <div className="flex items-center justify-between">
-                {/* Left side: Model selector (responsive) */}
-                {/* Desktop/regular: show dropdown */}
-                <div className="hidden sm:flex items-center">
-                    <HiCpuChip className="h-5 w-5 text-gray-500 mr-1" aria-hidden="true" />
-                    <select
-                        value={selectedModel}
-                        onChange={(e) => setSelectedModel(e.target.value)}
+                {/* Left side: Model selection and Web Search */}
+                <div className="relative flex items-center">
+                    {/* ✅ NEW Web Search Button */}
+                    <button
+                        type="button"
+                        onClick={() => setIsWebSearchEnabled(p => !p)}
                         disabled={isLoading || isRecording || isTranscribing}
-                        className="model-selector"
-                        aria-label="Select AI Model"
+                        className={`p-2 rounded-full disabled:opacity-50 ml-2 transition-colors ${
+                            isWebSearchEnabled 
+                                ? (theme === 'dark' ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-100 text-blue-600')
+                                : (theme === 'dark' ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100')
+                        }`}
+                        aria-pressed={isWebSearchEnabled}
+                        aria-label="Toggle web search"
+                        title="Toggle web search"
                     >
-                        <option value="openai/gpt-4o">GPT-4.0</option>
-                        <option value="google/gemini-flash-1.5">Gemini Flash</option>
-                        <option value="google/gemini-2.5-pro">Gemini 2.5 Pro (Thinking)</option>
-                    </select>
-                </div>
-
-                {/* Compact mode: hide dropdown, show icon with popover menu */}
-                <div className="relative sm:hidden flex items-center">
+                        <HiOutlineGlobeAlt className="h-6 w-6" />
+                    </button>
                     <button
                         type="button"
                         onClick={() => setIsModelMenuOpen((p) => !p)}
@@ -242,6 +245,7 @@ const ChatInput = ({
                     <span
                         className={`ml-2 text-xs ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'} max-w-[96px] truncate`}
                         aria-hidden="true"
+                        onClick={() => setIsModelMenuOpen((p) => !p)}
                     >
                         {modelLabels[selectedModel] || 'Model'}
                     </span>
@@ -252,8 +256,10 @@ const ChatInput = ({
                         >
                             {[
                                 { value: 'openai/gpt-4o', label: 'GPT-4.0' },
-                                { value: 'google/gemini-flash-1.5', label: 'Gemini Flash' },
-                                { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro (Thinking)' },
+                                { value: 'google/gemini-flash-1.5', label: 'Gemini Flash 1.5' },
+                                { value: 'google/gemini-2.5-pro', label: 'Gemini Pro 2.5 (reasoner)' },
+                                { value: 'deepseek/deepseek-chat-v3.1', label: 'Deepseek Chat 3.1' },
+                                { value: 'deepseek/deepseek-r1', label: 'Deepseek Reasoner R1'}
                             ].map((opt) => (
                                 <button
                                     key={opt.value}

@@ -56,6 +56,7 @@ const AidaWidget = (props) => {
     const [pendingImages, setPendingImages] = useState([]); // [{ id, src, name, type }]
     const [editingMessageId, setEditingMessageId] = useState(null);
     const [imagePreview, setImagePreview] = useState(null);
+    const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false); // ✅ New state for web search
 
     const lastInputWasVoiceRef = useRef(false);
     const messagesEndRef = useRef(null);
@@ -81,7 +82,7 @@ const AidaWidget = (props) => {
         try { return JSON.parse(localStorage.getItem(HISTORY_PROJECTS_KEY)) || []; } catch { return []; }
     });
     const [customPrompt, setCustomPrompt] = useState(() => {
-        try { return localStorage.getItem(PROMPT_STORAGE_KEY) || ''; } catch { return ''; }
+        try { return localStorage.getItem(PROMPT_STORAGE_KEY) || ''; } catch { return []; }
     });
     const [promptDraft, setPromptDraft] = useState('');
     const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
@@ -433,6 +434,12 @@ const AidaWidget = (props) => {
         const hasImages = pendingImages && pendingImages.length > 0;
         if ((!messageText.trim() && !hasImages) || isLoading) return;
 
+        // ✅ Capture web search state and reset UI immediately
+        const webSearchWasEnabled = isWebSearchEnabled;
+        if (webSearchWasEnabled) {
+            setIsWebSearchEnabled(false);
+        }
+
         cancelAutoSendTimer();
         cancelAutoRecordTimer();
 
@@ -467,6 +474,7 @@ const AidaWidget = (props) => {
                 const hasEditImages = Array.isArray(userMessage.images) && userMessage.images.length > 0;
                 const visionModels = new Set(['openai/gpt-4o', 'google/gemini-flash-1.5', 'google/gemini-pro-vision']);
                 const modelToUse = hasEditImages && !visionModels.has(selectedModel) ? 'google/gemini-flash-1.5' : selectedModel;
+                const finalModelName = webSearchWasEnabled ? `${modelToUse}:online` : modelToUse; // ✅ Append :online if needed
 
                 const payload = {
                     user_input: userMessage.text,
@@ -474,7 +482,7 @@ const AidaWidget = (props) => {
                     email: user.email,
                     page_path: window.location.pathname,
                     language: detectedLanguageCode,
-                    model: modelToUse,
+                    model: finalModelName, // ✅ Use final model name
                     images: userMessage.images || []
                 };
                 if (hasEditImages) {
@@ -542,6 +550,7 @@ const AidaWidget = (props) => {
             // Ensure a vision-capable model when sending an image
             const visionModels = new Set(['openai/gpt-4o', 'google/gemini-flash-1.5', 'google/gemini-pro-vision']);
             const modelToUse = hasImages && !visionModels.has(selectedModel) ? 'google/gemini-flash-1.5' : selectedModel;
+            const finalModelName = webSearchWasEnabled ? `${modelToUse}:online` : modelToUse; // ✅ Append :online if needed
 
             const payload = {
                 user_input: userMessage.text,
@@ -549,7 +558,7 @@ const AidaWidget = (props) => {
                 email: user.email,
                 page_path: window.location.pathname,
                 language: detectedLanguageCode,
-                model: modelToUse,
+                model: finalModelName, // ✅ Use final model name
                 images: userMessage.images || []
             };
             if (hasImages) {
@@ -600,7 +609,7 @@ const AidaWidget = (props) => {
             stopLoadingAnimation();
             setIsLoading(false); 
         }
-    }, [messages, currentMessage, isLoading, selectedModel, chatUrl, user.email, editingMessageId, pendingImages, buildMessageHistoryPayload]);
+    }, [messages, currentMessage, isLoading, selectedModel, chatUrl, user.email, editingMessageId, pendingImages, buildMessageHistoryPayload, isWebSearchEnabled]);
     
     useEffect(() => {
         if (isSendTimerPaused || autoSendCountdown === null) return;
@@ -958,6 +967,8 @@ const AidaWidget = (props) => {
                         pendingImages={pendingImages}
                         onRemovePendingImage={removePendingImage}
                         hasPendingImages={pendingImages.length > 0}
+                        isWebSearchEnabled={isWebSearchEnabled}
+                        setIsWebSearchEnabled={setIsWebSearchEnabled}
                     />
                 </div>
             )}
