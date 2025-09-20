@@ -210,7 +210,7 @@ const ChatInput = ({
             <div className="flex items-center justify-between">
                 {/* Left side: Model selector (responsive) */}
                 {/* Desktop/regular: show dropdown */}
-                <div className="sm:flex items-center">
+                <div className="hidden sm:flex items-center">
                     <HiCpuChip className="h-5 w-5 text-gray-500 mr-1" aria-hidden="true" />
                     <select
                         value={selectedModel}
