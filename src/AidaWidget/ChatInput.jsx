@@ -196,17 +196,24 @@ const ChatInput = ({
                         <span>{formatTime(elapsedTime)}</span>
                     </div>
                 ) : (
-                    <textarea
-                        ref={inputRef}
-                        value={currentMessage}
-                        onChange={(e) => setCurrentMessage(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        placeholder={isEditing ? "Edit your message..." : isTranscribing ? translations.transcribing : (translations.inputPlaceholder || "Type your message...")}
-                        disabled={isLoading || isTranscribing}
-                        dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'}
-                        rows={1}
-                        className={`flex-1 bg-transparent px-0 py-2 resize-none focus:outline-none max-h-40 overflow-y-auto whitespace-pre-wrap leading-tight auto-expand ${theme === 'dark' ? 'text-gray-100 placeholder-gray-400' : ''}`}
-                    />
+                   <textarea
+    ref={inputRef}
+    value={currentMessage}
+    onChange={(e) => setCurrentMessage(e.target.value)}
+    onKeyDown={handleKeyDown}
+    placeholder={isEditing ? "Edit your message..." : isTranscribing ? translations.transcribing : (translations.inputPlaceholder || "Type your message...")}
+    disabled={isLoading || isTranscribing}
+    dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'}
+    rows={1}
+    className={`flex-1 bg-transparent px-0 py-2 resize-none focus:outline-none custom-scrollbar
+        overflow-y-auto whitespace-pre-wrap leading-tight
+        ${theme === 'dark' ? 'text-gray-100 placeholder-gray-400' : ''}
+        min-h-[42px] max-h-[200px]`}
+    style={{
+        overflowY: 'auto',
+        overflowX: 'hidden',
+    }}
+/>
                 )}
             </div>
             
