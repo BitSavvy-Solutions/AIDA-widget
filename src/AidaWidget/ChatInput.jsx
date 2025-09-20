@@ -259,7 +259,8 @@ const ChatInput = ({
                                 { value: 'google/gemini-flash-1.5', label: 'Gemini Flash 1.5' },
                                 { value: 'google/gemini-2.5-pro', label: 'Gemini Pro 2.5 (reasoner)' },
                                 { value: 'deepseek/deepseek-chat-v3.1', label: 'Deepseek Chat 3.1' },
-                                { value: 'deepseek/deepseek-r1', label: 'Deepseek Reasoner R1'}
+                                { value: 'deepseek/deepseek-r1', label: 'Deepseek Reasoner R1'},
+                                { value: 'perplexity/sonar', label: 'Perplexity Sonar'}
                             ].map((opt) => (
                                 <button
                                     key={opt.value}
