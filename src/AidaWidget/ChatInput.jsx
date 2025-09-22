@@ -1,6 +1,16 @@
 import React, { useRef, useState } from 'react';
 import { HiPaperAirplane, HiOutlineMicrophone, HiStop, HiArrowPath, HiXMark, HiCpuChip, HiOutlineGlobeAlt } from 'react-icons/hi2';
 
+// ✅ Single source of truth for all available models
+const AVAILABLE_MODELS = [
+    { value: 'deepseek/deepseek-chat-v3.1', label: 'Deepseek Chat 3.1' },
+    { value: 'deepseek/deepseek-r1', label: 'Deepseek Reasoner R1'},
+    { value: 'openai/gpt-4o', label: 'GPT-4.0' },
+    { value: 'google/gemini-flash-1.5', label: 'Gemini Flash 1.5' },
+    { value: 'google/gemini-2.5-pro', label: 'Gemini Pro 2.5 (reasoner)' },
+    { value: 'perplexity/sonar', label: 'Perplexity Sonar'}
+];
+
 const ChatInput = ({
     currentMessage,
     setCurrentMessage,
@@ -37,13 +47,8 @@ const ChatInput = ({
     const imageInputRef = useRef(null);
     const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
 
-    const modelLabels = {
-        'openai/gpt-4o': 'GPT-4.0',
-        'google/gemini-flash-1.5': 'Gemini Flash',
-        'google/gemini-pro': 'Gemini Pro',
-        'deepseek/deepseek-chat-v3.1': 'Deepseek Chat',
-        'deepseek/deepseek-r1': 'Deepseek Reasoner',
-    };
+    // ✅ Get the display label from our single source of truth
+    const selectedModelLabel = AVAILABLE_MODELS.find(m => m.value === selectedModel)?.label || 'Model';
 
     const formatTime = (seconds) => {
         const minutes = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -254,21 +259,15 @@ const ChatInput = ({
                         aria-hidden="true"
                         onClick={() => setIsModelMenuOpen((p) => !p)}
                     >
-                        {modelLabels[selectedModel] || 'Model'}
+                        {selectedModelLabel}
                     </span>
                     {isModelMenuOpen && (
                         <div
                             className={`absolute z-50 left-0 bottom-full mb-2 w-48 rounded-md shadow-lg overflow-hidden ${theme === 'dark' ? 'bg-gray-800 border border-gray-700 text-gray-100' : 'bg-white border border-gray-200 text-gray-900'}`}
                             role="menu"
                         >
-                            {[
-                                { value: 'openai/gpt-4o', label: 'GPT-4.0' },
-                                { value: 'google/gemini-flash-1.5', label: 'Gemini Flash 1.5' },
-                                { value: 'google/gemini-2.5-pro', label: 'Gemini Pro 2.5 (reasoner)' },
-                                { value: 'deepseek/deepseek-chat-v3.1', label: 'Deepseek Chat 3.1' },
-                                { value: 'deepseek/deepseek-r1', label: 'Deepseek Reasoner R1'},
-                                { value: 'perplexity/sonar', label: 'Perplexity Sonar'}
-                            ].map((opt) => (
+                            {/* ✅ Render the menu from our single source of truth */}
+                            {AVAILABLE_MODELS.map((opt) => (
                                 <button
                                     key={opt.value}
                                     type="button"

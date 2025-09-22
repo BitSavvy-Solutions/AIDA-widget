@@ -791,9 +791,9 @@ const AidaWidget = (props) => {
             if (results.length > 0) {
                 setPendingImages(prev => [...prev, ...results]);
                 // Ensure a vision-capable model is selected when images are attached
-                const visionModels = new Set(['openai/gpt-4o', 'google/gemini-flash-1.5', 'google/gemini-pro-vision']);
-                if (!visionModels.has(selectedModel)) {
-                    setSelectedModel('openai/gpt-4o');
+                const visionlessModels = new Set([]);
+                if (!visionlessModels.has(selectedModel)) {
+                    setSelectedModel('deepseek/deepseek-chat-v3.1');
                 }
             }
         } catch (e) {
