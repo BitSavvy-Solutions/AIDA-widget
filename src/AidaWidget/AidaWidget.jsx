@@ -52,7 +52,7 @@ const AidaWidget = (props) => {
     const [isSendTimerPaused, setIsSendTimerPaused] = useState(false);
     const [autoRecordCountdown, setAutoRecordCountdown] = useState(null);
     const [isRecordTimerPaused, setIsRecordTimerPaused] = useState(false);
-    const [selectedModel, setSelectedModel] = useState('openai/gpt-4o');
+    const [selectedModel, setSelectedModel] = useState('deepseek/deepseek-chat-v3.1');
     const [pendingImages, setPendingImages] = useState([]); // [{ id, src, name, type }]
     const [editingMessageId, setEditingMessageId] = useState(null);
     const [imagePreview, setImagePreview] = useState(null);
