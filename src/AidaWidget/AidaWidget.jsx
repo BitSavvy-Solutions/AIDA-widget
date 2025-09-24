@@ -89,6 +89,7 @@ const AidaWidget = (props) => {
     const [currentSessionId, setCurrentSessionId] = useState(() => {
         try { return sessionStorage.getItem(CURRENT_SESSION_KEY) || null; } catch { return null; }
     });
+    const [lastCost, setLastCost] = useState(0);
 
     // Remove heavy fields (e.g., base64 images) before persisting to storage
     const sanitizeMessagesForStorage = (msgs) => (msgs || []).map(({ images, ...m }) => m);
@@ -469,6 +470,8 @@ const AidaWidget = (props) => {
             const detectedLang = franc(userMessage.text);
             const detectedLanguageCode = supportedLanguages.includes(langMap[detectedLang]) ? langMap[detectedLang] : "en";
 
+            setLastCost(0);
+
             try {
                 // Choose a vision-capable model automatically if images are present
                 const hasEditImages = Array.isArray(userMessage.images) && userMessage.images.length > 0;
@@ -595,6 +598,10 @@ const AidaWidget = (props) => {
                                 if (currentSessionId) updateCurrentSession(updated);
                                 return updated;
                             });
+                            // ✅ NEW: Extract and store cost information
+                            if (data.cost !== undefined) {
+                                setLastCost(data.cost);
+                            }
                         } catch (e) {
                             console.error("Stream parse error:", part.substring(6), e);
                         }
@@ -872,6 +879,8 @@ const AidaWidget = (props) => {
                 >
                     <ChatHeader
                         displayText={displayText}
+                        lastCost={lastCost}
+
                         resetChat={() => { 
                             saveCurrentChatToHistory(); 
                             setMessages([]); 
