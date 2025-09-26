@@ -65,6 +65,7 @@ const AidaWidget = (props) => {
     const inputRef = useRef(null);
     const loadingIntervalRef = useRef(null);
     const blinkTimerRef = useRef(null);
+    const streamRef = useRef(null);
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
     const timerIntervalRef = useRef(null);
@@ -221,6 +222,9 @@ const AidaWidget = (props) => {
         if (loadingIntervalRef.current) clearInterval(loadingIntervalRef.current);
         if (blinkTimerRef.current) clearTimeout(blinkTimerRef.current);
         if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+        }
     }, []);
 
     // --- CORE LOGIC FUNCTIONS ---
@@ -410,6 +414,7 @@ const AidaWidget = (props) => {
         cancelAutoRecordTimer();
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            streamRef.current = stream;
             const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
             mediaRecorderRef.current = recorder;
             audioChunksRef.current = [];
@@ -684,6 +689,11 @@ const AidaWidget = (props) => {
         if (mediaRecorderRef.current?.state === "recording") {
             mediaRecorderRef.current.stop();
         }
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+        }
+
         setIsRecording(false);
         if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     }, []);
