@@ -6,7 +6,7 @@ const AVAILABLE_MODELS = [
     { value: 'deepseek/deepseek-chat-v3.1', label: 'Deepseek Chat 3.1' },
     { value: 'deepseek/deepseek-r1', label: 'Deepseek Reasoner R1'},
     { value: 'openai/gpt-4o', label: 'GPT-4.0' },
-    { value: 'google/gemini-flash-1.5', label: 'Gemini Flash 1.5' },
+    { value: 'google/gemini-2.5-flash', label: 'Gemini Flash 2.5' },
     { value: 'google/gemini-2.5-pro', label: 'Gemini Pro 2.5 (reasoner)' },
     { value: 'perplexity/sonar', label: 'Perplexity Sonar'}
 ];

@@ -14,6 +14,7 @@ const defaultProps = {
         transcriptionUrl: "https://aitut-agentbackend.azurewebsites.net/transcribe_audio",
     },
     user: {
+        id: "anonymous_id",
         email: "anonymous@example.com",
     },
     language: 'en',
@@ -479,21 +480,19 @@ const AidaWidget = (props) => {
 
             try {
                 // Choose a vision-capable model automatically if images are present
-                const hasEditImages = Array.isArray(userMessage.images) && userMessage.images.length > 0;
-                const visionModels = new Set(['openai/gpt-4o', 'google/gemini-flash-1.5', 'google/gemini-pro-vision']);
-                const modelToUse = hasEditImages && !visionModels.has(selectedModel) ? 'google/gemini-flash-1.5' : selectedModel;
-                const finalModelName = webSearchWasEnabled ? `${modelToUse}:online` : modelToUse; // ✅ Append :online if needed
+                const finalModelName = webSearchWasEnabled ? `${modelToUse}:online` : selectedModel; // ✅ Append :online if needed
 
                 const payload = {
                     user_input: userMessage.text,
                     message_history: buildMessageHistoryPayload(historyBefore),
+                    user_id: user.id,
                     email: user.email,
                     page_path: window.location.pathname,
                     language: detectedLanguageCode,
                     model: finalModelName, // ✅ Use final model name
                     images: userMessage.images || []
                 };
-                if (hasEditImages) {
+                if (hasImages) {
                     const urls = (userMessage.images || []).map(img => img.src).filter(Boolean);
                     if (urls.length > 0) payload.image_data_urls = urls;
                 }
@@ -556,13 +555,13 @@ const AidaWidget = (props) => {
         
         try {
             // Ensure a vision-capable model when sending an image
-            const visionModels = new Set(['openai/gpt-4o', 'google/gemini-flash-1.5', 'google/gemini-pro-vision']);
-            const modelToUse = hasImages && !visionModels.has(selectedModel) ? 'google/gemini-flash-1.5' : selectedModel;
-            const finalModelName = webSearchWasEnabled ? `${modelToUse}:online` : modelToUse; // ✅ Append :online if needed
+            
+            const finalModelName = webSearchWasEnabled ? `${modelToUse}:online` : selectedModel; // ✅ Append :online if needed
 
             const payload = {
                 user_input: userMessage.text,
                 message_history: buildMessageHistoryPayload(messages),
+                user_id: user.id,
                 email: user.email,
                 page_path: window.location.pathname,
                 language: detectedLanguageCode,
@@ -621,7 +620,7 @@ const AidaWidget = (props) => {
             stopLoadingAnimation();
             setIsLoading(false); 
         }
-    }, [messages, currentMessage, isLoading, selectedModel, chatUrl, user.email, editingMessageId, pendingImages, buildMessageHistoryPayload, isWebSearchEnabled]);
+    }, [messages, currentMessage, isLoading, selectedModel, chatUrl, user.id, user.email, editingMessageId, pendingImages, buildMessageHistoryPayload, isWebSearchEnabled]);
     
     useEffect(() => {
         if (isSendTimerPaused || autoSendCountdown === null) return;
@@ -808,9 +807,11 @@ const AidaWidget = (props) => {
             if (results.length > 0) {
                 setPendingImages(prev => [...prev, ...results]);
                 // Ensure a vision-capable model is selected when images are attached
-                const visionlessModels = new Set([]);
-                if (!visionlessModels.has(selectedModel)) {
-                    setSelectedModel('deepseek/deepseek-chat-v3.1');
+                const visionlessModels = new Set(['deepseek/deepseek-r1', 'deepseek/deepseek-chat-v3.1']);
+                console.log("Checking visionless")
+                if (visionlessModels.has(selectedModel)) {
+                    console.log("setting default")
+                    setSelectedModel('google/gemini-2.5-flash');
                 }
             }
         } catch (e) {
