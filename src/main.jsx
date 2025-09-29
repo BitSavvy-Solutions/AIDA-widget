@@ -48,7 +48,7 @@ if (import.meta.env.DEV) {
   render(`#${widgetContainerId}`, {
     // You can put default props here for testing
     language: 'en',
-    user: { email: 'dev-user@example.com' },
+    user: { email: 'dev-user@example.com' , id: 'dev-id'},
     translations: {
       transcribing: 'Transcribing...',
       inputPlaceholder: 'Type a message to Aida...'
