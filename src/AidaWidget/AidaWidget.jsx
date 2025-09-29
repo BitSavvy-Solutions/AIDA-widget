@@ -13,10 +13,6 @@ const defaultProps = {
         chatUrl: "https://aitut-agentbackend.azurewebsites.net/iverse_agent",
         transcriptionUrl: "https://aitut-agentbackend.azurewebsites.net/transcribe_audio",
     },
-    user: {
-        id: "anonymous_id",
-        email: "anonymous@example.com",
-    },
     language: 'en',
     translations: {
         transcribing: 'Transcribing...',
@@ -406,7 +402,7 @@ const AidaWidget = (props) => {
             if (isOpen) {
                 startBlinking();
             } else {
-                setDisplayText("AI:DA");
+                setDisplayText("Ai:DA");
             }
         }
     }, [isOpen, startBlinking]);
