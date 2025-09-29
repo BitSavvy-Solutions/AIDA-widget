@@ -490,7 +490,6 @@ const AidaWidget = (props) => {
                     page_path: window.location.pathname,
                     language: detectedLanguageCode,
                     model: finalModelName, // ✅ Use final model name
-                    images: userMessage.images || []
                 };
                 if (hasImages) {
                     const urls = (userMessage.images || []).map(img => img.src).filter(Boolean);
@@ -566,7 +565,6 @@ const AidaWidget = (props) => {
                 page_path: window.location.pathname,
                 language: detectedLanguageCode,
                 model: finalModelName, // ✅ Use final model name
-                images: userMessage.images || []
             };
             if (hasImages) {
                 const urls = (userMessage.images || []).map(img => img.src).filter(Boolean);
