@@ -476,7 +476,7 @@ const AidaWidget = (props) => {
 
             try {
                 // Choose a vision-capable model automatically if images are present
-                const finalModelName = webSearchWasEnabled ? `${modelToUse}:online` : selectedModel; // ✅ Append :online if needed
+                const finalModelName = webSearchWasEnabled ? `${selectedModel}:online` : selectedModel; // ✅ Append :online if needed
 
                 const payload = {
                     user_input: userMessage.text,
@@ -551,7 +551,7 @@ const AidaWidget = (props) => {
         try {
             // Ensure a vision-capable model when sending an image
             
-            const finalModelName = webSearchWasEnabled ? `${modelToUse}:online` : selectedModel; // ✅ Append :online if needed
+            const finalModelName = webSearchWasEnabled ? `${selectedModel}:online` : selectedModel; // ✅ Append :online if needed
 
             const payload = {
                 user_input: userMessage.text,
