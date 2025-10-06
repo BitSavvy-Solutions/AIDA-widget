@@ -37,7 +37,7 @@ const AidaWidget = (props) => {
     });
     const [displayText, setDisplayText] = useState("AI:DA");
     const [messages, setMessages] = useState(
-      JSON.parse(sessionStorage.getItem('chatMessages')) || []
+        JSON.parse(sessionStorage.getItem('chatMessages')) || []
     );
     const [currentMessage, setCurrentMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -94,12 +94,12 @@ const AidaWidget = (props) => {
 
     const persistHistory = (items) => {
         setHistoryItems(items);
-        try { localStorage.setItem(HISTORY_KEY, JSON.stringify(items)); } catch {}
+        try { localStorage.setItem(HISTORY_KEY, JSON.stringify(items)); } catch { }
     };
 
     const persistProjects = (projects) => {
         setHistoryProjects(projects);
-        try { localStorage.setItem(HISTORY_PROJECTS_KEY, JSON.stringify(projects)); } catch {}
+        try { localStorage.setItem(HISTORY_PROJECTS_KEY, JSON.stringify(projects)); } catch { }
     };
 
     const buildTitleFromMessages = (msgs) => {
@@ -115,7 +115,7 @@ const AidaWidget = (props) => {
         const next = [entry, ...historyItems].slice(0, 200);
         persistHistory(next);
         setCurrentSessionId(id);
-        try { sessionStorage.setItem(CURRENT_SESSION_KEY, id); } catch {}
+        try { sessionStorage.setItem(CURRENT_SESSION_KEY, id); } catch { }
         return id;
     };
 
@@ -126,7 +126,7 @@ const AidaWidget = (props) => {
         persistHistory(updated);
     };
 
-    
+
 
     const saveCurrentChatToHistory = () => {
         if (!messages || messages.length === 0) return; // nothing to save
@@ -138,16 +138,16 @@ const AidaWidget = (props) => {
     };
 
     const isMobile = window.innerWidth <= 768;
-    
+
     // --- API & CONFIG ---
     const { chatUrl, transcriptionUrl } = apiConfig;
     const supportedLanguages = ["en", "fr", "ar", "hi", "tl", "uk", "sa", "ny"];
     const langMap = {
-      eng: "en", fra: "fr", ara: "ar", hin: "hi",
-      tgl: "tl", ukr: "uk", san: "sa", nya: "ny"
+        eng: "en", fra: "fr", ara: "ar", hin: "hi",
+        tgl: "tl", ukr: "uk", san: "sa", nya: "ny"
     };
     const siteLanguage = language || 'en';
-  
+
     const getLocalizedGreeting = (lang) => {
         switch (lang) {
             case 'ar': return "✨ مرحبًا! أنا آيدا، مساعدتك الرقمية الذكية 🤖💖 كيف يمكنني مساعدتك اليوم؟ 😊";
@@ -162,26 +162,26 @@ const AidaWidget = (props) => {
     };
 
     const handleDeleteProject = useCallback((projectId) => {
-  const updatedProjects = historyProjects.filter(project => project.id !== projectId);
-  persistProjects(updatedProjects);
-}, [historyProjects]);
-    
+        const updatedProjects = historyProjects.filter(project => project.id !== projectId);
+        persistProjects(updatedProjects);
+    }, [historyProjects]);
+
     // --- EFFECT HOOKS ---
     useEffect(() => {
         if (isOpen && !isLoading && !isTranscribing) inputRef.current?.focus();
     }, [isLoading, isTranscribing, isOpen]);
 
     useEffect(() => {
-        try { localStorage.setItem('aida-theme', theme); } catch (_) {}
+        try { localStorage.setItem('aida-theme', theme); } catch (_) { }
     }, [theme]);
 
     useEffect(() => {
-        try { localStorage.setItem(PROMPT_STORAGE_KEY, customPrompt); } catch (_) {}
+        try { localStorage.setItem(PROMPT_STORAGE_KEY, customPrompt); } catch (_) { }
     }, [customPrompt]);
 
     useEffect(() => {
         if (inputRef.current) {
-            inputRef.current.style.height = 'auto'; 
+            inputRef.current.style.height = 'auto';
             inputRef.current.style.height = `${inputRef.current.scrollHeight}px`;
         }
     }, [currentMessage]);
@@ -370,18 +370,18 @@ const AidaWidget = (props) => {
     const startBlinking = useCallback(() => {
         if (blinkTimerRef.current) clearTimeout(blinkTimerRef.current);
         const scheduleNextBlink = () => {
-          const nextBlinkDelay = 2000 + Math.random() * 5000;
-          blinkTimerRef.current = setTimeout(() => {
-            setEyeState('half-closed');
-            setTimeout(() => setEyeState('closed'), 100);
-            setTimeout(() => setEyeState('half-closed'), 160);
-            setTimeout(() => { setEyeState('open'); scheduleNextBlink(); }, 260);
-          }, nextBlinkDelay);
+            const nextBlinkDelay = 2000 + Math.random() * 5000;
+            blinkTimerRef.current = setTimeout(() => {
+                setEyeState('half-closed');
+                setTimeout(() => setEyeState('closed'), 100);
+                setTimeout(() => setEyeState('half-closed'), 160);
+                setTimeout(() => { setEyeState('open'); scheduleNextBlink(); }, 260);
+            }, nextBlinkDelay);
         };
         setEyeState('open');
         scheduleNextBlink();
     }, []);
-    
+
     const stopBlinking = () => {
         if (blinkTimerRef.current) clearTimeout(blinkTimerRef.current);
         setEyeState('open');
@@ -394,7 +394,7 @@ const AidaWidget = (props) => {
         if (loadingIntervalRef.current) clearInterval(loadingIntervalRef.current);
         loadingIntervalRef.current = setInterval(() => setDisplayText(states[i++ % states.length]), 300);
     }, [stopBlinking]);
-    
+
     const stopLoadingAnimation = useCallback(() => {
         if (loadingIntervalRef.current) {
             clearInterval(loadingIntervalRef.current);
@@ -415,7 +415,7 @@ const AidaWidget = (props) => {
             const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
             mediaRecorderRef.current = recorder;
             audioChunksRef.current = [];
-            
+
             recorder.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
             recorder.onstart = () => {
                 lastInputWasVoiceRef.current = true;
@@ -431,7 +431,7 @@ const AidaWidget = (props) => {
             alert("Could not access microphone.");
         }
     };
-    
+
     const stableHandleSendMessage = useCallback(async (messageToSend = null) => {
         const messageText = messageToSend ?? currentMessage;
         const hasImages = pendingImages && pendingImages.length > 0;
@@ -547,10 +547,10 @@ const AidaWidget = (props) => {
 
         const detectedLang = franc(userMessage.text);
         const detectedLanguageCode = supportedLanguages.includes(langMap[detectedLang]) ? langMap[detectedLang] : "en";
-        
+
         try {
             // Ensure a vision-capable model when sending an image
-            
+
             const finalModelName = webSearchWasEnabled ? `${selectedModel}:online` : selectedModel; // ✅ Append :online if needed
 
             const payload = {
@@ -576,7 +576,7 @@ const AidaWidget = (props) => {
             // Clear input and staged images after a successful send
             setCurrentMessage('');
             setPendingImages([]);
-            
+
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let accumulated = '';
@@ -612,10 +612,10 @@ const AidaWidget = (props) => {
             setDisplayText("ERR:0");
         } finally {
             stopLoadingAnimation();
-            setIsLoading(false); 
+            setIsLoading(false);
         }
     }, [messages, currentMessage, isLoading, selectedModel, chatUrl, user.id, user.email, editingMessageId, pendingImages, buildMessageHistoryPayload, isWebSearchEnabled]);
-    
+
     useEffect(() => {
         if (isSendTimerPaused || autoSendCountdown === null) return;
         const intervalId = setInterval(() => {
@@ -654,7 +654,7 @@ const AidaWidget = (props) => {
         setAutoSendCountdown(3);
         setIsSendTimerPaused(false);
     }, [cancelAutoSendTimer]);
-    
+
     const transcribeAudioBlob = async (audioBlob) => {
         if (audioBlob.size === 0) return;
         const formData = new FormData();
@@ -677,7 +677,7 @@ const AidaWidget = (props) => {
             setIsTranscribing(false);
         }
     };
-    
+
     const stopRecording = useCallback(() => {
         if (mediaRecorderRef.current?.state === "recording") {
             mediaRecorderRef.current.stop();
@@ -695,7 +695,7 @@ const AidaWidget = (props) => {
         if (isOpen) {
             if (isRecording) stopRecording();
             cancelAutoSendTimer();
-            cancelAutoRecordTimer(); 
+            cancelAutoRecordTimer();
             setIsClosing(true);
             setDisplayText("AI:DA");
             stopBlinking();
@@ -707,7 +707,7 @@ const AidaWidget = (props) => {
         } else {
             setIsOpen(true);
             startBlinking();
-            if (isMobile) setIsFullscreen(true); 
+            if (isMobile) setIsFullscreen(true);
             const stored = JSON.parse(sessionStorage.getItem('chatMessages'));
             if (!stored || stored.length === 0) {
                 const greeting = { id: `bot-${Date.now()}`, text: getLocalizedGreeting(siteLanguage), sender: 'bot' };
@@ -793,7 +793,7 @@ const AidaWidget = (props) => {
                 const bytes = estimateBytes(processed);
                 const MAX_BYTES_ALLOWED = 5 * 1024 * 1024; // 5MB safety cap
                 if (bytes > MAX_BYTES_ALLOWED) {
-                    alert(`Image \"${file.name}\" is too large after compression (${(bytes/1024/1024).toFixed(2)} MB). Please choose a smaller image.`);
+                    alert(`Image \"${file.name}\" is too large after compression (${(bytes / 1024 / 1024).toFixed(2)} MB). Please choose a smaller image.`);
                     continue; // skip oversized image
                 }
                 results.push({ id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, src: processed, name: file.name, type: file.type });
@@ -816,7 +816,7 @@ const AidaWidget = (props) => {
     const removePendingImage = (id) => {
         setPendingImages(prev => prev.filter(img => img.id !== id));
     };
-    
+
     const openPromptConfigurator = useCallback(() => {
         setPromptDraft(customPrompt);
         setIsPromptModalOpen(true);
@@ -869,10 +869,10 @@ const AidaWidget = (props) => {
 
     // --- RENDER ---
     return (
-        <div className={`z-50 ${isFullscreen 
-            ? 'fixed inset-0 w-full h-full' 
+        <div className={`z-50 ${isFullscreen
+            ? 'fixed inset-0 w-full h-full'
             : 'fixed bottom-5 right-5'
-        }`}>
+            }`}>
             {!isOpen && (<button onClick={toggleChat} className="bg-gray-900 text-white rounded-lg p-2 flex"><div className="compact-lcd"><SevenSegmentDisplay text={displayText} className="animate-lcd-pulse" /></div></button>)}
             {isOpen && (
                 <div
@@ -880,16 +880,16 @@ const AidaWidget = (props) => {
                     className={`${theme === 'dark'
                         ? 'bg-gray-900 text-gray-100 border border-gray-800'
                         : 'bg-white text-gray-900 border border-gray-200'
-                    } rounded-xl shadow-2xl flex flex-col ${isFullscreen ? 'w-full h-full' : 'w-80 sm:w-96 h-[500px]'} ${isClosing ? 'animate-collapse-chat' : 'animate-expand-chat'}`}
+                        } rounded-xl shadow-2xl flex flex-col ${isFullscreen ? 'w-full h-full' : 'w-80 sm:w-96 h-[500px]'} ${isClosing ? 'animate-collapse-chat' : 'animate-expand-chat'}`}
                 >
                     <ChatHeader
                         displayText={displayText}
                         lastCost={lastCost}
-
-                        resetChat={() => { 
-                            saveCurrentChatToHistory(); 
-                            setMessages([]); 
-                            try { sessionStorage.setItem('chatMessages', JSON.stringify([])); } catch (_) {}
+                        userId={user?.id}  // Add this line
+                        resetChat={() => {
+                            saveCurrentChatToHistory();
+                            setMessages([]);
+                            try { sessionStorage.setItem('chatMessages', JSON.stringify([])); } catch (_) { }
                         }}
                         toggleFullscreen={() => setIsFullscreen(p => !p)}
                         toggleChat={toggleChat}
@@ -908,7 +908,7 @@ const AidaWidget = (props) => {
                         onAssignChatToProject={handleAssignChatToProject}
                         onRemoveChatFromProject={handleRemoveChatFromProject}
                         onShare={handleShareHistory}
-                        onDeleteProject={handleDeleteProject} 
+                        onDeleteProject={handleDeleteProject}
                         onRename={handleRenameHistory}
                         onSelect={(s) => {
                             const restored = s.messages || [];
@@ -916,7 +916,7 @@ const AidaWidget = (props) => {
                             try { sessionStorage.setItem('chatMessages', JSON.stringify(sanitizeMessagesForStorage(restored))); } catch (e) { console.warn('Skipping chatMessages persist:', e); }
                             // Continue autosaving into this existing session
                             setCurrentSessionId(s.id);
-                            try { sessionStorage.setItem(CURRENT_SESSION_KEY, s.id); } catch {}
+                            try { sessionStorage.setItem(CURRENT_SESSION_KEY, s.id); } catch { }
                             setIsHistoryOpen(false);
                         }}
                         onDelete={handleDeleteHistoryItem}
