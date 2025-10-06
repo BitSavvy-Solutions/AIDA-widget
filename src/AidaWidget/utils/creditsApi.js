@@ -7,6 +7,7 @@ export const fetchUserCredits = async (userId) => {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+         'x-functions-key': 'dlkgVHOPghXdpOeE9SgyYe0r6nN3AjuEowskmJsDDhrBAzFuSlPb7g=='
       }
     });
     
