@@ -544,6 +544,9 @@ const AidaWidget = (props) => {
         });
         setIsLoading(true);
         startLoadingAnimation();
+        // Clear the composer immediately so the input reflects the send action even while we wait for the API handshake.
+        setCurrentMessage('');
+        setPendingImages([]);
 
         const detectedLang = franc(userMessage.text);
         const detectedLanguageCode = supportedLanguages.includes(langMap[detectedLang]) ? langMap[detectedLang] : "en";
