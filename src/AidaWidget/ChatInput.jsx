@@ -84,7 +84,7 @@ const ChatInput = ({
             );
         }
 
-        const isDisabled = isLoading || isTranscribing || (!currentMessage.trim() && !hasPendingImages);
+        const isDisabled = isTranscribing || (!currentMessage.trim() && !hasPendingImages);
 
         return (
             <button
@@ -121,7 +121,7 @@ const ChatInput = ({
         return (
             <button
                 onClick={handleRecordButtonClick}
-                disabled={isLoading || isTranscribing || autoSendCountdown !== null}
+                disabled={isTranscribing || autoSendCountdown !== null}
                 className={`ml-2 p-2 rounded-full text-white transition-opacity disabled:opacity-50 ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-900 hover:bg-gray-700'}`}
                 aria-label={isRecording ? "Stop Recording" : "Start Recording"}
             >
@@ -148,7 +148,7 @@ const ChatInput = ({
             <button
                 type="button"
                 onClick={() => imageInputRef.current?.click()}
-                disabled={isLoading || isTranscribing || isEditing}
+                disabled={isTranscribing || isEditing}
                 className={`ml-2 p-2 rounded-full text-white transition-opacity disabled:opacity-50 flex items-center justify-center ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-900 hover:bg-gray-700'}`}
                 aria-label="Add image"
                 title="Add image"
@@ -207,7 +207,7 @@ const ChatInput = ({
     onChange={(e) => setCurrentMessage(e.target.value)}
     onKeyDown={handleKeyDown}
     placeholder={isEditing ? "Edit your message..." : isTranscribing ? translations.transcribing : (translations.inputPlaceholder || "Type your message...")}
-    disabled={isLoading || isTranscribing}
+    disabled={isTranscribing}
     dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'}
     rows={1}
     className={`flex-1 bg-transparent px-0 py-2 resize-none focus:outline-none custom-scrollbar
@@ -230,7 +230,7 @@ const ChatInput = ({
                     <button
                         type="button"
                         onClick={() => setIsWebSearchEnabled(p => !p)}
-                        disabled={isLoading || isRecording || isTranscribing}
+                        disabled={isRecording || isTranscribing}
                         className={`p-2 rounded-full disabled:opacity-50 ml-2 transition-colors ${
                             isWebSearchEnabled 
                                 ? (theme === 'dark' ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-100 text-blue-600')
@@ -245,7 +245,7 @@ const ChatInput = ({
                     <button
                         type="button"
                         onClick={() => setIsModelMenuOpen((p) => !p)}
-                        disabled={isLoading || isRecording || isTranscribing}
+                        disabled={isRecording || isTranscribing}
                         className={`p-2 rounded-full disabled:opacity-50 ${theme === 'dark' ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`}
                         aria-haspopup="menu"
                         aria-expanded={isModelMenuOpen}
