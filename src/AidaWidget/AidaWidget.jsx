@@ -1,3 +1,4 @@
+/* src/AidaWidget/AidaWidget.jsx */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import SevenSegmentDisplay from './SevenSegmentDisplay';
 import ChatHeader from './ChatHeader';
@@ -6,12 +7,13 @@ import ChatDisplay from './ChatDisplay';
 import ChatInput from './ChatInput';
 import './AidaWidget.css';
 import { franc } from 'franc';
+import { CHAT_URL, TRANSCRIPTION_URL } from './utils/apiConfig'; // ✅ Import new config
 
 // Define default props to make the widget configurable and robust
 const defaultProps = {
     apiConfig: {
-        chatUrl: "https://aitut-agentbackend.azurewebsites.net/iverse_agent",
-        transcriptionUrl: "https://aitut-agentbackend.azurewebsites.net/transcribe_audio",
+        chatUrl: CHAT_URL, // ✅ Use imported value
+        transcriptionUrl: TRANSCRIPTION_URL, // ✅ Use imported value
     },
     language: 'en',
     translations: {
@@ -53,7 +55,7 @@ const AidaWidget = (props) => {
     const [pendingImages, setPendingImages] = useState([]); // [{ id, src, name, type }]
     const [editingMessageId, setEditingMessageId] = useState(null);
     const [imagePreview, setImagePreview] = useState(null);
-    const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false); // ✅ New state for web search
+    const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false);
 
     const lastInputWasVoiceRef = useRef(false);
     const messagesEndRef = useRef(null);

@@ -1,13 +1,15 @@
-// src/AidaWidget/utils/creditsApi.js
+/* src/AidaWidget/utils/creditsApi.js */
+import { CREDITS_API_HOST, CREDITS_API_KEY } from './apiConfig';
+
 export const fetchUserCredits = async (userId) => {
   if (!userId) return null;
   
   try {
-    const response = await fetch(`https://aitutfunc.azurewebsites.net/api/credits/${userId}`, {
+    const response = await fetch(`${CREDITS_API_HOST}/api/credits/${userId}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-         'x-functions-key': 'dlkgVHOPghXdpOeE9SgyYe0r6nN3AjuEowskmJsDDhrBAzFuSlPb7g=='
+         'x-functions-key': CREDITS_API_KEY
       }
     });
     
