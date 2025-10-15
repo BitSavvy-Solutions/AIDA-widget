@@ -24,7 +24,8 @@ const defaultProps = {
 
 const AidaWidget = (props) => {
     // Merge incoming props with defaults
-    const { apiConfig, user, language, translations } = { ...defaultProps, ...props };
+    const { apiConfig, user, language, translations, pageContext } = { ...defaultProps, ...props };
+
 
     // --- STATE AND REFS ---
     const [isOpen, setIsOpen] = useState(false);
@@ -226,14 +227,32 @@ const AidaWidget = (props) => {
         }
     }, []);
 
-    // --- CORE LOGIC FUNCTIONS ---
-    const buildMessageHistoryPayload = useCallback((history = []) => {
+    const buildMessageHistoryPayload = useCallback((history = [], context = null) => {
+        const messageHistory = [];
+
+        // 1. Prepend the Page Context as the very first instruction for the AI
+        if (context && Object.keys(context).length > 0) {
+            const contextString = JSON.stringify(context, null, 2); // Pretty-print for readability
+            messageHistory.push({
+                type: 'ai', // Treat context as a system-level instruction from "Aida's" side
+                content: `<PageContext>\n${contextString}\n</PageContext>`
+            });
+        }
+
+        // 2. Add the user's custom instructions right after the page context
         const trimmedPrompt = (customPrompt || '').trim();
-        const baseHistory = (history || []).map(m => ({
+        if (trimmedPrompt) {
+            messageHistory.push({ type: 'human', content: trimmedPrompt });
+        }
+
+        // 3. Add the actual visible chat history
+        const chatHistory = (history || []).map(m => ({
             type: m.sender === 'user' ? 'human' : 'ai',
             content: m.text || ''
         }));
-        return trimmedPrompt ? [{ type: 'human', content: trimmedPrompt }, ...baseHistory] : baseHistory;
+        messageHistory.push(...chatHistory);
+
+        return messageHistory;
     }, [customPrompt]);
 
     const handleShareHistory = useCallback(async (session) => {
@@ -482,7 +501,7 @@ const AidaWidget = (props) => {
 
                 const payload = {
                     user_input: userMessage.text,
-                    message_history: buildMessageHistoryPayload(historyBefore),
+                    message_history: buildMessageHistoryPayload(historyBefore, pageContext),
                     user_id: user.id,
                     email: user.email,
                     page_path: window.location.pathname,
@@ -560,7 +579,7 @@ const AidaWidget = (props) => {
 
             const payload = {
                 user_input: userMessage.text,
-                message_history: buildMessageHistoryPayload(messages),
+                message_history: buildMessageHistoryPayload(messages, pageContext),
                 user_id: user.id,
                 email: user.email,
                 page_path: window.location.pathname,
@@ -619,7 +638,7 @@ const AidaWidget = (props) => {
             stopLoadingAnimation();
             setIsLoading(false);
         }
-    }, [messages, currentMessage, isLoading, selectedModel, chatUrl, user.id, user.email, editingMessageId, pendingImages, buildMessageHistoryPayload, isWebSearchEnabled]);
+    }, [messages, currentMessage, isLoading, selectedModel, chatUrl, user, editingMessageId, pendingImages, buildMessageHistoryPayload, isWebSearchEnabled, pageContext]);
 
     useEffect(() => {
         if (isSendTimerPaused || autoSendCountdown === null) return;
