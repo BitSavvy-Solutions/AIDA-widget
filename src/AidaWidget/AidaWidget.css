@@ -273,6 +273,51 @@ body.aida-widget-resizing * {
   user-select: none !important;
 }
 
+/* Subtle edge glow to hint the panel can be resized */
+.aida-widget-shell {
+  transition: border-left-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.aida-widget-shell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  border: 1px solid transparent;
+  opacity: 0;
+  transition: opacity 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  z-index: 1;
+}
+
+.aida-widget-shell:hover::after,
+.aida-widget-shell--active::after {
+  opacity: 1;
+  border-color: rgba(255, 95, 144, 0.6);
+  box-shadow:
+    0 0 0 1px rgba(255, 95, 144, 0.4),
+    0 0 0 6px rgba(255, 95, 144, 0.18),
+    0 0 24px rgba(255, 160, 195, 0.45);
+}
+
+.aida-widget-shell[data-theme='dark']:hover::after,
+.aida-widget-shell--active[data-theme='dark']::after {
+  box-shadow:
+    0 0 0 1px rgba(255, 95, 144, 0.55),
+    0 0 0 8px rgba(255, 95, 144, 0.22),
+    0 0 32px rgba(255, 160, 195, 0.55);
+}
+
+.aida-widget-shell[data-theme='light']:hover,
+.aida-widget-shell--active[data-theme='light'] {
+  border-left-color: rgba(255, 95, 144, 0.6);
+}
+
+.aida-widget-shell[data-theme='dark']:hover,
+.aida-widget-shell--active[data-theme='dark'] {
+  border-left-color: rgba(255, 123, 170, 0.75);
+}
+
 .aida-resize-handle {
   position: absolute;
   top: 0;
@@ -293,17 +338,17 @@ body.aida-widget-resizing * {
   width: 2px;
   height: 48px;
   border-radius: 9999px;
-  background-color: rgba(148, 163, 184, 0.45); /* slate-400 */
   transition: background-color 0.2s ease, opacity 0.2s ease;
+  background-color: transparent;
 }
 
 [data-theme='dark'] .aida-resize-handle::before {
-  background-color: rgba(148, 163, 184, 0.65);
+  background-color: transparent;
 }
 
 .aida-resize-handle:hover::before,
 .aida-resize-handle.is-resizing::before {
-  background-color: rgba(59, 130, 246, 0.85); /* blue-500 */
+  background-color: transparent;
 }
 
 @media (max-width: 768px) {

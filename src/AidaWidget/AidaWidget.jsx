@@ -1101,6 +1101,12 @@ const AidaWidget = (props) => {
         transition: isResizingSidebar ? 'none' : 'width 0.2s ease'
     } : undefined;
     const resizeHandleClassName = `aida-resize-handle${isResizingSidebar ? ' is-resizing' : ''}`;
+    const baseContainerClasses = theme === 'dark'
+        ? 'bg-gray-900 text-gray-100 border-l border-gray-800'
+        : 'bg-white text-gray-900 border-l border-gray-200';
+    const sizeClasses = isFullscreen ? 'w-full h-full' : 'h-full max-w-[100vw]';
+    const animationClasses = isClosing ? 'animate-collapse-chat' : 'animate-expand-chat';
+    const containerClassName = `${baseContainerClasses} flex flex-col relative ${sizeClasses} ${animationClasses} aida-widget-shell${isResizingSidebar ? ' aida-widget-shell--active' : ''}`;
 
     return (
         <div className={`z-50 ${isFullscreen
@@ -1123,10 +1129,7 @@ const AidaWidget = (props) => {
                 <div
                     ref={sidebarRef}
                     data-theme={theme}
-                    className={`${theme === 'dark'
-                        ? 'bg-gray-900 text-gray-100 border-l border-gray-800'
-                        : 'bg-white text-gray-900 border-l border-gray-200'
-                        } flex flex-col relative ${isFullscreen ? 'w-full h-full' : 'h-full max-w-[100vw]'} ${isClosing ? 'animate-collapse-chat' : 'animate-expand-chat'}`}
+                    className={containerClassName}
                     style={sidebarInlineStyle}
                 >
                     {!isFullscreen && !isMobileViewport && (
