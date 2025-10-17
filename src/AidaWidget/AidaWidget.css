@@ -258,6 +258,12 @@
   text-align: left;
 }
 
+body.aida-widget-open {
+  padding-right: calc(var(--aida-original-padding-right, 0px) + var(--aida-widget-offset, 0px));
+  transition: padding-right 0.3s ease;
+  overflow-x: hidden;
+}
+
 .user-message[dir="rtl"] {
   text-align: right;
 }
@@ -541,6 +547,10 @@ textarea.auto-expand {
 /* Glossy header overlay */
 .glass-header {
   position: relative;
+  /* Allow menus rendered inside the header to overflow the rounded parent
+     (prevents dropdowns like the ellipsis menu from being clipped). */
+  overflow: visible;
+  z-index: 2; /* create a stacking context so absolute children with high z-index appear above siblings */
 }
 .glass-header::before {
   content: "";

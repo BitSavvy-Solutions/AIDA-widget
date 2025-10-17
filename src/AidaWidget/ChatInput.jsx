@@ -163,7 +163,7 @@ const ChatInput = ({
     );
 
     return (
-        <div className={`p-4 rounded-b-xl ${theme === 'dark' ? 'border-t border-gray-800 bg-gray-900 text-gray-100' : 'border-t border-gray-200 bg-white text-gray-900'}`}>
+        <div className={`p-4 rounded-none ${theme === 'dark' ? 'border-t border-gray-800 bg-gray-900 text-gray-100' : 'border-t border-gray-200 bg-white text-gray-900'}`}>
             {isEditing && (
                 <div className="mb-2 -mt-1 flex items-center justify-between rounded-md bg-amber-50 border border-amber-200 px-3 py-1.5 text-amber-800 text-sm">
                     <span>Editing message — press Enter to save</span>

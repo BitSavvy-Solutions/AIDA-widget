@@ -69,6 +69,8 @@ const AidaWidget = (props) => {
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
     const timerIntervalRef = useRef(null);
+    const sidebarRef = useRef(null);
+    const originalBodyPaddingRef = useRef(null);
     const [isAtBottom, setIsAtBottom] = useState(true);
     const [autoScrollPaused, setAutoScrollPaused] = useState(false);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -173,6 +175,70 @@ const AidaWidget = (props) => {
     useEffect(() => {
         if (isOpen && !isLoading && !isTranscribing) inputRef.current?.focus();
     }, [isLoading, isTranscribing, isOpen]);
+
+    useEffect(() => {
+        if (typeof document === 'undefined') return undefined;
+        const body = document.body;
+        if (!body) return undefined;
+
+        const updatePageOffset = () => {
+            if (!sidebarRef.current) return;
+            const width = sidebarRef.current.getBoundingClientRect().width;
+            body.style.setProperty('--aida-widget-offset', `${Math.round(width)}px`);
+        };
+
+        let resizeObserver = null;
+
+        const attachResizeObserver = () => {
+            if (resizeObserver || typeof ResizeObserver === 'undefined' || !sidebarRef.current) return;
+            resizeObserver = new ResizeObserver(updatePageOffset);
+            resizeObserver.observe(sidebarRef.current);
+        };
+
+        const scheduleMeasurement = () => {
+            const run = () => {
+                updatePageOffset();
+                attachResizeObserver();
+            };
+            if (typeof requestAnimationFrame === 'function') {
+                requestAnimationFrame(run);
+            } else {
+                setTimeout(run, 0);
+            }
+        };
+
+        const cleanup = () => {
+            window.removeEventListener('resize', updatePageOffset);
+            if (resizeObserver) {
+                resizeObserver.disconnect();
+                resizeObserver = null;
+            }
+            body.classList.remove('aida-widget-open');
+            body.style.removeProperty('--aida-widget-offset');
+            if (originalBodyPaddingRef.current !== null) {
+                body.style.removeProperty('--aida-original-padding-right');
+                originalBodyPaddingRef.current = null;
+            }
+        };
+
+        if (isOpen && !isFullscreen) {
+            if (originalBodyPaddingRef.current === null) {
+                const computed = window.getComputedStyle(body).paddingRight || '0px';
+                originalBodyPaddingRef.current = computed;
+                body.style.setProperty('--aida-original-padding-right', computed);
+            }
+
+            body.classList.add('aida-widget-open');
+            attachResizeObserver();
+            updatePageOffset();
+            scheduleMeasurement();
+            window.addEventListener('resize', updatePageOffset);
+        } else {
+            cleanup();
+        }
+
+        return cleanup;
+    }, [isOpen, isFullscreen]);
 
     useEffect(() => {
         try { localStorage.setItem('aida-theme', theme); } catch (_) { }
@@ -895,16 +961,28 @@ const AidaWidget = (props) => {
     return (
         <div className={`z-50 ${isFullscreen
             ? 'fixed inset-0 w-full h-full'
-            : 'fixed bottom-5 right-5'
+            : isOpen
+                ? 'fixed inset-y-0 right-0'
+                : 'fixed bottom-0 right-0'
             }`}>
-            {!isOpen && (<button onClick={toggleChat} className="bg-gray-900 text-white rounded-lg p-2 flex"><div className="compact-lcd"><SevenSegmentDisplay text={displayText} className="animate-lcd-pulse" /></div></button>)}
+            {!isOpen && (
+                <button
+                    onClick={toggleChat}
+                    className="bg-gray-900 text-white rounded-lg p-2 flex"
+                >
+                    <div className="compact-lcd">
+                        <SevenSegmentDisplay text={displayText} className="animate-lcd-pulse" />
+                    </div>
+                </button>
+            )}
             {isOpen && (
                 <div
+                    ref={sidebarRef}
                     data-theme={theme}
                     className={`${theme === 'dark'
-                        ? 'bg-gray-900 text-gray-100 border border-gray-800'
-                        : 'bg-white text-gray-900 border border-gray-200'
-                        } rounded-xl shadow-2xl flex flex-col ${isFullscreen ? 'w-full h-full' : 'w-80 sm:w-96 h-[500px]'} ${isClosing ? 'animate-collapse-chat' : 'animate-expand-chat'}`}
+                        ? 'bg-gray-900 text-gray-100 border-l border-gray-800'
+                        : 'bg-white text-gray-900 border-l border-gray-200'
+                        } flex flex-col relative ${isFullscreen ? 'w-full h-full' : 'h-full w-full sm:w-[420px] max-w-[100vw]'} ${isClosing ? 'animate-collapse-chat' : 'animate-expand-chat'}`}
                 >
                     <ChatHeader
                         displayText={displayText}
