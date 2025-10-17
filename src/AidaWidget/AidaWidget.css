@@ -264,6 +264,54 @@ body.aida-widget-open {
   overflow-x: hidden;
 }
 
+body.aida-widget-resizing {
+  cursor: ew-resize;
+  user-select: none;
+}
+
+body.aida-widget-resizing * {
+  user-select: none !important;
+}
+
+.aida-resize-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translateX(-50%);
+  width: 16px;
+  height: 100%;
+  cursor: ew-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  z-index: 10;
+}
+
+.aida-resize-handle::before {
+  content: "";
+  width: 2px;
+  height: 48px;
+  border-radius: 9999px;
+  background-color: rgba(148, 163, 184, 0.45); /* slate-400 */
+  transition: background-color 0.2s ease, opacity 0.2s ease;
+}
+
+[data-theme='dark'] .aida-resize-handle::before {
+  background-color: rgba(148, 163, 184, 0.65);
+}
+
+.aida-resize-handle:hover::before,
+.aida-resize-handle.is-resizing::before {
+  background-color: rgba(59, 130, 246, 0.85); /* blue-500 */
+}
+
+@media (max-width: 768px) {
+  .aida-resize-handle {
+    display: none;
+  }
+}
+
 .user-message[dir="rtl"] {
   text-align: right;
 }

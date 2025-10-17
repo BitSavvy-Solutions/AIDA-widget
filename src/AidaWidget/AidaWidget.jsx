@@ -22,6 +22,22 @@ const defaultProps = {
     }
 };
 
+const SIDEBAR_WIDTH_STORAGE_KEY = 'aida-widget-sidebar-width';
+const DEFAULT_DESKTOP_WIDTH = 420;
+const MIN_DESKTOP_WIDTH = 360; // Keep enough room for header/input controls
+const MAX_DESKTOP_WIDTH = 720;
+const VIEWPORT_PADDING = 48;
+
+const clampSidebarWidth = (width, viewportWidth) => {
+    const safeViewport = typeof viewportWidth === 'number' && viewportWidth > 0 ? viewportWidth : undefined;
+    if (!safeViewport) {
+        return Math.min(Math.max(width, MIN_DESKTOP_WIDTH), MAX_DESKTOP_WIDTH);
+    }
+    const effectiveMax = Math.min(MAX_DESKTOP_WIDTH, Math.max(240, safeViewport - VIEWPORT_PADDING));
+    const effectiveMin = Math.min(MIN_DESKTOP_WIDTH, effectiveMax);
+    return Math.min(Math.max(width, effectiveMin), effectiveMax);
+};
+
 const AidaWidget = (props) => {
     // Merge incoming props with defaults
     const { apiConfig, user, language, translations, pageContext } = { ...defaultProps, ...props };
@@ -93,6 +109,24 @@ const AidaWidget = (props) => {
         try { return sessionStorage.getItem(CURRENT_SESSION_KEY) || null; } catch { return null; }
     });
     const [lastCost, setLastCost] = useState(0);
+    const [isMobileViewport, setIsMobileViewport] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        return window.innerWidth <= 768;
+    });
+    const [sidebarWidth, setSidebarWidth] = useState(() => {
+        if (typeof window === 'undefined') return DEFAULT_DESKTOP_WIDTH;
+        const viewportWidth = window.innerWidth || 0;
+        try {
+            const stored = Number.parseInt(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY) ?? '', 10);
+            if (Number.isFinite(stored)) {
+                return clampSidebarWidth(stored, viewportWidth);
+            }
+        } catch (_) { /* ignore persistence errors */ }
+        return clampSidebarWidth(DEFAULT_DESKTOP_WIDTH, viewportWidth);
+    });
+    const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+    const sidebarWidthRef = useRef(sidebarWidth);
+    const resizeListenersRef = useRef({ move: null, up: null });
 
     // Remove heavy fields (e.g., base64 images) before persisting to storage
     const sanitizeMessagesForStorage = (msgs) => (msgs || []).map(({ images, ...m }) => m);
@@ -142,8 +176,6 @@ const AidaWidget = (props) => {
         persistHistory(next);
     };
 
-    const isMobile = window.innerWidth <= 768;
-
     // --- API & CONFIG ---
     const { chatUrl, transcriptionUrl } = apiConfig;
     const supportedLanguages = ["en", "fr", "ar", "hi", "tl", "uk", "sa", "ny"];
@@ -173,8 +205,56 @@ const AidaWidget = (props) => {
 
     // --- EFFECT HOOKS ---
     useEffect(() => {
+        sidebarWidthRef.current = sidebarWidth;
+    }, [sidebarWidth]);
+
+    useEffect(() => {
         if (isOpen && !isLoading && !isTranscribing) inputRef.current?.focus();
     }, [isLoading, isTranscribing, isOpen]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return undefined;
+        const handleResize = () => {
+            const viewportWidth = window.innerWidth || 0;
+            setIsMobileViewport(viewportWidth <= 768);
+            const clamped = clampSidebarWidth(sidebarWidthRef.current, viewportWidth);
+            if (clamped !== sidebarWidthRef.current) {
+                sidebarWidthRef.current = clamped;
+                setSidebarWidth(clamped);
+            }
+        };
+        window.addEventListener('resize', handleResize);
+        handleResize();
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    useEffect(() => {
+        if (isResizingSidebar) return;
+        if (typeof window === 'undefined') return undefined;
+        try {
+            localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth));
+        } catch (_) { /* ignore persistence errors */ }
+    }, [sidebarWidth, isResizingSidebar]);
+
+    useEffect(() => {
+        if (isOpen && isMobileViewport) {
+            setIsFullscreen(true);
+        }
+    }, [isMobileViewport, isOpen]);
+
+    useEffect(() => () => {
+        const { move, up } = resizeListenersRef.current || {};
+        if (typeof window !== 'undefined') {
+            if (typeof move === 'function') window.removeEventListener('pointermove', move);
+            if (typeof up === 'function') {
+                window.removeEventListener('pointerup', up);
+                window.removeEventListener('pointercancel', up);
+            }
+        }
+        if (typeof document !== 'undefined' && document.body) {
+            document.body.classList.remove('aida-widget-resizing');
+        }
+    }, []);
 
     useEffect(() => {
         if (typeof document === 'undefined') return undefined;
@@ -183,7 +263,8 @@ const AidaWidget = (props) => {
 
         const updatePageOffset = () => {
             if (!sidebarRef.current) return;
-            const width = sidebarRef.current.getBoundingClientRect().width;
+            const node = sidebarRef.current;
+            const width = (node?.offsetWidth ?? node?.getBoundingClientRect().width ?? 0);
             body.style.setProperty('--aida-widget-offset', `${Math.round(width)}px`);
         };
 
@@ -797,14 +878,71 @@ const AidaWidget = (props) => {
         } else {
             setIsOpen(true);
             startBlinking();
-            if (isMobile) setIsFullscreen(true);
+            if (isMobileViewport) setIsFullscreen(true);
             const stored = JSON.parse(sessionStorage.getItem('chatMessages'));
             if (!stored || stored.length === 0) {
                 const greeting = { id: `bot-${Date.now()}`, text: getLocalizedGreeting(siteLanguage), sender: 'bot' };
                 setMessages([greeting]);
             }
         }
-    }, [isOpen, isRecording, siteLanguage, startBlinking, stopBlinking, stopRecording, cancelAutoSendTimer, cancelAutoRecordTimer, isMobile]);
+    }, [isOpen, isRecording, siteLanguage, startBlinking, stopBlinking, stopRecording, cancelAutoSendTimer, cancelAutoRecordTimer, isMobileViewport]);
+
+
+
+    const handleSidebarResizeStart = useCallback((event) => {
+        if (typeof window === 'undefined') return;
+        if (isFullscreen || isMobileViewport) return;
+        if (event.button !== undefined && event.button !== 0) return;
+        if (event.isPrimary === false) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        const startX = event.clientX;
+        if (typeof startX !== 'number') return;
+
+        const viewportWidth = window.innerWidth || 0;
+        const initialWidth = clampSidebarWidth(sidebarWidthRef.current, viewportWidth);
+        if (initialWidth !== sidebarWidthRef.current) {
+            sidebarWidthRef.current = initialWidth;
+            setSidebarWidth(initialWidth);
+        }
+
+        setIsResizingSidebar(true);
+        if (typeof document !== 'undefined' && document.body) {
+            document.body.classList.add('aida-widget-resizing');
+        }
+
+        const handlePointerMove = (moveEvent) => {
+            const currentX = moveEvent.clientX;
+            if (typeof currentX !== 'number') return;
+            const delta = startX - currentX;
+            const nextWidth = clampSidebarWidth(initialWidth + delta, window.innerWidth || 0);
+            if (nextWidth !== sidebarWidthRef.current) {
+                sidebarWidthRef.current = nextWidth;
+                setSidebarWidth(nextWidth);
+            }
+        };
+
+        const finishResize = () => {
+            setIsResizingSidebar(false);
+            if (typeof document !== 'undefined' && document.body) {
+                document.body.classList.remove('aida-widget-resizing');
+            }
+            window.removeEventListener('pointermove', handlePointerMove);
+            window.removeEventListener('pointerup', finishResize);
+            window.removeEventListener('pointercancel', finishResize);
+            resizeListenersRef.current = { move: null, up: null };
+            try {
+                localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidthRef.current));
+            } catch (_) { /* ignore persistence errors */ }
+        };
+
+        resizeListenersRef.current = { move: handlePointerMove, up: finishResize };
+        window.addEventListener('pointermove', handlePointerMove);
+        window.addEventListener('pointerup', finishResize);
+        window.addEventListener('pointercancel', finishResize);
+    }, [isFullscreen, isMobileViewport]);
 
 
 
@@ -958,6 +1096,12 @@ const AidaWidget = (props) => {
     }, [imagePreview]);
 
     // --- RENDER ---
+    const sidebarInlineStyle = !isFullscreen ? {
+        width: `${sidebarWidth}px`,
+        transition: isResizingSidebar ? 'none' : 'width 0.2s ease'
+    } : undefined;
+    const resizeHandleClassName = `aida-resize-handle${isResizingSidebar ? ' is-resizing' : ''}`;
+
     return (
         <div className={`z-50 ${isFullscreen
             ? 'fixed inset-0 w-full h-full'
@@ -982,8 +1126,17 @@ const AidaWidget = (props) => {
                     className={`${theme === 'dark'
                         ? 'bg-gray-900 text-gray-100 border-l border-gray-800'
                         : 'bg-white text-gray-900 border-l border-gray-200'
-                        } flex flex-col relative ${isFullscreen ? 'w-full h-full' : 'h-full w-full sm:w-[420px] max-w-[100vw]'} ${isClosing ? 'animate-collapse-chat' : 'animate-expand-chat'}`}
+                        } flex flex-col relative ${isFullscreen ? 'w-full h-full' : 'h-full max-w-[100vw]'} ${isClosing ? 'animate-collapse-chat' : 'animate-expand-chat'}`}
+                    style={sidebarInlineStyle}
                 >
+                    {!isFullscreen && !isMobileViewport && (
+                        <div
+                            className={resizeHandleClassName}
+                            onPointerDown={handleSidebarResizeStart}
+                            aria-hidden="true"
+                            tabIndex={-1}
+                        />
+                    )}
                     <ChatHeader
                         displayText={displayText}
                         lastCost={lastCost}
@@ -994,6 +1147,7 @@ const AidaWidget = (props) => {
                             try { sessionStorage.setItem('chatMessages', JSON.stringify([])); } catch (_) { }
                         }}
                         toggleFullscreen={() => setIsFullscreen(p => !p)}
+                        showFullscreenToggle={!isMobileViewport}
                         toggleChat={toggleChat}
                         theme={theme}
                         onToggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
