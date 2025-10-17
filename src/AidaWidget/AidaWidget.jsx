@@ -1111,156 +1111,161 @@ const AidaWidget = (props) => {
     }, [imagePreview]);
 
     // --- RENDER ---
-    const sidebarInlineStyle = !isFullscreen ? {
-        width: `${sidebarWidth}px`,
-        transition: isResizingSidebar ? 'none' : 'width 0.2s ease'
-    } : undefined;
+    const sidebarInlineStyle = {
+        width: isFullscreen ? '100%' : `${sidebarWidth}px`,
+        maxWidth: isFullscreen ? '100%' : 'min(100vw, 720px)',
+        height: '100%',
+        transition: isResizingSidebar
+            ? 'none'
+            : 'width 0.3s ease, max-width 0.3s ease, height 0.3s ease, border-radius 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease'
+    };
     const resizeHandleClassName = `aida-resize-handle${isResizingSidebar ? ' is-resizing' : ''}`;
     const baseContainerClasses = theme === 'dark'
         ? 'bg-gray-900 text-gray-100 border-l border-gray-800'
         : 'bg-white text-gray-900 border-l border-gray-200';
-    const sizeClasses = isFullscreen ? 'w-full h-full' : 'h-full max-w-[100vw]';
+    const sizeClasses = isFullscreen ? 'w-full h-full' : 'h-full';
     const animationClasses = isClosing ? 'animate-collapse-chat' : 'animate-expand-chat';
-    const containerClassName = `${baseContainerClasses} flex flex-col relative ${sizeClasses} ${animationClasses} aida-widget-shell${isResizingSidebar ? ' aida-widget-shell--active' : ''}`;
+    const panelStateClasses = isFullscreen ? 'aida-widget-shell--fullscreen' : 'aida-widget-shell--docked';
+    const containerClassName = `${baseContainerClasses} flex flex-col relative ${sizeClasses} ${animationClasses} aida-widget-shell ${panelStateClasses}${isResizingSidebar ? ' aida-widget-shell--active' : ''}`;
+    const viewportClassName = `aida-widget-viewport z-50 ${isFullscreen ? 'aida-widget-viewport--fullscreen' : 'aida-widget-viewport--docked'}`;
 
     return (
-        <div className={`z-50 ${isFullscreen
-            ? 'fixed inset-0 w-full h-full'
-            : isOpen
-                ? 'fixed inset-y-0 right-0'
-                : 'fixed bottom-0 right-0'
-            }`}>
+        <>
             {!isOpen && (
-                <button
-                    onClick={toggleChat}
-                    className="bg-gray-900 text-white rounded-lg p-2 flex"
-                >
-                    <div className="compact-lcd">
-                        <SevenSegmentDisplay text={displayText} className="animate-lcd-pulse" />
-                    </div>
-                </button>
+                <div className="aida-widget-launcher fixed z-50">
+                    <button
+                        onClick={toggleChat}
+                        className="bg-gray-900 text-white rounded-lg p-2 flex"
+                    >
+                        <div className="compact-lcd">
+                            <SevenSegmentDisplay text={displayText} className="animate-lcd-pulse" />
+                        </div>
+                    </button>
+                </div>
             )}
             {isOpen && (
-                <div
-                    ref={sidebarRef}
-                    data-theme={theme}
-                    className={containerClassName}
-                    style={sidebarInlineStyle}
-                >
-                    {!isFullscreen && !isMobileViewport && (
-                        <div
-                            className={resizeHandleClassName}
-                            onPointerDown={handleSidebarResizeStart}
-                            onPointerEnter={handleResizeHandlePointerEnter}
-                            onPointerLeave={handleResizeHandlePointerLeave}
-                            aria-hidden="true"
-                            tabIndex={-1}
+                <div className={viewportClassName}>
+                    <div
+                        ref={sidebarRef}
+                        data-theme={theme}
+                        className={containerClassName}
+                        style={sidebarInlineStyle}
+                    >
+                        {!isFullscreen && !isMobileViewport && (
+                            <div
+                                className={resizeHandleClassName}
+                                onPointerDown={handleSidebarResizeStart}
+                                onPointerEnter={handleResizeHandlePointerEnter}
+                                onPointerLeave={handleResizeHandlePointerLeave}
+                                aria-hidden="true"
+                                tabIndex={-1}
+                            />
+                        )}
+                        <ChatHeader
+                            displayText={displayText}
+                            lastCost={lastCost}
+                            userId={user?.id}  // Add this line
+                            resetChat={() => {
+                                saveCurrentChatToHistory();
+                                setMessages([]);
+                                try { sessionStorage.setItem('chatMessages', JSON.stringify([])); } catch (_) { }
+                            }}
+                            toggleFullscreen={() => setIsFullscreen(p => !p)}
+                            showFullscreenToggle={!isMobileViewport}
+                            toggleChat={toggleChat}
+                            theme={theme}
+                            onToggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
+                            onToggleHistory={() => setIsHistoryOpen(v => !v)}
+                            onDisplayClick={openPromptConfigurator}
                         />
-                    )}
-                    <ChatHeader
-                        displayText={displayText}
-                        lastCost={lastCost}
-                        userId={user?.id}  // Add this line
-                        resetChat={() => {
-                            saveCurrentChatToHistory();
-                            setMessages([]);
-                            try { sessionStorage.setItem('chatMessages', JSON.stringify([])); } catch (_) { }
-                        }}
-                        toggleFullscreen={() => setIsFullscreen(p => !p)}
-                        showFullscreenToggle={!isMobileViewport}
-                        toggleChat={toggleChat}
-                        theme={theme}
-                        onToggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
-                        onToggleHistory={() => setIsHistoryOpen(v => !v)}
-                        onDisplayClick={openPromptConfigurator}
-                    />
-                    <ChatHistoryPanel
-                        theme={theme}
-                        open={isHistoryOpen}
-                        onClose={() => setIsHistoryOpen(false)}
-                        sessions={historyItems}
-                        projects={historyProjects}
-                        onCreateProject={handleCreateProject}
-                        onAssignChatToProject={handleAssignChatToProject}
-                        onRemoveChatFromProject={handleRemoveChatFromProject}
-                        onShare={handleShareHistory}
-                        onDeleteProject={handleDeleteProject}
-                        onRename={handleRenameHistory}
-                        onSelect={(s) => {
-                            const restored = s.messages || [];
-                            setMessages(restored);
-                            try { sessionStorage.setItem('chatMessages', JSON.stringify(sanitizeMessagesForStorage(restored))); } catch (e) { console.warn('Skipping chatMessages persist:', e); }
-                            // Continue autosaving into this existing session
-                            setCurrentSessionId(s.id);
-                            try { sessionStorage.setItem(CURRENT_SESSION_KEY, s.id); } catch { }
-                            setIsHistoryOpen(false);
-                        }}
-                        onDelete={handleDeleteHistoryItem}
-                    />
-                    <ChatDisplay
-                        messages={messages}
-                        messagesEndRef={messagesEndRef}
-                        siteLanguage={siteLanguage}
-                        theme={theme}
-                        onImagePreview={(img) => setImagePreview(img)}
-                        programmaticScrollRef={programmaticScrollRef}
-                        onScrollStateChange={(atBottom) => {
-                            setIsAtBottom(atBottom);
-                            if (atBottom) {
-                                setAutoScrollPaused(false);
-                            }
-                            shouldAutoScrollRef.current = atBottom && !autoScrollPaused;
-                        }}
-                        onUserScrollAway={() => {
-                            if (isLoading) {
-                                setAutoScrollPaused(true);
-                                shouldAutoScrollRef.current = false;
-                            }
-                        }}
-                        shouldAutoScroll={isAtBottom && !autoScrollPaused}
-                        onStartEdit={(id, text) => {
-                            setCurrentMessage(text);
-                            setEditingMessageId(id);
-                            setTimeout(() => inputRef.current?.focus(), 0);
-                        }}
-                    />
-                    <ChatInput
-                        currentMessage={currentMessage}
-                        setCurrentMessage={handleInputChange}
-                        theme={theme}
-                        handleSendMessage={() => stableHandleSendMessage()}
-                        handleKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault();
-                                stableHandleSendMessage();
-                            }
-                        }}
-                        handleRecordButtonClick={handleRecordButtonClick}
-                        inputRef={inputRef}
-                        isLoading={isLoading}
-                        isTranscribing={isTranscribing}
-                        isRecording={isRecording}
-                        elapsedTime={elapsedTime}
-                        siteLanguage={siteLanguage}
-                        autoSendCountdown={autoSendCountdown}
-                        cancelAutoSendTimer={cancelAutoSendTimer}
-                        setIsSendTimerPaused={setIsSendTimerPaused}
-                        autoRecordCountdown={autoRecordCountdown}
-                        cancelAutoRecordTimer={cancelAutoRecordTimer}
-                        setIsRecordTimerPaused={setIsRecordTimerPaused}
-                        selectedModel={selectedModel}
-                        setSelectedModel={setSelectedModel}
-                        translations={translations}
-                        isEditing={Boolean(editingMessageId)}
-                        cancelEdit={() => { setEditingMessageId(null); setCurrentMessage(''); }}
-                        onImagesSelected={handleImagesSelected}
-                        pendingImages={pendingImages}
-                        onRemovePendingImage={removePendingImage}
-                        hasPendingImages={pendingImages.length > 0}
-                        isWebSearchEnabled={isWebSearchEnabled}
-                        setIsWebSearchEnabled={setIsWebSearchEnabled}
-                    />
+                        <ChatHistoryPanel
+                            theme={theme}
+                            open={isHistoryOpen}
+                            onClose={() => setIsHistoryOpen(false)}
+                            sessions={historyItems}
+                            projects={historyProjects}
+                            onCreateProject={handleCreateProject}
+                            onAssignChatToProject={handleAssignChatToProject}
+                            onRemoveChatFromProject={handleRemoveChatFromProject}
+                            onShare={handleShareHistory}
+                            onDeleteProject={handleDeleteProject}
+                            onRename={handleRenameHistory}
+                            onSelect={(s) => {
+                                const restored = s.messages || [];
+                                setMessages(restored);
+                                try { sessionStorage.setItem('chatMessages', JSON.stringify(sanitizeMessagesForStorage(restored))); } catch (e) { console.warn('Skipping chatMessages persist:', e); }
+                                // Continue autosaving into this existing session
+                                setCurrentSessionId(s.id);
+                                try { sessionStorage.setItem(CURRENT_SESSION_KEY, s.id); } catch { }
+                                setIsHistoryOpen(false);
+                            }}
+                            onDelete={handleDeleteHistoryItem}
+                        />
+                        <ChatDisplay
+                            messages={messages}
+                            messagesEndRef={messagesEndRef}
+                            siteLanguage={siteLanguage}
+                            theme={theme}
+                            onImagePreview={(img) => setImagePreview(img)}
+                            programmaticScrollRef={programmaticScrollRef}
+                            onScrollStateChange={(atBottom) => {
+                                setIsAtBottom(atBottom);
+                                if (atBottom) {
+                                    setAutoScrollPaused(false);
+                                }
+                                shouldAutoScrollRef.current = atBottom && !autoScrollPaused;
+                            }}
+                            onUserScrollAway={() => {
+                                if (isLoading) {
+                                    setAutoScrollPaused(true);
+                                    shouldAutoScrollRef.current = false;
+                                }
+                            }}
+                            shouldAutoScroll={isAtBottom && !autoScrollPaused}
+                            onStartEdit={(id, text) => {
+                                setCurrentMessage(text);
+                                setEditingMessageId(id);
+                                setTimeout(() => inputRef.current?.focus(), 0);
+                            }}
+                        />
+                        <ChatInput
+                            currentMessage={currentMessage}
+                            setCurrentMessage={handleInputChange}
+                            theme={theme}
+                            handleSendMessage={() => stableHandleSendMessage()}
+                            handleKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    stableHandleSendMessage();
+                                }
+                            }}
+                            handleRecordButtonClick={handleRecordButtonClick}
+                            inputRef={inputRef}
+                            isLoading={isLoading}
+                            isTranscribing={isTranscribing}
+                            isRecording={isRecording}
+                            elapsedTime={elapsedTime}
+                            siteLanguage={siteLanguage}
+                            autoSendCountdown={autoSendCountdown}
+                            cancelAutoSendTimer={cancelAutoSendTimer}
+                            setIsSendTimerPaused={setIsSendTimerPaused}
+                            autoRecordCountdown={autoRecordCountdown}
+                            cancelAutoRecordTimer={cancelAutoRecordTimer}
+                            setIsRecordTimerPaused={setIsRecordTimerPaused}
+                            selectedModel={selectedModel}
+                            setSelectedModel={setSelectedModel}
+                            translations={translations}
+                            isEditing={Boolean(editingMessageId)}
+                            cancelEdit={() => { setEditingMessageId(null); setCurrentMessage(''); }}
+                            onImagesSelected={handleImagesSelected}
+                            pendingImages={pendingImages}
+                            onRemovePendingImage={removePendingImage}
+                            hasPendingImages={pendingImages.length > 0}
+                            isWebSearchEnabled={isWebSearchEnabled}
+                            setIsWebSearchEnabled={setIsWebSearchEnabled}
+                        />
                 </div>
+            </div>
             )}
             {isPromptModalOpen && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center">
@@ -1325,7 +1330,7 @@ const AidaWidget = (props) => {
                     </div>
                 </div>
             )}
-        </div>
+        </>
     );
 };
 

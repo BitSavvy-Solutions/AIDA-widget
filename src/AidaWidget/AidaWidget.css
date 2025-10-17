@@ -201,6 +201,13 @@
   text-align: right;
 }
 
+.aida-widget-launcher {
+  position: fixed;
+  bottom: 0;
+  right: 1.5rem; /* nudged closer to the edge */
+  z-index: 50;
+}
+
 .bot-message[dir="rtl"] li {
   direction: rtl;
   text-align: right;
@@ -273,9 +280,39 @@ body.aida-widget-resizing * {
   user-select: none !important;
 }
 
+.aida-widget-viewport {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: stretch;
+  pointer-events: none;
+}
+
+.aida-widget-viewport > * {
+  pointer-events: auto;
+  max-height: 100vh;
+}
+
+.aida-widget-viewport--fullscreen {
+  padding: 0;
+}
+
+.aida-widget-viewport--docked {
+  padding: 0;
+}
+
 /* Subtle edge glow to hint the panel can be resized */
 .aida-widget-shell {
-  transition: border-left-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-left-color 0.2s ease,
+    box-shadow 0.2s ease,
+    width 0.3s ease,
+    max-width 0.3s ease,
+    height 0.3s ease,
+    border-radius 0.3s ease,
+    transform 0.3s ease;
+  will-change: width, height, transform;
 }
 
 .aida-widget-shell::after {
@@ -316,6 +353,14 @@ body.aida-widget-resizing * {
 .aida-widget-shell--edge-hover[data-theme='dark'],
 .aida-widget-shell--active[data-theme='dark'] {
   border-left-color: rgba(255, 123, 170, 0.75);
+}
+
+.aida-widget-shell--fullscreen {
+  border-left-color: transparent;
+}
+
+.aida-widget-shell--docked {
+  border-left-color: inherit;
 }
 
 .aida-resize-handle {
