@@ -163,6 +163,8 @@ const ChatDisplay = ({
                                 </div>
                             )}
                             {message.text && message.text.trim() !== '' ? (
+                                // Replace literal <br> tags with Markdown line breaks so they render
+                                // correctly inside tables and paragraphs when parsed by ReactMarkdown.
                                 <ReactMarkdown
                                     remarkPlugins={[remarkGfm]}
                                     components={{
@@ -176,7 +178,7 @@ const ChatDisplay = ({
                                         }
                                     }}
                                 >
-                                    {message.text}
+                                    {String(message.text).replace(/<br\s*\/?>(?=\s*)/gi, '  \n')}
                                 </ReactMarkdown>
                             ) : (
                                 message.sender === 'bot' ? (
@@ -188,7 +190,7 @@ const ChatDisplay = ({
                                 ) : null
                             )}
                         </div>
-                        <div className="mt-1 flex items-center gap-2 select-none">
+                        <div className="mt-0 flex items-center gap-2 select-none">
                             <button
                                 type="button"
                                 onClick={() => handleCopy(message.text, message.id)}
