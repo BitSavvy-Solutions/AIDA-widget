@@ -1,5 +1,5 @@
 /* src/AidaWidget/AidaWidget.jsx */
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import SevenSegmentDisplay from './SevenSegmentDisplay';
 import ChatHeader from './ChatHeader';
 import ChatHistoryPanel from './ChatHistoryPanel';
@@ -620,7 +620,14 @@ const AidaWidget = (props) => {
             const idx = messages.findIndex(m => m.id === editingMessageId);
             if (idx === -1) return; // safety
             // For simplicity, keep original images during edit; do not attach new pending images
-            const userMessage = { ...messages[idx], text: trimmed, edited: true };
+            const finalModelName = webSearchWasEnabled ? `${selectedModel}:online` : selectedModel;
+            const userMessage = {
+                ...messages[idx],
+                text: trimmed,
+                edited: true,
+                webSearchEnabled: webSearchWasEnabled,
+                model: finalModelName,
+            };
             const historyBefore = messages.slice(0, idx);
             const botMessageId = `bot-${Date.now()}`;
 
@@ -643,9 +650,6 @@ const AidaWidget = (props) => {
             setLastCost(0);
 
             try {
-                // Choose a vision-capable model automatically if images are present
-                const finalModelName = webSearchWasEnabled ? `${selectedModel}:online` : selectedModel; // ✅ Append :online if needed
-
                 const payload = {
                     user_input: userMessage.text,
                     message_history: buildMessageHistoryPayload(historyBefore, pageContext),
@@ -653,11 +657,11 @@ const AidaWidget = (props) => {
                     email: user.email,
                     page_path: window.location.pathname,
                     language: detectedLanguageCode,
-                    model: finalModelName, // ✅ Use final model name
+                    model: userMessage.model, // ✅ Use final model name
                 };
-                if (hasImages) {
-                    const urls = (userMessage.images || []).map(img => img.src).filter(Boolean);
-                    if (urls.length > 0) payload.image_data_urls = urls;
+                const imageUrls = (userMessage.images || []).map(img => img.src).filter(Boolean);
+                if (imageUrls.length > 0) {
+                    payload.image_data_urls = imageUrls;
                 }
 
                 const response = await fetch(chatUrl, {
@@ -698,7 +702,15 @@ const AidaWidget = (props) => {
             return;
         }
 
-        const userMessage = { id: `user-${Date.now()}`, text: messageText.trim(), sender: 'user', images: hasImages ? pendingImages : [] };
+        const finalModelName = webSearchWasEnabled ? `${selectedModel}:online` : selectedModel; // ✅ Append :online if needed
+        const userMessage = {
+            id: `user-${Date.now()}`,
+            text: messageText.trim(),
+            sender: 'user',
+            images: hasImages ? pendingImages : [],
+            webSearchEnabled: webSearchWasEnabled,
+            model: finalModelName,
+        };
         const botMessageId = `bot-${Date.now()}`;
         setMessages(prev => {
             const next = [...prev, userMessage, { id: botMessageId, text: '', sender: 'bot' }];
@@ -722,8 +734,6 @@ const AidaWidget = (props) => {
         try {
             // Ensure a vision-capable model when sending an image
 
-            const finalModelName = webSearchWasEnabled ? `${selectedModel}:online` : selectedModel; // ✅ Append :online if needed
-
             const payload = {
                 user_input: userMessage.text,
                 message_history: buildMessageHistoryPayload(messages, pageContext),
@@ -731,11 +741,11 @@ const AidaWidget = (props) => {
                 email: user.email,
                 page_path: window.location.pathname,
                 language: detectedLanguageCode,
-                model: finalModelName, // ✅ Use final model name
+                model: userMessage.model, // ✅ Use final model name
             };
-            if (hasImages) {
-                const urls = (userMessage.images || []).map(img => img.src).filter(Boolean);
-                if (urls.length > 0) payload.image_data_urls = urls;
+            const imageUrls = (userMessage.images || []).map(img => img.src).filter(Boolean);
+            if (imageUrls.length > 0) {
+                payload.image_data_urls = imageUrls;
             }
 
             const response = await fetch(chatUrl, {
@@ -786,6 +796,116 @@ const AidaWidget = (props) => {
             setIsLoading(false);
         }
     }, [messages, currentMessage, isLoading, selectedModel, chatUrl, user, editingMessageId, pendingImages, buildMessageHistoryPayload, isWebSearchEnabled, pageContext]);
+
+    const retryContext = useMemo(() => {
+        for (let i = messages.length - 1; i >= 0; i -= 1) {
+            const message = messages[i];
+            if (message.sender !== 'bot') continue;
+            for (let j = i - 1; j >= 0; j -= 1) {
+                const candidate = messages[j];
+                if (candidate.sender === 'user' && (candidate.text || '').trim()) {
+                    return { botIndex: i, userIndex: j, botMessageId: message.id };
+                }
+            }
+            break;
+        }
+        return null;
+    }, [messages]);
+
+    const retryableBotMessageId = retryContext?.botMessageId ?? null;
+
+    const handleRetryLastBotResponse = useCallback(async () => {
+        if (isLoading) return;
+        if (!retryContext) return;
+
+        const { userIndex } = retryContext;
+        const originalUserMessage = messages[userIndex];
+        if (!originalUserMessage || !(originalUserMessage.text || '').trim()) return;
+
+        const historyBefore = messages.slice(0, userIndex);
+        const wasWebSearchEnabled = Boolean(originalUserMessage.webSearchEnabled);
+        const finalModelName = originalUserMessage.model || (wasWebSearchEnabled ? `${selectedModel}:online` : selectedModel);
+        const refreshedUserMessage = {
+            ...originalUserMessage,
+            webSearchEnabled: wasWebSearchEnabled,
+            model: finalModelName,
+        };
+        const botMessageId = `bot-${Date.now()}`;
+        const nextThread = [...historyBefore, refreshedUserMessage, { id: botMessageId, text: '', sender: 'bot' }];
+        setMessages(nextThread);
+        if (!currentSessionId) {
+            createNewSession(nextThread);
+        } else {
+            updateCurrentSession(nextThread);
+        }
+
+        setIsLoading(true);
+        startLoadingAnimation();
+        setLastCost(0);
+
+        const detectedLang = franc(refreshedUserMessage.text);
+        const detectedLanguageCode = supportedLanguages.includes(langMap[detectedLang]) ? langMap[detectedLang] : "en";
+        const imageUrls = (refreshedUserMessage.images || []).map(img => img.src).filter(Boolean);
+
+        try {
+            const payload = {
+                user_input: refreshedUserMessage.text,
+                message_history: buildMessageHistoryPayload(historyBefore, pageContext),
+                user_id: user.id,
+                email: user.email,
+                page_path: window.location.pathname,
+                language: detectedLanguageCode,
+                model: finalModelName,
+            };
+            if (imageUrls.length > 0) {
+                payload.image_data_urls = imageUrls;
+            }
+
+            const response = await fetch(chatUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (!response.ok || !response.body) throw new Error(`HTTP error! status: ${response.status}`);
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let accumulated = '';
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                accumulated += decoder.decode(value, { stream: true });
+                const parts = accumulated.split('\n\n');
+                accumulated = parts.pop();
+                for (const part of parts) {
+                    if (part.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(part.substring(6));
+                            if (data.delta_content) {
+                                setMessages(prev => {
+                                    const updated = prev.map(m => m.id === botMessageId ? { ...m, text: m.text + data.delta_content } : m);
+                                    if (currentSessionId) updateCurrentSession(updated);
+                                    return updated;
+                                });
+                            }
+                            if (data.cost !== undefined) {
+                                setLastCost(data.cost);
+                            }
+                        } catch (e) {
+                            console.error("Stream parse error:", part.substring(6), e);
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("Chatbot API error:", error);
+            setMessages(prev => prev.map(m => m.id === botMessageId ? { ...m, text: "Oops! I couldn't connect. Please try again." } : m));
+            setDisplayText("ERR:0");
+        } finally {
+            stopLoadingAnimation();
+            setIsLoading(false);
+        }
+    }, [isLoading, retryContext, messages, currentSessionId, createNewSession, updateCurrentSession, startLoadingAnimation, supportedLanguages, langMap, buildMessageHistoryPayload, pageContext, user, chatUrl, selectedModel, stopLoadingAnimation]);
 
     useEffect(() => {
         if (isSendTimerPaused || autoSendCountdown === null) return;
@@ -1222,6 +1342,9 @@ const AidaWidget = (props) => {
                                 }
                             }}
                             shouldAutoScroll={isAtBottom && !autoScrollPaused}
+                            onRetryLastBot={handleRetryLastBotResponse}
+                            retryableBotMessageId={retryableBotMessageId}
+                            isLoading={isLoading}
                             onStartEdit={(id, text) => {
                                 setCurrentMessage(text);
                                 setEditingMessageId(id);

@@ -48,7 +48,21 @@ const CodeBlock = ({ inline, className, children, ...props }) => {
     );
 };
 
-const ChatDisplay = ({ messages, messagesEndRef, siteLanguage, onStartEdit, onScrollStateChange, onUserScrollAway, programmaticScrollRef, shouldAutoScroll = true, theme = 'dark', onImagePreview }) => {
+const ChatDisplay = ({
+    messages,
+    messagesEndRef,
+    siteLanguage,
+    onStartEdit,
+    onScrollStateChange,
+    onUserScrollAway,
+    programmaticScrollRef,
+    shouldAutoScroll = true,
+    theme = 'dark',
+    onImagePreview,
+    onRetryLastBot,
+    retryableBotMessageId,
+    isLoading = false,
+}) => {
     const [copiedId, setCopiedId] = useState(null);
     const containerRef = useRef(null);
 
@@ -186,6 +200,20 @@ const ChatDisplay = ({ messages, messagesEndRef, siteLanguage, onStartEdit, onSc
                                     <path d="M16 1H4c-1.1 0-2 .9-2 2v12h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
                                 </svg>
                             </button>
+                            {message.sender === 'bot' && message.id === retryableBotMessageId && onRetryLastBot && (
+                                <button
+                                    type="button"
+                                    onClick={onRetryLastBot}
+                                    disabled={isLoading}
+                                    className="text-gray-400 hover:text-gray-600 transition-colors p-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    aria-label="Retry response"
+                                    title="Retry response"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                                        <path d="M12 6V3L8 7l4 4V8c2.76 0 5 2.24 5 5 0 1.01-.3 1.95-.82 2.73l1.46 1.46C18.54 15.77 19 14.44 19 13c0-3.87-3.13-7-7-7zm-6.64.64L3.9 8.1C3.27 9.36 3 10.66 3 12c0 3.87 3.13 7 7 7v3l4-4-4-4v3c-2.76 0-5-2.24-5-5 0-1.01.3-1.95.82-2.73L5.36 6.64z"/>
+                                    </svg>
+                                </button>
+                            )}
                             {message.sender === 'user' && (
                                 <button
                                     type="button"

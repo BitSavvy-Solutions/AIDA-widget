@@ -1,6 +1,6 @@
 // src/AidaWidget/ChatHeader.jsx
 import React, { useState, useRef, useEffect } from 'react';
-import { HiXMark, HiArrowsPointingOut, HiPlus, HiOutlineSun, HiOutlineMoon, HiClock, HiEllipsisVertical, HiMinusSmall } from 'react-icons/hi2';
+import { HiPlus, HiOutlineSun, HiOutlineMoon, HiClock, HiEllipsisVertical, HiMinusSmall, HiOutlineArrowsPointingOut } from 'react-icons/hi2';
 import SevenSegmentDisplay from './SevenSegmentDisplay';
 import CreditsDisplay from './CreditsDisplay';
 
@@ -19,7 +19,8 @@ const ChatHeader = ({
 }) => {
     // Use a solid dark shade so it looks identical in both themes
     const headerColors = 'bg-[#0f172a] text-white backdrop-blur-md border-b border-white/10';
-    const hoverColor = 'hover:bg-white/10';
+    const hoverColor = theme === 'dark' ? 'hover:bg-white/10' : 'hover:bg-slate-200/70';
+    const accentColor = '#ffffff';
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const menuRef = useRef(null);
 
@@ -57,8 +58,14 @@ const ChatHeader = ({
             </div>
             <div className="flex items-center space-x-2 pr-1">
                 {showFullscreenToggle && typeof toggleFullscreen === 'function' && (
-                    <button onClick={toggleFullscreen} className={`p-1 rounded-full ${hoverColor}`} aria-label="Toggle Fullscreen">
-                        <HiArrowsPointingOut className="w-5 h-5" />
+                    <button
+                        onClick={toggleFullscreen}
+                        className={`p-1 rounded-full ${hoverColor} transition-colors`}
+                        style={{ color: accentColor }}
+                        aria-label="Toggle Fullscreen"
+                        title="Toggle fullscreen"
+                    >
+                        <HiOutlineArrowsPointingOut className="w-5 h-5" />
                     </button>
                 )}
                 <button onClick={toggleChat} className={`p-1 rounded-full ${hoverColor}`} aria-label="Minimize Chat">
