@@ -889,6 +889,18 @@ const AidaWidget = (props) => {
 
 
 
+    const handleResizeHandlePointerEnter = () => {
+        if (sidebarRef.current) {
+            sidebarRef.current.classList.add('aida-widget-shell--edge-hover');
+        }
+    };
+
+    const handleResizeHandlePointerLeave = () => {
+        if (sidebarRef.current) {
+            sidebarRef.current.classList.remove('aida-widget-shell--edge-hover');
+        }
+    };
+
     const handleSidebarResizeStart = useCallback((event) => {
         if (typeof window === 'undefined') return;
         if (isFullscreen || isMobileViewport) return;
@@ -928,6 +940,9 @@ const AidaWidget = (props) => {
             setIsResizingSidebar(false);
             if (typeof document !== 'undefined' && document.body) {
                 document.body.classList.remove('aida-widget-resizing');
+            }
+            if (sidebarRef.current) {
+                sidebarRef.current.classList.remove('aida-widget-shell--edge-hover');
             }
             window.removeEventListener('pointermove', handlePointerMove);
             window.removeEventListener('pointerup', finishResize);
@@ -1136,6 +1151,8 @@ const AidaWidget = (props) => {
                         <div
                             className={resizeHandleClassName}
                             onPointerDown={handleSidebarResizeStart}
+                            onPointerEnter={handleResizeHandlePointerEnter}
+                            onPointerLeave={handleResizeHandlePointerLeave}
                             aria-hidden="true"
                             tabIndex={-1}
                         />
