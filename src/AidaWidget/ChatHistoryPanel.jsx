@@ -314,7 +314,7 @@ const unassignedSessions = useMemo(() => {
                         className={`rounded-lg border px-3 py-2 transition ${isDark ? 'border-gray-800 bg-gray-900/70' : 'border-gray-200 bg-white'} ${isActiveDrop ? (isDark ? 'ring-2 ring-blue-400' : 'ring-2 ring-blue-500') : ''}`}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 text-sm font-medium">
+                          <div className="flex-1 min-w-0 flex items-center gap-2 text-sm font-medium">
                             <NotebookIcon className="w-4 h-4" />
                             {isEditingProject ? (
                               <>
@@ -331,7 +331,7 @@ const unassignedSessions = useMemo(() => {
                                       cancelProjectEdit();
                                     }
                                   }}
-                                  className={`text-sm px-2 py-1 rounded border outline-none ${isDark ? 'bg-gray-800 border-gray-700 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'}`}
+                                  className={`flex-1 min-w-0 text-sm px-2 py-1 rounded border outline-none ${isDark ? 'bg-gray-800 border-gray-700 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'}`}
                                 />
                                 <button
                                   type="button"
@@ -497,12 +497,12 @@ const unassignedSessions = useMemo(() => {
                     <div className="flex items-start justify-between gap-2">
                       <button
                         type="button"
-                        className="flex-1 text-left"
+                        className="flex-1 min-w-0 text-left"
                         onClick={() => onSelect && onSelect(s)}
                         title={displayTitle}
                       >
-                        <div className="flex flex-col">
-                          <span className="text-sm font-medium truncate">{displayTitle}</span>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-sm font-medium truncate block">{displayTitle}</span>
                           <span className="text-[11px] opacity-60 mt-0.5">{new Date(s.createdAt).toLocaleString()}</span>
                         </div>
                       </button>
