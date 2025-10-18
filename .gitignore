@@ -75,6 +75,6 @@ Thumbs.db
 # yarn.lock
 # pnpm-lock.yaml
 
-
+.github/copilot-instructions.md
 
 .vscode

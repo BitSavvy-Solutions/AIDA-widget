@@ -109,14 +109,35 @@
 .bot-message {
   background-color: transparent; /* remove chat bubble */
   border: none;                  /* no border like ChatGPT */
-  border-radius: 0;              /* no rounded container */
-  padding: 0;                    /* text sits flush like ChatGPT */
-  max-width: 80%;
-  line-height: 1.6;
+  border-radius: 0;              /* keep container shape minimal */
+  /* Add breathing room so blocks inside messages feel distinct */
+    /* keep roomy top padding for headings but reduce bottom padding so action
+      buttons sit closer to messages */
+    padding: 0rem 1rem 0rem;
+    max-width: 80%;
+    line-height: 1.72;
   font-size: 0.95rem;
   font-family: 'Inter', sans-serif;
   text-align: left;
   color: inherit; /* inherit from theme */
+  /* Divider color -- overridden for dark theme below */
+  --bot-divider: rgb(223, 223, 223);
+}
+
+/* Slightly lighter divider when using dark theme */
+[data-theme='dark'] .bot-message {
+  --bot-divider: #353535;
+}
+
+/* Instead of adding a border between every consecutive element (which caused
+   empty lines to render a visible divider), only render a subtle divider for
+   explicit markdown thematic breaks (<hr> / `---`). Paragraph spacing is
+   handled by normal margins below. */
+.bot-message hr {
+  border: none;
+  height: 1px;
+  background: var(--bot-divider);
+  margin: 1.6rem 0 1rem 0;
 }
 
 /* ✅ MARKDOWN STYLING ADDED FOR CODE BLOCKS */
@@ -129,8 +150,8 @@
   font-size: 0.85rem;
   line-height: 1.5;
   font-family: 'Fira Code', monospace;
-  margin-top: 0.5rem;
-  margin-bottom: 0.5rem;
+  margin-top: 2rem;
+  margin-bottom: 2rem;
 }
 
 /* react-syntax-highlighter container (PreTag="div") */
@@ -159,12 +180,19 @@
 .bot-message h2,
 .bot-message h3 {
   font-weight: bold;
-  margin-top: 1rem;
-  margin-bottom: 0.5rem;
+  margin-top: 2rem;
+  margin-bottom: 1.8rem;
 }
 
 .bot-message p {
-  margin: 0.6rem 0; /* a bit more breathing room like ChatGPT */
+  margin: 1rem 0; /* more breathing room */
+}
+
+/* Remove bottom margin for the last block inside a bot message so action
+   buttons sit up against the message content */
+.bot-message > *:last-child {
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
 }
 
 .bot-message strong {
@@ -724,4 +752,13 @@ textarea.auto-expand {
 /* Dark theme scrollbar */
 .dark .custom-scrollbar::-webkit-scrollbar-thumb {
   background-color: rgba(209, 213, 219, 0.5);
+}
+
+
+/* This is the magic part! ✨ */
+@media (max-width: 1024px) {
+  .bot-message {
+    /* When the viewport is 600px wide or less... */
+    max-width: 100%; /* Let it take up almost all the space! */
+  }
 }

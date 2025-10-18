@@ -822,12 +822,11 @@ const AidaWidget = (props) => {
         const originalUserMessage = messages[userIndex];
         if (!originalUserMessage || !(originalUserMessage.text || '').trim()) return;
 
-        const historyBefore = messages.slice(0, userIndex);
-        const wasWebSearchEnabled = Boolean(originalUserMessage.webSearchEnabled);
-        const finalModelName = originalUserMessage.model || (wasWebSearchEnabled ? `${selectedModel}:online` : selectedModel);
+        const historyBefore = messages.slice(0, userIndex);;
+        const finalModelName = isWebSearchEnabled ? `${selectedModel}:online` : selectedModel;
         const refreshedUserMessage = {
             ...originalUserMessage,
-            webSearchEnabled: wasWebSearchEnabled,
+            webSearchEnabled: isWebSearchEnabled,
             model: finalModelName,
         };
         const botMessageId = `bot-${Date.now()}`;
@@ -905,7 +904,7 @@ const AidaWidget = (props) => {
             stopLoadingAnimation();
             setIsLoading(false);
         }
-    }, [isLoading, retryContext, messages, currentSessionId, createNewSession, updateCurrentSession, startLoadingAnimation, supportedLanguages, langMap, buildMessageHistoryPayload, pageContext, user, chatUrl, selectedModel, stopLoadingAnimation]);
+    }, [isLoading, retryContext, messages, currentSessionId, createNewSession, updateCurrentSession, startLoadingAnimation, supportedLanguages, langMap, buildMessageHistoryPayload, pageContext, user, chatUrl, selectedModel, stopLoadingAnimation, isWebSearchEnabled]);
 
     useEffect(() => {
         if (isSendTimerPaused || autoSendCountdown === null) return;

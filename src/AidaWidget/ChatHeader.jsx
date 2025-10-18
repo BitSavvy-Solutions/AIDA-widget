@@ -39,7 +39,7 @@ const ChatHeader = ({
     const closeMenu = () => setIsMenuOpen(false);
 
     return (
-        <div className={`${headerColors} glass-header pl-4 pr-1 py-4 flex justify-between items-center rounded-none relative`}>
+        <div className={`${headerColors} glass-header pl-2 pr-1 py-2 flex justify-between items-center rounded-none relative`}>
             <div className="flex items-center">
                 {onDisplayClick ? (
                     <button
