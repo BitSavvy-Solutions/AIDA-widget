@@ -753,3 +753,12 @@ textarea.auto-expand {
 .dark .custom-scrollbar::-webkit-scrollbar-thumb {
   background-color: rgba(209, 213, 219, 0.5);
 }
+
+
+/* This is the magic part! ✨ */
+@media (max-width: 1024px) {
+  .bot-message {
+    /* When the viewport is 600px wide or less... */
+    max-width: 100%; /* Let it take up almost all the space! */
+  }
+}

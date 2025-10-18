@@ -5,9 +5,13 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkGfm from 'remark-gfm';
 
 const CodeBlock = ({ inline, className, children, ...props }) => {
-    if (inline) {
+    // If react-markdown says it's inline, great! But if it's being dramatic,
+    // we'll add a check: if there are no newlines, it's definitely inline. Period. 💅
+    if (inline || !String(children).includes('\n')) {
         return <code className={className} {...props}>{children}</code>;
     }
+
+    // The rest of this is for your actual, multi-line, block-level code parties.
     const [copied, setCopied] = useState(false);
     const match = /language-(\w+)/.exec(className || '');
     const code = String(children).replace(/\n$/, '');
@@ -136,7 +140,7 @@ const ChatDisplay = ({
     return (
         <div ref={containerRef} className={`relative flex-1 overflow-y-auto p-4 space-y-4 ${theme === 'dark' ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
             {messages.map((message) => (
-                <div key={message.id} className={`flex ${message.sender === 'user' ? 'justify-end pl-10' : 'justify-start pr-10'}`}>
+                <div key={message.id} className={`flex ${message.sender === 'user' ? 'justify-end pl-10' : 'justify-start'}`}>
                     <div className={`flex flex-col w-full ${message.sender === 'user' ? 'items-end' : 'items-start'}`}>
                         <div
                             className={`${message.sender === 'user' ? 'user-message rounded-l-xl' : 'bot-message'}`}
@@ -190,7 +194,7 @@ const ChatDisplay = ({
                                 ) : null
                             )}
                         </div>
-                        <div className="mt-0 flex items-center gap-2 select-none">
+                        <div className="mt-3 flex items-center gap-2 select-none">
                             <button
                                 type="button"
                                 onClick={() => handleCopy(message.text, message.id)}
