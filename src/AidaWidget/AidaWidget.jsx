@@ -1,5 +1,5 @@
 /* src/AidaWidget/AidaWidget.jsx */
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import SevenSegmentDisplay from './SevenSegmentDisplay';
 import ChatHeader from './ChatHeader';
 import ChatHistoryPanel from './ChatHistoryPanel';
@@ -82,6 +82,7 @@ const AidaWidget = (props) => {
     const loadingIntervalRef = useRef(null);
     const blinkTimerRef = useRef(null);
     const streamRef = useRef(null);
+    const streamAbortControllerRef = useRef(null);
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
     const timerIntervalRef = useRef(null);
@@ -575,6 +576,37 @@ const AidaWidget = (props) => {
         }
     }, [isOpen, startBlinking]);
 
+    const handleStopStreaming = useCallback(() => {
+        if (streamAbortControllerRef.current) {
+            streamAbortControllerRef.current.abort();
+            streamAbortControllerRef.current = null;
+        }
+
+        let updatedThread = null;
+        setMessages(prev => {
+            if (!prev || prev.length === 0) return prev;
+            for (let i = prev.length - 1; i >= 0; i -= 1) {
+                const message = prev[i];
+                if (message.sender !== 'bot') continue;
+                const text = typeof message.text === 'string' ? message.text : '';
+                if (text.trim() === '') {
+                    const next = [...prev.slice(0, i), ...prev.slice(i + 1)];
+                    updatedThread = next;
+                    return next;
+                }
+                break;
+            }
+            return prev;
+        });
+
+        if (updatedThread && currentSessionId) {
+            updateCurrentSession(updatedThread);
+        }
+
+        stopLoadingAnimation();
+        setIsLoading(false);
+    }, [stopLoadingAnimation, currentSessionId, updateCurrentSession]);
+
     const startRecording = async () => {
         cancelAutoRecordTimer();
         try {
@@ -649,6 +681,12 @@ const AidaWidget = (props) => {
 
             setLastCost(0);
 
+            const abortController = new AbortController();
+            if (streamAbortControllerRef.current) {
+                streamAbortControllerRef.current.abort();
+            }
+            streamAbortControllerRef.current = abortController;
+
             try {
                 const payload = {
                     user_input: userMessage.text,
@@ -668,6 +706,7 @@ const AidaWidget = (props) => {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload),
+                    signal: abortController.signal,
                 });
                 if (!response.ok || !response.body) throw new Error(`HTTP error! status: ${response.status}`);
 
@@ -692,10 +731,17 @@ const AidaWidget = (props) => {
                     }
                 }
             } catch (error) {
-                console.error("Chatbot API error:", error);
-                setMessages(p => p.map(m => m.id === botMessageId ? { ...m, text: "Oops! I couldn't connect. Please try again." } : m));
-                setDisplayText("ERR:0");
+                if (error?.name === 'AbortError') {
+                    console.info("Chat streaming was stopped by the user.");
+                } else {
+                    console.error("Chatbot API error:", error);
+                    setMessages(p => p.map(m => m.id === botMessageId ? { ...m, text: "Oops! I couldn't connect. Please try again." } : m));
+                    setDisplayText("ERR:0");
+                }
             } finally {
+                if (streamAbortControllerRef.current === abortController) {
+                    streamAbortControllerRef.current = null;
+                }
                 stopLoadingAnimation();
                 setIsLoading(false);
             }
@@ -731,6 +777,12 @@ const AidaWidget = (props) => {
         const detectedLang = franc(userMessage.text);
         const detectedLanguageCode = supportedLanguages.includes(langMap[detectedLang]) ? langMap[detectedLang] : "en";
 
+        const abortController = new AbortController();
+        if (streamAbortControllerRef.current) {
+            streamAbortControllerRef.current.abort();
+        }
+        streamAbortControllerRef.current = abortController;
+
         try {
             // Ensure a vision-capable model when sending an image
 
@@ -752,6 +804,7 @@ const AidaWidget = (props) => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
+                signal: abortController.signal,
             });
             if (!response.ok || !response.body) throw new Error(`HTTP error! status: ${response.status}`);
             // Clear input and staged images after a successful send
@@ -788,49 +841,49 @@ const AidaWidget = (props) => {
                 }
             }
         } catch (error) {
-            console.error("Chatbot API error:", error);
-            setMessages(p => p.map(m => m.id === botMessageId ? { ...m, text: "Oops! I couldn't connect. Please try again." } : m));
-            setDisplayText("ERR:0");
+            if (error?.name === 'AbortError') {
+                console.info("Chat streaming was stopped by the user.");
+            } else {
+                console.error("Chatbot API error:", error);
+                setMessages(p => p.map(m => m.id === botMessageId ? { ...m, text: "Oops! I couldn't connect. Please try again." } : m));
+                setDisplayText("ERR:0");
+            }
         } finally {
+            if (streamAbortControllerRef.current === abortController) {
+                streamAbortControllerRef.current = null;
+            }
             stopLoadingAnimation();
             setIsLoading(false);
         }
     }, [messages, currentMessage, isLoading, selectedModel, chatUrl, user, editingMessageId, pendingImages, buildMessageHistoryPayload, isWebSearchEnabled, pageContext]);
 
-    const retryContext = useMemo(() => {
-        for (let i = messages.length - 1; i >= 0; i -= 1) {
-            const message = messages[i];
-            if (message.sender !== 'bot') continue;
-            for (let j = i - 1; j >= 0; j -= 1) {
-                const candidate = messages[j];
-                if (candidate.sender === 'user' && (candidate.text || '').trim()) {
-                    return { botIndex: i, userIndex: j, botMessageId: message.id };
-                }
-            }
+    const handleRetryBotResponse = useCallback(async (botMessageId) => {
+        if (isLoading) return;
+        const botIndex = messages.findIndex(m => m.id === botMessageId && m.sender === 'bot');
+        if (botIndex === -1) return;
+
+        let userIndex = -1;
+        for (let i = botIndex - 1; i >= 0; i -= 1) {
+            const candidate = messages[i];
+            if (candidate.sender !== 'user') continue;
+            if (!(candidate.text || '').trim()) continue;
+            userIndex = i;
             break;
         }
-        return null;
-    }, [messages]);
+        if (userIndex === -1) return;
 
-    const retryableBotMessageId = retryContext?.botMessageId ?? null;
-
-    const handleRetryLastBotResponse = useCallback(async () => {
-        if (isLoading) return;
-        if (!retryContext) return;
-
-        const { userIndex } = retryContext;
         const originalUserMessage = messages[userIndex];
-        if (!originalUserMessage || !(originalUserMessage.text || '').trim()) return;
+        if (!originalUserMessage) return;
 
-        const historyBefore = messages.slice(0, userIndex);;
+        const historyBefore = messages.slice(0, userIndex);
         const finalModelName = isWebSearchEnabled ? `${selectedModel}:online` : selectedModel;
         const refreshedUserMessage = {
             ...originalUserMessage,
             webSearchEnabled: isWebSearchEnabled,
             model: finalModelName,
         };
-        const botMessageId = `bot-${Date.now()}`;
-        const nextThread = [...historyBefore, refreshedUserMessage, { id: botMessageId, text: '', sender: 'bot' }];
+        const newBotMessageId = `bot-${Date.now()}`;
+        const nextThread = [...historyBefore, refreshedUserMessage, { id: newBotMessageId, text: '', sender: 'bot' }];
         setMessages(nextThread);
         if (!currentSessionId) {
             createNewSession(nextThread);
@@ -845,6 +898,12 @@ const AidaWidget = (props) => {
         const detectedLang = franc(refreshedUserMessage.text);
         const detectedLanguageCode = supportedLanguages.includes(langMap[detectedLang]) ? langMap[detectedLang] : "en";
         const imageUrls = (refreshedUserMessage.images || []).map(img => img.src).filter(Boolean);
+
+        const abortController = new AbortController();
+        if (streamAbortControllerRef.current) {
+            streamAbortControllerRef.current.abort();
+        }
+        streamAbortControllerRef.current = abortController;
 
         try {
             const payload = {
@@ -864,6 +923,7 @@ const AidaWidget = (props) => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
+                signal: abortController.signal,
             });
             if (!response.ok || !response.body) throw new Error(`HTTP error! status: ${response.status}`);
 
@@ -882,7 +942,7 @@ const AidaWidget = (props) => {
                             const data = JSON.parse(part.substring(6));
                             if (data.delta_content) {
                                 setMessages(prev => {
-                                    const updated = prev.map(m => m.id === botMessageId ? { ...m, text: m.text + data.delta_content } : m);
+                                    const updated = prev.map(m => m.id === newBotMessageId ? { ...m, text: m.text + data.delta_content } : m);
                                     if (currentSessionId) updateCurrentSession(updated);
                                     return updated;
                                 });
@@ -897,14 +957,21 @@ const AidaWidget = (props) => {
                 }
             }
         } catch (error) {
-            console.error("Chatbot API error:", error);
-            setMessages(prev => prev.map(m => m.id === botMessageId ? { ...m, text: "Oops! I couldn't connect. Please try again." } : m));
-            setDisplayText("ERR:0");
+            if (error?.name === 'AbortError') {
+                console.info("Chat streaming was stopped by the user.");
+            } else {
+                console.error("Chatbot API error:", error);
+                setMessages(prev => prev.map(m => m.id === newBotMessageId ? { ...m, text: "Oops! I couldn't connect. Please try again." } : m));
+                setDisplayText("ERR:0");
+            }
         } finally {
+            if (streamAbortControllerRef.current === abortController) {
+                streamAbortControllerRef.current = null;
+            }
             stopLoadingAnimation();
             setIsLoading(false);
         }
-    }, [isLoading, retryContext, messages, currentSessionId, createNewSession, updateCurrentSession, startLoadingAnimation, supportedLanguages, langMap, buildMessageHistoryPayload, pageContext, user, chatUrl, selectedModel, stopLoadingAnimation, isWebSearchEnabled]);
+    }, [isLoading, messages, currentSessionId, createNewSession, updateCurrentSession, startLoadingAnimation, supportedLanguages, langMap, buildMessageHistoryPayload, pageContext, user, chatUrl, selectedModel, stopLoadingAnimation, isWebSearchEnabled]);
 
     useEffect(() => {
         if (isSendTimerPaused || autoSendCountdown === null) return;
@@ -986,6 +1053,7 @@ const AidaWidget = (props) => {
             if (isRecording) stopRecording();
             cancelAutoSendTimer();
             cancelAutoRecordTimer();
+            handleStopStreaming();
             setIsClosing(true);
             setDisplayText("AI:DA");
             stopBlinking();
@@ -1004,7 +1072,7 @@ const AidaWidget = (props) => {
                 setMessages([greeting]);
             }
         }
-    }, [isOpen, isRecording, siteLanguage, startBlinking, stopBlinking, stopRecording, cancelAutoSendTimer, cancelAutoRecordTimer, isMobileViewport]);
+    }, [isOpen, isRecording, siteLanguage, startBlinking, stopBlinking, stopRecording, cancelAutoSendTimer, cancelAutoRecordTimer, handleStopStreaming, isMobileViewport]);
 
 
 
@@ -1341,8 +1409,7 @@ const AidaWidget = (props) => {
                                 }
                             }}
                             shouldAutoScroll={isAtBottom && !autoScrollPaused}
-                            onRetryLastBot={handleRetryLastBotResponse}
-                            retryableBotMessageId={retryableBotMessageId}
+                            onRetryBotMessage={handleRetryBotResponse}
                             isLoading={isLoading}
                             onStartEdit={(id, text) => {
                                 setCurrentMessage(text);
@@ -1385,6 +1452,7 @@ const AidaWidget = (props) => {
                             hasPendingImages={pendingImages.length > 0}
                             isWebSearchEnabled={isWebSearchEnabled}
                             setIsWebSearchEnabled={setIsWebSearchEnabled}
+                            onStopStreaming={handleStopStreaming}
                         />
                 </div>
             </div>

@@ -41,6 +41,7 @@ const ChatInput = ({
     hasPendingImages = false,
     isWebSearchEnabled,
     setIsWebSearchEnabled,
+    onStopStreaming,
 }) => {
     const [isHoveringSend, setIsHoveringSend] = useState(false);
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
@@ -57,6 +58,25 @@ const ChatInput = ({
     };
 
     const renderSendButton = () => {
+        if (isLoading) {
+            const stopDisabled = !onStopStreaming;
+            return (
+                <button
+                    type="button"
+                    onClick={onStopStreaming}
+                    disabled={stopDisabled}
+                    className={`ml-2 p-2 rounded-full transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${
+                        theme === 'dark'
+                            ? 'bg-[#2f3645] hover:bg-[#3a4254] focus-visible:ring-[#ff6bbd] focus-visible:ring-offset-[#1a1f2b]'
+                            : 'bg-[#2f3645] hover:bg-[#3a4254] focus-visible:ring-[#ff6bbd] focus-visible:ring-offset-[#f2f2f7]'
+                    } ${stopDisabled ? '' : 'cursor-pointer'}`}
+                    aria-label="Stop response generation"
+                >
+                    <HiStop className="w-5 h-5 text-[#ff6bbd]" />
+                </button>
+            );
+        }
+
         if (autoSendCountdown !== null) {
             return (
                 <button
@@ -88,6 +108,7 @@ const ChatInput = ({
 
         return (
             <button
+                type="button"
                 onClick={handleSendMessage}
                 disabled={isDisabled}
                 className={`ml-2 p-2 rounded-full transition-opacity disabled:opacity-50 ${

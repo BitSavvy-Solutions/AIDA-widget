@@ -63,8 +63,7 @@ const ChatDisplay = ({
     shouldAutoScroll = true,
     theme = 'dark',
     onImagePreview,
-    onRetryLastBot,
-    retryableBotMessageId,
+    onRetryBotMessage,
     isLoading = false,
 }) => {
     const [copiedId, setCopiedId] = useState(null);
@@ -139,110 +138,133 @@ const ChatDisplay = ({
 
     return (
         <div ref={containerRef} className={`relative flex-1 overflow-y-auto p-4 space-y-4 ${theme === 'dark' ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
-            {messages.map((message) => (
-                <div key={message.id} className={`flex ${message.sender === 'user' ? 'justify-end pl-10' : 'justify-start'}`}>
-                    <div className={`flex flex-col w-full ${message.sender === 'user' ? 'items-end' : 'items-start'}`}>
-                        <div
-                            className={`${message.sender === 'user' ? 'user-message rounded-l-xl' : 'bot-message'}`}
-                            dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'}
-                        >
-                            {/* Attached images (if any) */}
-                            {Array.isArray(message.images) && message.images.length > 0 && (
-                                <div className="space-y-2 mb-2">
-                                    {message.images.map((img) => (
-                                        <button
-                                            key={img.id || img.src}
-                                            type="button"
-                                            onClick={() => onImagePreview && onImagePreview({ ...img, messageId: message.id })}
-                                            className="block"
-                                            aria-label="Open image"
-                                        >
-                                            <img
-                                                src={img.src}
-                                                alt={img.name || 'uploaded'}
-                                                className="rounded-lg border border-gray-200 max-w-full max-h-64 object-contain transition-transform hover:scale-[1.02]"
-                                            />
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                            {message.text && message.text.trim() !== '' ? (
-                                // Replace literal <br> tags with Markdown line breaks so they render
-                                // correctly inside tables and paragraphs when parsed by ReactMarkdown.
-                                <ReactMarkdown
-                                    remarkPlugins={[remarkGfm]}
-                                    components={{
-                                        code: CodeBlock,
-                                        a({ href, children }) {
-                                            return (
-                                                <a href={href} target="_blank" rel="noopener noreferrer" className="markdown-link">
-                                                    {children}
-                                                </a>
-                                            );
-                                        }
-                                    }}
-                                >
-                                    {String(message.text).replace(/<br\s*\/?>(?=\s*)/gi, '  \n')}
-                                </ReactMarkdown>
-                            ) : (
-                                message.sender === 'bot' ? (
-                                    <div className="thinking-dots" role="status" aria-live="polite" aria-label="Assistant is thinking">
-                                        <span className="dot" />
-                                        <span className="dot" />
-                                        <span className="dot" />
-                                    </div>
-                                ) : null
-                            )}
-                        </div>
-                        <div className="mt-3 flex items-center gap-2 select-none">
-                            <button
-                                type="button"
-                                onClick={() => handleCopy(message.text, message.id)}
-                                className="text-gray-400 hover:text-gray-600 transition-colors p-1"
-                                aria-label="Copy message"
-                                title="Copy message"
+            {messages.map((message, index) => {
+                const messageText = typeof message.text === 'string' ? message.text : '';
+                const trimmedText = messageText.trim();
+                const hasImages = Array.isArray(message.images) && message.images.length > 0;
+                const isBot = message.sender === 'bot';
+                const showThinkingDots = isBot && !hasImages && trimmedText === '' && isLoading;
+                const hideBotMessage = isBot && !hasImages && trimmedText === '' && !isLoading;
+                let canRetry = false;
+                if (isBot && onRetryBotMessage) {
+                    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+                        const candidate = messages[cursor];
+                        if (candidate.sender !== 'user') continue;
+                        if ((candidate.text || '').trim() === '') continue;
+                        canRetry = true;
+                        break;
+                    }
+                }
+
+                if (hideBotMessage) return null;
+
+                return (
+                    <div key={message.id} className={`flex ${message.sender === 'user' ? 'justify-end pl-10' : 'justify-start'}`}>
+                        <div className={`flex flex-col w-full ${message.sender === 'user' ? 'items-end' : 'items-start'}`}>
+                            <div
+                                className={`${message.sender === 'user' ? 'user-message rounded-l-xl' : 'bot-message'}`}
+                                dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'}
                             >
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                                    <path d="M16 1H4c-1.1 0-2 .9-2 2v12h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
-                                </svg>
-                            </button>
-                            {message.sender === 'bot' && message.id === retryableBotMessageId && onRetryLastBot && (
-                                <button
-                                    type="button"
-                                    onClick={onRetryLastBot}
-                                    disabled={isLoading}
-                                    className="text-gray-400 hover:text-gray-600 transition-colors p-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    aria-label="Retry response"
-                                    title="Retry response"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                                        <path d="M12 6V3L8 7l4 4V8c2.76 0 5 2.24 5 5 0 1.01-.3 1.95-.82 2.73l1.46 1.46C18.54 15.77 19 14.44 19 13c0-3.87-3.13-7-7-7zm-6.64.64L3.9 8.1C3.27 9.36 3 10.66 3 12c0 3.87 3.13 7 7 7v3l4-4-4-4v3c-2.76 0-5-2.24-5-5 0-1.01.3-1.95.82-2.73L5.36 6.64z"/>
-                                    </svg>
-                                </button>
-                            )}
-                            {message.sender === 'user' && (
-                                <button
-                                    type="button"
-                                    onClick={() => onStartEdit && onStartEdit(message.id, message.text)}
-                                    className="text-gray-400 hover:text-gray-600 transition-colors p-1"
-                                    aria-label="Edit message"
-                                    title="Edit message"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                                        <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm2.92 2.33H5v-0.92l8.06-8.06.92.92L5.92 19.58zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
-                                    </svg>
-                                </button>
-                            )}
-                            {copiedId === message.id && (
-                                <span className="text-xs text-green-600">Copied</span>
-                            )}
-                            {message.sender === 'user' && message.edited && (
-                                <span className="text-xs text-gray-400">Edited</span>
+                                {/* Attached images (if any) */}
+                                {hasImages && (
+                                    <div className="space-y-2 mb-2">
+                                        {message.images.map((img) => (
+                                            <button
+                                                key={img.id || img.src}
+                                                type="button"
+                                                onClick={() => onImagePreview && onImagePreview({ ...img, messageId: message.id })}
+                                                className="block"
+                                                aria-label="Open image"
+                                            >
+                                                <img
+                                                    src={img.src}
+                                                    alt={img.name || 'uploaded'}
+                                                    className="rounded-lg border border-gray-200 max-w-full max-h-64 object-contain transition-transform hover:scale-[1.02]"
+                                                />
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                {trimmedText !== '' ? (
+                                    // Replace literal <br> tags with Markdown line breaks so they render
+                                    // correctly inside tables and paragraphs when parsed by ReactMarkdown.
+                                    <ReactMarkdown
+                                        remarkPlugins={[remarkGfm]}
+                                        components={{
+                                            code: CodeBlock,
+                                            a({ href, children }) {
+                                                return (
+                                                    <a href={href} target="_blank" rel="noopener noreferrer" className="markdown-link">
+                                                        {children}
+                                                    </a>
+                                                );
+                                            }
+                                        }}
+                                    >
+                                        {String(messageText).replace(/<br\s*\/?>(?=\s*)/gi, '  \n')}
+                                    </ReactMarkdown>
+                                ) : (
+                                    showThinkingDots ? (
+                                        <div className="thinking-dots" role="status" aria-live="polite" aria-label="Assistant is thinking">
+                                            <span className="dot" />
+                                            <span className="dot" />
+                                            <span className="dot" />
+                                        </div>
+                                    ) : null
+                                )}
+                            </div>
+                            {!showThinkingDots && (
+                                <div className="mt-3 flex items-center gap-2 select-none">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleCopy(messageText, message.id)}
+                                        className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+                                        aria-label="Copy message"
+                                        title="Copy message"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                                            <path d="M16 1H4c-1.1 0-2 .9-2 2v12h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                                        </svg>
+                                    </button>
+                                    {message.sender === 'bot' && onRetryBotMessage && canRetry && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onRetryBotMessage(message.id)}
+                                            disabled={isLoading}
+                                            className="text-gray-400 hover:text-gray-600 transition-colors p-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            aria-label="Retry response"
+                                            title="Retry response"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                                                <path d="M12 6V3L8 7l4 4V8c2.76 0 5 2.24 5 5 0 1.01-.3 1.95-.82 2.73l1.46 1.46C18.54 15.77 19 14.44 19 13c0-3.87-3.13-7-7-7zm-6.64.64L3.9 8.1C3.27 9.36 3 10.66 3 12c0 3.87 3.13 7 7 7v3l4-4-4-4v3c-2.76 0-5-2.24-5-5 0-1.01.3-1.95.82-2.73L5.36 6.64z"/>
+                                            </svg>
+                                        </button>
+                                    )}
+                                    {message.sender === 'user' && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onStartEdit && onStartEdit(message.id, message.text)}
+                                            className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+                                            aria-label="Edit message"
+                                            title="Edit message"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                                                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm2.92 2.33H5v-0.92l8.06-8.06.92.92L5.92 19.58zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                                            </svg>
+                                        </button>
+                                    )}
+                                    {copiedId === message.id && (
+                                        <span className="text-xs text-green-600">Copied</span>
+                                    )}
+                                    {message.sender === 'user' && message.edited && (
+                                        <span className="text-xs text-gray-400">Edited</span>
+                                    )}
+                                </div>
                             )}
                         </div>
                     </div>
-                </div>
-            ))}
+                );
+            })}
             <div ref={messagesEndRef} />
         </div>
     );
