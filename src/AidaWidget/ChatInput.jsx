@@ -42,6 +42,7 @@ const ChatInput = ({
     isWebSearchEnabled,
     setIsWebSearchEnabled,
     onStopStreaming,
+    features = {}, // ✅ Receive features prop with a default
 }) => {
     const [isHoveringSend, setIsHoveringSend] = useState(false);
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
@@ -67,12 +68,12 @@ const ChatInput = ({
                     disabled={stopDisabled}
                     className={`ml-2 p-2 rounded-full transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${
                         theme === 'dark'
-                            ? 'bg-[#2f3645] hover:bg-[#3a4254] focus-visible:ring-[#ff6bbd] focus-visible:ring-offset-[#1a1f2b]'
-                            : 'bg-[#2f3645] hover:bg-[#3a4254] focus-visible:ring-[#ff6bbd] focus-visible:ring-offset-[#f2f2f7]'
+                            ? 'bg-[#2f3645] hover:bg-[#3a4254] focus-visible:ring-[#60a5fa] focus-visible:ring-offset-[#1a1f2b]'
+                            : 'bg-[#2f3645] hover:bg-[#3a4254] focus-visible:ring-[#60a5fa] focus-visible:ring-offset-[#f2f2f7]'
                     } ${stopDisabled ? '' : 'cursor-pointer'}`}
                     aria-label="Stop response generation"
                 >
-                    <HiStop className="w-5 h-5 text-[#ff6bbd]" />
+                    <HiStop className="w-5 h-5 text-[#60a5fa]" />
                 </button>
             );
         }
@@ -246,67 +247,76 @@ const ChatInput = ({
             {/* Toolbar for controls */}
             <div className="flex items-center justify-between">
                 {/* Left side: Model selection and Web Search */}
-                <div className="relative flex items-center">
-                    {/* ✅ NEW Web Search Button */}
-                    <button
-                        type="button"
-                        onClick={() => setIsWebSearchEnabled(p => !p)}
-                        disabled={isRecording || isTranscribing}
-                        className={`p-2 rounded-full disabled:opacity-50 ml-2 transition-colors ${
-                            isWebSearchEnabled 
-                                ? (theme === 'dark' ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-100 text-blue-600')
-                                : (theme === 'dark' ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100')
-                        }`}
-                        aria-pressed={isWebSearchEnabled}
-                        aria-label="Toggle web search"
-                        title="Toggle web search"
-                    >
-                        <HiOutlineGlobeAlt className="h-6 w-6" />
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setIsModelMenuOpen((p) => !p)}
-                        disabled={isRecording || isTranscribing}
-                        className={`p-2 rounded-full disabled:opacity-50 ${theme === 'dark' ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`}
-                        aria-haspopup="menu"
-                        aria-expanded={isModelMenuOpen}
-                        aria-label="Select AI Model"
-                        title="Select AI Model"
-                    >
-                        <HiCpuChip className="h-6 w-6" />
-                    </button>
-                    <span
-                        className={`ml-2 text-xs ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'} max-w-[96px] truncate`}
-                        aria-hidden="true"
-                        onClick={() => setIsModelMenuOpen((p) => !p)}
-                    >
-                        {selectedModelLabel}
-                    </span>
-                    {isModelMenuOpen && (
-                        <div
-                            className={`absolute z-50 left-0 bottom-full mb-2 w-48 rounded-md shadow-lg overflow-hidden ${theme === 'dark' ? 'bg-gray-800 border border-gray-700 text-gray-100' : 'bg-white border border-gray-200 text-gray-900'}`}
-                            role="menu"
-                        >
-                            {/* ✅ Render the menu from our single source of truth */}
-                            {AVAILABLE_MODELS.map((opt) => (
+                {!features.minimalUI ? (
+                    <div className="relative flex items-center">
+                        {/* Web Search Button */}
+                        {features.webSearch && (
+                            <button
+                                type="button"
+                                onClick={() => setIsWebSearchEnabled(p => !p)}
+                                disabled={isRecording || isTranscribing}
+                                className={`p-2 rounded-full disabled:opacity-50 ml-2 transition-colors ${
+                                    isWebSearchEnabled 
+                                        ? (theme === 'dark' ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-100 text-blue-600')
+                                        : (theme === 'dark' ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100')
+                                }`}
+                                aria-pressed={isWebSearchEnabled}
+                                aria-label="Toggle web search"
+                                title="Toggle web search"
+                            >
+                                <HiOutlineGlobeAlt className="h-6 w-6" />
+                            </button>
+                        )}
+                        {/* Model Selector Button */}
+                        {features.modelSelection && (
+                            <>
                                 <button
-                                    key={opt.value}
                                     type="button"
-                                    onClick={() => { setSelectedModel(opt.value); setIsModelMenuOpen(false); }}
-                                    className={`w-full text-left px-3 py-2 text-sm ${theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-50'} ${selectedModel === opt.value ? (theme === 'dark' ? 'bg-gray-700 font-medium' : 'bg-gray-100 font-medium') : ''}`}
-                                    role="menuitem"
+                                    onClick={() => setIsModelMenuOpen((p) => !p)}
+                                    disabled={isRecording || isTranscribing}
+                                    className={`p-2 rounded-full disabled:opacity-50 ${theme === 'dark' ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`}
+                                    aria-haspopup="menu"
+                                    aria-expanded={isModelMenuOpen}
+                                    aria-label="Select AI Model"
+                                    title="Select AI Model"
                                 >
-                                    {opt.label}
+                                    <HiCpuChip className="h-6 w-6" />
                                 </button>
-                            ))}
-                        </div>
-                    )}
-                </div>
+                                <span
+                                    className={`ml-2 text-xs ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'} max-w-[96px] truncate`}
+                                    aria-hidden="true"
+                                    onClick={() => setIsModelMenuOpen((p) => !p)}
+                                >
+                                    {selectedModelLabel}
+                                </span>
+                                {isModelMenuOpen && (
+                                    <div
+                                        className={`absolute z-50 left-0 bottom-full mb-2 w-48 rounded-md shadow-lg overflow-hidden ${theme === 'dark' ? 'bg-gray-800 border border-gray-700 text-gray-100' : 'bg-white border border-gray-200 text-gray-900'}`}
+                                        role="menu"
+                                    >
+                                        {/* Render the menu from our single source of truth */}
+                                        {AVAILABLE_MODELS.map((opt) => (
+                                            <button
+                                                key={opt.value}
+                                                type="button"
+                                                onClick={() => { setSelectedModel(opt.value); setIsModelMenuOpen(false); }}
+                                                className={`w-full text-left px-3 py-2 text-sm ${theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-50'} ${selectedModel === opt.value ? (theme === 'dark' ? 'bg-gray-700 font-medium' : 'bg-gray-100 font-medium') : ''}`}
+                                                role="menuitem"
+                                            >
+                                                {opt.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
+                 ) : <div /> /* Placeholder to preserve layout */}
 
                 {/* Right side: Action Buttons */}
                 <div className="flex items-center chat-action-buttons">
-                    {renderImageButton()}
-                    {renderRecordButton()}
+                    {!features.minimalUI && features.imageUpload && renderImageButton()}
+                    {features.voiceInput && renderRecordButton()}
                     {renderSendButton()}
                 </div>
             </div>

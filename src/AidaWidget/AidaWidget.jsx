@@ -38,12 +38,23 @@ const defaultProps = {
         retryMessage: true,
         customInstructions: true,
         historyProjects: true,
+        minimalUI: false, // ✅ Added feature flag for minimal UI
     }
 };
 
 const AidaWidget = (props) => {
     // --- 1. SETUP: Props, Config, and Component-level State ---
-    const { apiConfig, user, language, translations, pageContext, features } = { ...defaultProps, ...props };
+    // ✅ Explicitly merge features object to handle partial overrides from props
+    const finalProps = {
+        ...defaultProps,
+        ...props,
+        features: {
+            ...defaultProps.features,
+            ...(props.features || {}),
+        }
+    };
+    const { apiConfig, user, language, translations, pageContext, features } = finalProps;
+
 
     // State that is local to this component and passed into hooks
     const [currentMessage, setCurrentMessage] = useState('');
@@ -203,7 +214,7 @@ const AidaWidget = (props) => {
                         {features.resizable && !isFullscreen && !isMobileViewport && <div {...resizeHandleProps} />}
 
                         {/* ✅ 3. Use the hook's return value here too */}
-                        <ChatHeader displayText={displayText} lastCost={lastCost} userId={user?.id} resetChat={() => { saveCurrentChatToHistory(); setMessages([]); setCurrentSessionId(null); }} toggleFullscreen={() => setIsFullscreen(p => !p)} showFullscreenToggle={!isMobileViewport} toggleChat={toggleChat} theme={theme} onToggleTheme={() => setTheme(p => p === 'dark' ? 'light' : 'dark')} onToggleHistory={openPanel} onDisplayClick={features.customInstructions ? openPromptModal : undefined} />
+                        <ChatHeader displayText={displayText} lastCost={lastCost} userId={user?.id} resetChat={() => { saveCurrentChatToHistory(); setMessages([]); setCurrentSessionId(null); }} toggleFullscreen={() => setIsFullscreen(p => !p)} showFullscreenToggle={!isMobileViewport} toggleChat={toggleChat} theme={theme} onToggleTheme={() => setTheme(p => p === 'dark' ? 'light' : 'dark')} onToggleHistory={openPanel} onDisplayClick={features.customInstructions ? openPromptModal : undefined} features={features} />
 
                         {features.historyProjects && <ChatHistoryPanel theme={theme} open={isPanelOpen} onClose={closePanel} sessions={historyItems} projects={projects} onSelect={(s) => { setMessages(s.messages || []); setCurrentSessionId(s.id); closePanel(); }} {...historyHandlers} />}
 

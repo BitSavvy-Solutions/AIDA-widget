@@ -16,6 +16,7 @@ const ChatHeader = ({
     onToggleHistory,
     onDisplayClick,
     showFullscreenToggle = true,
+    features = {}, // ✅ Receive features prop
 }) => {
     // Use a solid dark shade so it looks identical in both themes
     const headerColors = 'bg-[#0f172a] text-white backdrop-blur-md border-b border-white/10';
@@ -53,8 +54,8 @@ const ChatHeader = ({
                 ) : (
                     <SevenSegmentDisplay text={displayText} className="mr-3" />
                 )}
-                {/* Use the new CreditsDisplay component */}
-                <CreditsDisplay userId={userId} lastCost={lastCost} theme={theme} />
+                {/* ✅ Use the new CreditsDisplay component conditionally */}
+                {!features.minimalUI && <CreditsDisplay userId={userId} lastCost={lastCost} theme={theme} />}
             </div>
             <div className="flex items-center space-x-2 pr-1">
                 {showFullscreenToggle && typeof toggleFullscreen === 'function' && (
