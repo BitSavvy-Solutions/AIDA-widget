@@ -38,7 +38,7 @@ const defaultProps = {
         retryMessage: true,
         customInstructions: true,
         historyProjects: true,
-        minimalUI: false, // ✅ Added feature flag for minimal UI
+        minimalUI: true, // ✅ Enabled minimal UI to hide extra features
     }
 };
 
