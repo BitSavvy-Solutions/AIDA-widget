@@ -255,13 +255,13 @@ const unassignedSessions = useMemo(() => {
                         handleProjectCancel();
                       }
                     }}
-                    className={`flex-1 text-sm px-2 py-1 rounded border outline-none ${isDark ? 'bg-gray-800 border-gray-700 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'}`}
+                    className={`flex-1 min-w-0 text-sm px-2 py-1 rounded border outline-none ${isDark ? 'bg-gray-800 border-gray-700 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'}`}
                     placeholder="Project name"
                   />
                   <button
                     type="button"
                     onClick={handleProjectCancel}
-                    className={`p-1.5 rounded-md border ${isDark ? 'border-gray-700 text-gray-300 hover:bg-gray-800' : 'border-gray-300 text-gray-600 hover:bg-gray-100'}`}
+                    className={`shrink-0 p-1.5 rounded-md border ${isDark ? 'border-gray-700 text-gray-300 hover:bg-gray-800' : 'border-gray-300 text-gray-600 hover:bg-gray-100'}`}
                     aria-label="Cancel new project"
                     title="Cancel"
                   >
@@ -270,7 +270,7 @@ const unassignedSessions = useMemo(() => {
                   <button
                     type="button"
                     onClick={handleProjectSave}
-                    className={`p-1.5 rounded-md border ${isDark ? 'border-blue-500/40 text-blue-300 hover:bg-blue-500/10' : 'border-blue-300 text-blue-600 hover:bg-blue-100'}`}
+                    className={`shrink-0 p-1.5 rounded-md border ${isDark ? 'border-blue-500/40 text-blue-300 hover:bg-blue-500/10' : 'border-blue-300 text-blue-600 hover:bg-blue-100'}`}
                     aria-label="Save new project"
                     title="Save"
                     disabled={!projectDraft.trim()}
@@ -304,6 +304,11 @@ const unassignedSessions = useMemo(() => {
                     const isExpanded = expandedProjectIds.has(project.id);
                     const isEditingProject = projectEditId === project.id;
                     const effectiveExpanded = isEditingProject || isExpanded;
+                    const matchedAssignedChats = assignedChats.filter(isMatch);
+                    const projectMatchesQuery = matchedAssignedChats.length > 0;
+                    const projectRingClass = isActiveDrop
+                      ? (isDark ? 'ring-2 ring-blue-400' : 'ring-2 ring-blue-500')
+                      : projectMatchesQuery ? 'ring-2 ring-amber-400' : '';
 
                     return (
                       <div
@@ -311,7 +316,7 @@ const unassignedSessions = useMemo(() => {
                         onDragOver={(event) => handleProjectDragOver(event, project.id)}
                         onDragLeave={() => handleProjectDragLeave(project.id)}
                         onDrop={(event) => handleProjectDrop(event, project.id)}
-                        className={`rounded-lg border px-3 py-2 transition ${isDark ? 'border-gray-800 bg-gray-900/70' : 'border-gray-200 bg-white'} ${isActiveDrop ? (isDark ? 'ring-2 ring-blue-400' : 'ring-2 ring-blue-500') : ''}`}
+                        className={`rounded-lg border px-3 py-2 transition ${isDark ? 'border-gray-800 bg-gray-900/70' : 'border-gray-200 bg-white'} ${projectRingClass}`}
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex-1 min-w-0 flex items-center gap-2 text-sm font-medium">
@@ -398,27 +403,33 @@ const unassignedSessions = useMemo(() => {
                         {effectiveExpanded && (
                           assignedChats.length > 0 ? (
                             <div className="mt-2 space-y-1">
-                              {assignedChats.map((chat) => (
-                                <div key={chat.id} className="flex items-center gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => onSelect && onSelect(chat)}
-                                    className={`flex-1 text-left text-xs px-2 py-1 rounded-md ${isDark ? 'bg-gray-800 text-gray-200 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                              {assignedChats.map((chat) => {
+                                const chatMatchesQuery = isMatch(chat);
+                                return (
+                                  <div
+                                    key={chat.id}
+                                    className={`flex items-center gap-2 rounded-lg ${chatMatchesQuery ? 'ring-2 ring-amber-400' : ''}`}
                                   >
-                                    {chat.title || 'Untitled chat'}
-                                  </button>
-                                  {isEditingProject && (
                                     <button
                                       type="button"
-                                      onClick={() => onRemoveChatFromProject && onRemoveChatFromProject(project.id, chat.id)}
-                                      className={`p-1 rounded ${isDark ? 'hover:bg-gray-800 text-red-300' : 'hover:bg-gray-100 text-red-500'}`}
-                                      aria-label="Remove chat from project"
+                                      onClick={() => onSelect && onSelect(chat)}
+                                      className={`flex-1 text-left text-xs px-2 py-1 rounded-md ${isDark ? 'bg-gray-800 text-gray-200 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
                                     >
-                                      <HiXMark className="w-4 h-4" />
+                                      {chat.title || 'Untitled chat'}
                                     </button>
-                                  )}
-                                </div>
-                              ))}
+                                    {isEditingProject && (
+                                      <button
+                                        type="button"
+                                        onClick={() => onRemoveChatFromProject && onRemoveChatFromProject(project.id, chat.id)}
+                                        className={`p-1 rounded ${isDark ? 'hover:bg-gray-800 text-red-300' : 'hover:bg-gray-100 text-red-500'}`}
+                                        aria-label="Remove chat from project"
+                                      >
+                                        <HiXMark className="w-4 h-4" />
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                           ) : (
                             <p className={`mt-2 text-[11px] ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>Drop chats here</p>
