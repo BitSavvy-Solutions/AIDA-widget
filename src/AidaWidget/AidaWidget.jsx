@@ -61,7 +61,7 @@ const AidaWidget = (props) => {
     const [selectedModel, setSelectedModel] = useState('deepseek/deepseek-chat-v3.1');
     const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false);
     const [editingMessageId, setEditingMessageId] = useState(null);
-    const [customPrompt, setCustomPrompt] = useState(() => localStorage.getItem('aida-widget-prompt') || '');
+    const [customPrompt, setCustomPrompt] = useState(() => localStorage.getItem('aida-widget-prompt') || "You are EduCare AI Assistant, a helpful and professional educational tutor. Your tone should be encouraging, clear, and supportive, but not overly casual or 'snappy'. Avoid excessive emojis. Your primary goal is to help students learn and understand concepts.");
     const [promptDraft, setPromptDraft] = useState('');
     const [imagePreviewSrc, setImagePreviewSrc] = useState(null);
     const inputRef = useRef(null);
@@ -92,9 +92,9 @@ const AidaWidget = (props) => {
 
     const getLocalizedGreeting = (lang) => {
         switch (lang) {
-            case 'ar': return "✨ مرحبًا! أنا آيدا، مساعدتك الرقمية الذكية 🤖💖 كيف يمكنني مساعدتك اليوم؟ 😊";
-            case 'fr': return "👋 Coucou ! Moi c’est Aida, ta super assistante numérique ✨💻 Comment puis-je t’aider aujourd’hui ? 😄";
-            default: return "Hey hey! 👋 I'm Aida, your sparkly smart digital assistant 🤖💖 How can I help you today? 😄";
+            case 'ar': return "مرحبًا! كيف يمكنني مساعدتك اليوم؟";
+            case 'fr': return "Bonjour ! Comment puis-je vous aider aujourd'hui ?";
+            default: return "Hi! How can I help you today?";
         }
     };
 
