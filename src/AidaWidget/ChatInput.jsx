@@ -109,7 +109,7 @@ const ChatInput = ({
         return (
             <button
                 type="button"
-                onClick={handleSendMessage}
+                onClick={() => handleSendMessage()}
                 disabled={isDisabled}
                 className={`ml-2 p-2 rounded-full transition-opacity disabled:opacity-50 ${
                     theme === 'dark'
