@@ -16,6 +16,7 @@ const ChatHeader = ({
     onToggleHistory,
     onDisplayClick,
     showFullscreenToggle = true,
+    isMobileViewport = false,
 }) => {
     // Use a solid dark shade so it looks identical in both themes
     const headerColors = 'bg-[#0f172a] text-white backdrop-blur-md border-b border-white/10';
@@ -71,6 +72,16 @@ const ChatHeader = ({
                 <button onClick={toggleChat} className={`p-1 rounded-full ${hoverColor}`} aria-label="Minimize Chat">
                     <HiMinusSmall className="w-5 h-5" />
                 </button>
+                {isMobileViewport && (
+                    <button
+                        onClick={resetChat}
+                        className={`p-1 rounded-full ${hoverColor}`}
+                        aria-label="New chat"
+                        title="New chat"
+                    >
+                        <HiPlus className="w-5 h-5" />
+                    </button>
+                )}
                 <div className="relative" ref={menuRef}>
                     <button
                         onClick={() => setIsMenuOpen((open) => !open)}
@@ -84,14 +95,16 @@ const ChatHeader = ({
                     </button>
                     {isMenuOpen && (
                         <div className="absolute right-0 mt-2 w-40 rounded-lg bg-slate-800/95 text-sm shadow-lg border border-white/10 py-1 z-50">
-                                <button
-                                    onClick={() => { resetChat(); closeMenu(); }}
-                                    className="w-full px-3 py-2 text-left hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 flex items-center gap-2"
-                                    role="menuitem"
-                                >
-                                    <HiPlus className="w-4 h-4" />
-                                    <span>New chat</span>
-                                </button>
+                                {!isMobileViewport && (
+                                    <button
+                                        onClick={() => { resetChat(); closeMenu(); }}
+                                        className="w-full px-3 py-2 text-left hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 flex items-center gap-2"
+                                        role="menuitem"
+                                    >
+                                        <HiPlus className="w-4 h-4" />
+                                        <span>New chat</span>
+                                    </button>
+                                )}
                                 {onToggleHistory && (
                                     <button
                                         onClick={() => { onToggleHistory(); closeMenu(); }}

@@ -7,16 +7,24 @@ const MAX_DESKTOP_WIDTH = 720;
 const VIEWPORT_PADDING = 48;
 
 /**
+ * Computes the effective min/max bounds for the sidebar given a viewport width.
+ */
+const getEffectiveBounds = (viewportWidth) => {
+    const safeViewport = typeof viewportWidth === 'number' && viewportWidth > 0 ? viewportWidth : undefined;
+    if (!safeViewport) {
+        return { min: MIN_DESKTOP_WIDTH, max: MAX_DESKTOP_WIDTH };
+    }
+    const max = Math.min(MAX_DESKTOP_WIDTH, Math.max(240, safeViewport - VIEWPORT_PADDING));
+    const min = Math.min(MIN_DESKTOP_WIDTH, max);
+    return { min, max };
+};
+
+/**
  * Clamps a given width between the min/max values, considering viewport size.
  */
 const clampSidebarWidth = (width, viewportWidth) => {
-    const safeViewport = typeof viewportWidth === 'number' && viewportWidth > 0 ? viewportWidth : undefined;
-    if (!safeViewport) {
-        return Math.min(Math.max(width, MIN_DESKTOP_WIDTH), MAX_DESKTOP_WIDTH);
-    }
-    const effectiveMax = Math.min(MAX_DESKTOP_WIDTH, Math.max(240, safeViewport - VIEWPORT_PADDING));
-    const effectiveMin = Math.min(MIN_DESKTOP_WIDTH, effectiveMax);
-    return Math.min(Math.max(width, effectiveMin), effectiveMax);
+    const { min, max } = getEffectiveBounds(viewportWidth);
+    return Math.min(Math.max(width, min), max);
 };
 
 /**
@@ -26,9 +34,10 @@ const clampSidebarWidth = (width, viewportWidth) => {
  * @param {boolean} config.isFullscreen - Is the widget in fullscreen mode?
  * @param {boolean} config.isMobileViewport - Is the viewport considered mobile?
  * @param {boolean} config.isEnabled - Feature flag to enable/disable this hook's functionality.
+ * @param {Function} [config.onRequestFullscreen] - Optional callback to switch to fullscreen.
  * @returns An object with sidebar state and props for the DOM elements.
  */
-export const useResizableSidebar = ({ isOpen, isFullscreen, isMobileViewport, isEnabled }) => {
+export const useResizableSidebar = ({ isOpen, isFullscreen, isMobileViewport, isEnabled, onRequestFullscreen }) => {
     const sidebarRef = useRef(null);
     const originalBodyPaddingRef = useRef(null);
     const resizeListenersRef = useRef({ move: null, up: null });
@@ -129,12 +138,26 @@ export const useResizableSidebar = ({ isOpen, isFullscreen, isMobileViewport, is
         document.body.classList.add('aida-widget-resizing');
         
         const startX = event.clientX;
-        const initialWidth = clampSidebarWidth(sidebarWidthRef.current, window.innerWidth);
+        const viewportWidthAtStart = window.innerWidth || 0;
+        const initialWidth = clampSidebarWidth(sidebarWidthRef.current, viewportWidthAtStart);
         
         const handlePointerMove = (moveEvent) => {
+            const currentViewportWidth = window.innerWidth || viewportWidthAtStart || 0;
+            const { max: currentMaxAllowedWidth } = getEffectiveBounds(currentViewportWidth);
             const delta = startX - moveEvent.clientX;
-            const nextWidth = clampSidebarWidth(initialWidth + delta, window.innerWidth);
+            const nextWidth = clampSidebarWidth(initialWidth + delta, currentViewportWidth);
             setSidebarWidth(nextWidth);
+
+            if (
+                typeof onRequestFullscreen === 'function' &&
+                !isFullscreen &&
+                nextWidth >= currentMaxAllowedWidth &&
+                currentViewportWidth > 0 &&
+                moveEvent.clientX <= currentViewportWidth * 0.5
+            ) {
+                onRequestFullscreen();
+                finishResize();
+            }
         };
         
         const finishResize = () => {
@@ -149,7 +172,7 @@ export const useResizableSidebar = ({ isOpen, isFullscreen, isMobileViewport, is
         window.addEventListener('pointermove', handlePointerMove);
         window.addEventListener('pointerup', finishResize);
         window.addEventListener('pointercancel', finishResize);
-    }, [isFullscreen, isMobileViewport, isEnabled]);
+    }, [isFullscreen, isMobileViewport, isEnabled, onRequestFullscreen]);
 
     // The props to be spread onto the respective DOM elements.
     const resizeHandleProps = {

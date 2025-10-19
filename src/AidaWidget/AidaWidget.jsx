@@ -54,6 +54,9 @@ const AidaWidget = (props) => {
     const [promptDraft, setPromptDraft] = useState('');
     const [imagePreviewSrc, setImagePreviewSrc] = useState(null);
     const inputRef = useRef(null);
+    const autoMobileFullscreenRef = useRef(false);
+    const previousDesktopFullscreenRef = useRef(false);
+    const viewportRafRef = useRef({ enter: null, settle: null });
     const [isMobileViewport, setIsMobileViewport] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
     const siteLanguage = language || 'en';
 
@@ -66,7 +69,15 @@ const AidaWidget = (props) => {
     const { isOpen: isPromptModalOpen, open: openPromptModal, close: closePromptModal } = useModal();
     const { isOpen: isImagePreviewOpen, open: openImagePreview, close: closeImagePreview } = useModal();
     const { pendingImages, handleImagesSelected, removePendingImage, clearPendingImages } = useAttachments(setSelectedModel);
-    const { sidebarRef, sidebarInlineStyle, resizeHandleProps, isResizing } = useResizableSidebar({ isOpen, isFullscreen, isMobileViewport, isEnabled: features.resizable });
+    const requestFullscreen = useCallback(() => setIsFullscreen(true), [setIsFullscreen]);
+
+    const { sidebarRef, sidebarInlineStyle, resizeHandleProps, isResizing } = useResizableSidebar({
+        isOpen,
+        isFullscreen,
+        isMobileViewport,
+        isEnabled: features.resizable,
+        onRequestFullscreen: requestFullscreen
+    });
 
     // Interaction & API Hooks
     const { isLoading, lastCost, streamResponse, stopStreaming } = useChatAPI({ apiConfig, messages, setMessages, currentSessionId, updateCurrentSession, user, pageContext, customPrompt });
@@ -183,6 +194,56 @@ const AidaWidget = (props) => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
+    useEffect(() => {
+        const cancelPendingAnimation = () => {
+            const { enter, settle } = viewportRafRef.current || {};
+            if (typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
+                if (enter) window.cancelAnimationFrame(enter);
+                if (settle) window.cancelAnimationFrame(settle);
+            }
+            viewportRafRef.current = { enter: null, settle: null };
+        };
+
+        if (!isOpen) {
+            cancelPendingAnimation();
+            autoMobileFullscreenRef.current = false;
+            return undefined;
+        }
+
+        const applyViewportState = () => {
+            if (isMobileViewport) {
+                if (!autoMobileFullscreenRef.current) {
+                    autoMobileFullscreenRef.current = true;
+                    previousDesktopFullscreenRef.current = isFullscreen;
+                    if (!isFullscreen) {
+                        setIsFullscreen(true);
+                    }
+                }
+            } else if (autoMobileFullscreenRef.current) {
+                autoMobileFullscreenRef.current = false;
+                if (isFullscreen !== previousDesktopFullscreenRef.current) {
+                    setIsFullscreen(previousDesktopFullscreenRef.current);
+                }
+            }
+        };
+
+        cancelPendingAnimation();
+
+        if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
+            applyViewportState();
+            return undefined;
+        }
+
+        viewportRafRef.current.enter = window.requestAnimationFrame(() => {
+            viewportRafRef.current.settle = window.requestAnimationFrame(() => {
+                applyViewportState();
+                viewportRafRef.current = { enter: null, settle: null };
+            });
+        });
+
+        return cancelPendingAnimation;
+    }, [isMobileViewport, isOpen, isFullscreen, setIsFullscreen]);
+
     // --- 5. RENDER ---
     const containerClasses = `flex flex-col relative aida-widget-shell ${isClosing ? 'animate-collapse-chat' : 'animate-expand-chat'} ${isResizing ? 'aida-widget-shell--active' : ''} ${theme === 'dark' ? 'bg-gray-900 text-gray-100 border-l border-gray-800' : 'bg-white text-gray-900 border-l border-gray-200'} ${isFullscreen ? 'w-full h-full aida-widget-shell--fullscreen' : 'h-full aida-widget-shell--docked'}`;
 
@@ -203,7 +264,7 @@ const AidaWidget = (props) => {
                         {features.resizable && !isFullscreen && !isMobileViewport && <div {...resizeHandleProps} />}
 
                         {/* ✅ 3. Use the hook's return value here too */}
-                        <ChatHeader displayText={displayText} lastCost={lastCost} userId={user?.id} resetChat={() => { saveCurrentChatToHistory(); setMessages([]); setCurrentSessionId(null); }} toggleFullscreen={() => setIsFullscreen(p => !p)} showFullscreenToggle={!isMobileViewport} toggleChat={toggleChat} theme={theme} onToggleTheme={() => setTheme(p => p === 'dark' ? 'light' : 'dark')} onToggleHistory={openPanel} onDisplayClick={features.customInstructions ? openPromptModal : undefined} />
+                        <ChatHeader displayText={displayText} lastCost={lastCost} userId={user?.id} resetChat={() => { saveCurrentChatToHistory(); setMessages([]); setCurrentSessionId(null); }} toggleFullscreen={() => setIsFullscreen(p => !p)} showFullscreenToggle={!isMobileViewport} isMobileViewport={isMobileViewport} toggleChat={toggleChat} theme={theme} onToggleTheme={() => setTheme(p => p === 'dark' ? 'light' : 'dark')} onToggleHistory={openPanel} onDisplayClick={features.customInstructions ? openPromptModal : undefined} />
 
                         {features.historyProjects && <ChatHistoryPanel theme={theme} open={isPanelOpen} onClose={closePanel} sessions={historyItems} projects={projects} onSelect={(s) => { setMessages(s.messages || []); setCurrentSessionId(s.id); closePanel(); }} {...historyHandlers} />}
 
