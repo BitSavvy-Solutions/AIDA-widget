@@ -1,3 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* You can add any other base styles for your dev page here */
+body {
+  font-family: sans-serif;
+  padding: 1rem;
+}
+
 /* ===== Seven-Segment LCD Display Styling ===== */
 
 .compact-lcd {
@@ -550,7 +560,7 @@ textarea.auto-expand {
   width: 2.25rem;  /* 36px */
   height: 2.25rem; /* 36px */
   border-radius: 50%;
- background-image: conic-gradient(#9ca3af var(--progress-angle), #e5e7eb 0deg);
+  background-image: conic-gradient(rgb(37, 99, 234) var(--progress-angle), #e5e7eb 0deg);
   animation: countdown-animation 3s linear forwards;
 }
 
@@ -558,7 +568,7 @@ textarea.auto-expand {
   width: 2.25rem;
   height: 2.25rem;
   border-radius: 50%;
-  background-image: conic-gradient(#9ca3af var(--progress-angle), #e5e7eb 0deg);
+  background-image: conic-gradient(rgb(37, 99, 234) var(--progress-angle), #e5e7eb 0deg);
   animation: countdown-animation 3s linear forwards;
 }
 

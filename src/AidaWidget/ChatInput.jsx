@@ -147,7 +147,7 @@ const ChatInput = ({
                 className={`ml-2 p-2 rounded-full text-white transition-opacity disabled:opacity-50 ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-900 hover:bg-gray-700'}`}
                 aria-label={isRecording ? "Stop Recording" : "Start Recording"}
             >
-                {isTranscribing ? <HiArrowPath className="w-5 h-5 animate-spin" /> : isRecording ? <HiStop className="w-5 h-5 text-red-500" /> : <HiOutlineMicrophone className="w-5 h-5" />}
+                {isTranscribing ? <HiArrowPath className="w-5 h-5 animate-spin" /> : isRecording ? <HiStop className="w-5 h-5 text-blue-500" /> : <HiOutlineMicrophone className="w-5 h-5" />}
             </button>
         );
     };
@@ -218,8 +218,8 @@ const ChatInput = ({
             {/* Text Input Area */}
             <div className={`flex items-end rounded-lg px-3 py-1 mb-3 ${theme === 'dark' ? 'border border-gray-700 bg-gray-800' : 'border border-gray-300 bg-gray-50'}` }>
                 {isRecording ? (
-                    <div className="flex-1 flex items-center justify-center text-red-500 font-mono text-lg space-x-3 h-[42px]">
-                        <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                    <div className="flex-1 flex items-center justify-center text-blue-400 font-mono text-lg space-x-3 h-[42px]">
+                        <div className="w-3 h-3 bg-blue-400 rounded-full animate-pulse"></div>
                         <span>{formatTime(elapsedTime)}</span>
                     </div>
                 ) : (
