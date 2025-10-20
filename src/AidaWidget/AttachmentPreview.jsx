@@ -1,44 +1,18 @@
 /* src/AidaWidget/AttachmentPreview.jsx */
 import React from 'react';
 import { HiArrowLeft } from 'react-icons/hi2';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-
-const extensionToLanguageMap = {
-    js: 'javascript',
-    jsx: 'jsx',
-    py: 'python',
-    json: 'json',
-    md: 'markdown',
-    html: 'html',
-    css: 'css',
-    scss: 'scss',
-    ts: 'typescript',
-    tsx: 'tsx',
-    xml: 'xml',
-    csv: 'csv',
-    sh: 'bash',
-    java: 'java',
-    c: 'c',
-    cpp: 'cpp',
-};
-
-const getLanguageFromFileName = (fileName) => {
-    if (typeof fileName !== 'string') return 'plaintext';
-    const extension = fileName.split('.').pop()?.toLowerCase();
-    return extension ? (extensionToLanguageMap[extension] || 'plaintext') : 'plaintext';
-};
 
 const AttachmentPreview = ({ attachment, onBack, theme = 'dark' }) => {
     if (!attachment) return null;
 
+    // This component is now more generic and can preview any string content,
+    // but the check remains for logical consistency.
     if (attachment.type !== 'text') {
         console.warn('AttachmentPreview is designed for text files.');
         onBack();
         return null;
     }
 
-    const language = getLanguageFromFileName(attachment.name);
     const isDark = theme === 'dark';
 
     return (
@@ -63,22 +37,9 @@ const AttachmentPreview = ({ attachment, onBack, theme = 'dark' }) => {
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar">
-                <SyntaxHighlighter
-                    language={language}
-                    style={oneDark}
-                    wrapLines={true}
-                    wrapLongLines={true}
-                    customStyle={{
-                        padding: '1rem',
-                        margin: 0,
-                        backgroundColor: 'transparent',
-                        fontSize: '0.875rem',
-                    }}
-                    PreTag="pre"
-                    className="h-full"
-                >
+                <pre className="p-4 text-sm whitespace-pre-wrap break-words">
                     {String(attachment.content || '')}
-                </SyntaxHighlighter>
+                </pre>
             </div>
         </div>
     );
