@@ -19,7 +19,37 @@ export const useChatAPI = ({
     const langMap = { eng: "en", fra: "fr", ara: "ar", hin: "hi", tgl: "tl", ukr: "uk", san: "sa", nya: "ny" };
     const supportedLanguages = Object.values(langMap);
 
-    const buildMessageHistoryPayload = useCallback((history = [], attachments = []) => {
+    // Helper to combine a message's text with its text/URL attachments into a single string.
+    const formatMessageContent = (message) => {
+        if (!message) return '';
+        let content = message.text || '';
+
+        if (Array.isArray(message.attachments) && message.attachments.length > 0) {
+            const textAndUrlAttachments = message.attachments.filter(att => att.type === 'text' || att.type === 'url');
+
+            if (textAndUrlAttachments.length > 0) {
+                let attachmentContent = '';
+                textAndUrlAttachments.forEach(att => {
+                    if (att.type === 'text' && att.content) {
+                        attachmentContent = `\n\`\`\`${att.name}\n${att.content}\n\`\`\`\n` + attachmentContent;
+                    } else if (att.type === 'url') {
+                        attachmentContent += `\n[url: ${att.url}]\n`;
+                    }
+                });
+
+                // Append or replace content based on whether text was present
+                if (content.trim()) {
+                    content = attachmentContent + content;
+                } else {
+                    content = attachmentContent.trim();
+                }
+            }
+        }
+        return content;
+    };
+
+
+    const buildMessageHistoryPayload = useCallback((history = []) => {
         const messageHistory = [];
         if (pageContext && Object.keys(pageContext).length > 0) {
             messageHistory.push({ type: 'ai', content: `<PageContext>\n${JSON.stringify(pageContext, null, 2)}\n</PageContext>` });
@@ -28,43 +58,35 @@ export const useChatAPI = ({
             messageHistory.push({ type: 'human', content: customPrompt.trim() });
         }
 
-        const textAndUrlAttachments = attachments.filter(att => att.type === 'text' || att.type === 'url');
-        if (textAndUrlAttachments.length > 0) {
-            let attachmentContext = '<Attachments>\n';
-            textAndUrlAttachments.forEach((att, idx) => {
-                if (att.type === 'text') {
-                    attachmentContext += `\n[Text File ${idx + 1}: ${att.name}]\n${att.content}\n`;
-                } else if (att.type === 'url') {
-                    attachmentContext += `\n[URL ${idx + 1}]: ${att.url}\n`;
-                }
+        // Process full history, formatting each message to include its attachments
+        (history || []).forEach(m => {
+            messageHistory.push({
+                type: m.sender === 'user' ? 'human' : 'ai',
+                // AI messages have no attachments, so this is safe for both.
+                content: formatMessageContent(m)
             });
-            attachmentContext += '\n</Attachments>';
-            messageHistory.push({ type: 'human', content: attachmentContext });
-        }
+        });
 
-        messageHistory.push(...(history || []).map(m => ({
-            type: m.sender === 'user' ? 'human' : 'ai',
-            content: m.text || ''
-        })));
         return messageHistory;
     }, [customPrompt, pageContext]);
 
-    const streamResponse = async ({ userMessage, botMessageId, historyForPayload, attachments = [] }) => {
+    const streamResponse = async ({ userMessage, botMessageId, historyForPayload }) => {
         setIsLoading(true);
         setLastCost(0);
 
         const abortController = new AbortController();
         streamAbortControllerRef.current = abortController;
 
-        const detectedLang = franc(userMessage.text);
+        const currentUserInput = formatMessageContent(userMessage);
+        const detectedLang = franc(currentUserInput);
         const detectedLanguageCode = supportedLanguages.includes(langMap[detectedLang]) ? langMap[detectedLang] : "en";
-        const imageAttachments = attachments.filter(att => att.type === 'image');
+        const imageAttachments = (userMessage.attachments || []).filter(att => att.type === 'image');
         const imageUrls = imageAttachments.map(img => img.src).filter(Boolean);
 
         try {
             const payload = {
-                user_input: userMessage.text,
-                message_history: buildMessageHistoryPayload(historyForPayload, attachments),
+                user_input: currentUserInput,
+                message_history: buildMessageHistoryPayload(historyForPayload),
                 user_id: user.id,
                 email: user.email,
                 page_path: window.location.pathname,
