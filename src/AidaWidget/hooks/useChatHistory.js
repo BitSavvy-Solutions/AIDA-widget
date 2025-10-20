@@ -3,6 +3,21 @@ import { useState, useCallback, useMemo } from 'react';
 const HISTORY_KEY = 'aida-chat-history';
 const HISTORY_PROJECTS_KEY = 'aida-history-projects';
 const CURRENT_SESSION_KEY = 'aida-current-session-id';
+const DEFAULT_PROJECT_ICON_KEY = 'notebook';
+const DEFAULT_PROJECT_ICON_COLOR = '#9CA3AF';
+
+const ensureProjectDefaults = (project = {}) => {
+    const {
+        iconKey = DEFAULT_PROJECT_ICON_KEY,
+        iconColor = DEFAULT_PROJECT_ICON_COLOR,
+    } = project;
+
+    return {
+        ...project,
+        iconKey,
+        iconColor,
+    };
+};
 
 /**
  * Manages long-term chat history and projects stored in localStorage.
@@ -13,7 +28,10 @@ export const useChatHistory = (getSanitizedMessages) => {
     // --- State ---
     const [isPanelOpen, setIsPanelOpen] = useState(false);
     const [historyItems, setHistoryItems] = useState(() => JSON.parse(localStorage.getItem(HISTORY_KEY)) || []);
-    const [projects, setProjects] = useState(() => JSON.parse(localStorage.getItem(HISTORY_PROJECTS_KEY)) || []);
+    const [projects, setProjects] = useState(() => {
+        const stored = JSON.parse(localStorage.getItem(HISTORY_PROJECTS_KEY)) || [];
+        return stored.map(ensureProjectDefaults);
+    });
     const [currentSessionId, setCurrentSessionId] = useState(() => sessionStorage.getItem(CURRENT_SESSION_KEY) || null);
 
     // --- Persistence Wrappers ---
@@ -22,8 +40,9 @@ export const useChatHistory = (getSanitizedMessages) => {
         try { localStorage.setItem(HISTORY_KEY, JSON.stringify(items)); } catch { }
     };
     const persistProjects = (items) => {
-        setProjects(items);
-        try { localStorage.setItem(HISTORY_PROJECTS_KEY, JSON.stringify(items)); } catch { }
+        const normalized = (items || []).map(ensureProjectDefaults);
+        setProjects(normalized);
+        try { localStorage.setItem(HISTORY_PROJECTS_KEY, JSON.stringify(normalized)); } catch { }
     };
 
     // --- Utility ---
@@ -84,7 +103,7 @@ export const useChatHistory = (getSanitizedMessages) => {
         onCreateProject: (projectName) => {
             const trimmed = projectName.trim();
             if (!trimmed || projects.some(p => p.name.toLowerCase() === trimmed.toLowerCase())) return false;
-            const newProject = { id: `project-${Date.now()}`, name: trimmed, chatIds: [] };
+            const newProject = ensureProjectDefaults({ id: `project-${Date.now()}`, name: trimmed, chatIds: [] });
             persistProjects([newProject, ...projects]);
             return true;
         },
@@ -102,6 +121,15 @@ export const useChatHistory = (getSanitizedMessages) => {
                 if (p.id !== projectId) return p;
                 return { ...p, chatIds: (p.chatIds || []).filter(id => id !== chatId) };
             }));
+        },
+        onRenameProject: (projectId, name) => {
+            const trimmed = (name || '').trim();
+            if (!trimmed) return;
+            persistProjects(projects.map(p => p.id === projectId ? { ...p, name: trimmed } : p));
+        },
+        onUpdateProjectAppearance: (projectId, updates = {}) => {
+            if (!projectId || !updates) return;
+            persistProjects(projects.map(p => p.id === projectId ? ensureProjectDefaults({ ...p, ...updates }) : p));
         },
         onShare: async (session) => { /* Share logic remains the same */ }
     }), [historyItems, projects]);

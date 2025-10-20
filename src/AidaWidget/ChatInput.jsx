@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { HiPaperAirplane, HiOutlineMicrophone, HiStop, HiArrowPath, HiXMark, HiCpuChip, HiOutlineGlobeAlt } from 'react-icons/hi2';
+import { HiPaperAirplane, HiOutlineMicrophone, HiStop, HiArrowPath, HiXMark, HiChevronDown, HiOutlineGlobeAlt } from 'react-icons/hi2';
 
 // ✅ Single source of truth for all available models
 const AVAILABLE_MODELS = [
@@ -42,11 +42,13 @@ const ChatInput = ({
     isWebSearchEnabled,
     setIsWebSearchEnabled,
     onStopStreaming,
+    isDragActive = false,
 }) => {
     const [isHoveringSend, setIsHoveringSend] = useState(false);
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
     const imageInputRef = useRef(null);
     const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
+    const attachmentsPresent = hasPendingImages || (pendingImages?.length ?? 0) > 0;
 
     // ✅ Get the display label from our single source of truth
     const selectedModelLabel = AVAILABLE_MODELS.find(m => m.value === selectedModel)?.label || 'Model';
@@ -104,7 +106,7 @@ const ChatInput = ({
             );
         }
 
-        const isDisabled = isTranscribing || (!currentMessage.trim() && !hasPendingImages);
+        const isDisabled = isTranscribing || (!currentMessage.trim() && !attachmentsPresent);
 
         return (
             <button
@@ -184,7 +186,7 @@ const ChatInput = ({
     );
 
     return (
-        <div className={`p-4 rounded-none ${theme === 'dark' ? 'border-t border-gray-800 bg-gray-900 text-gray-100' : 'border-t border-gray-200 bg-white text-gray-900'}`}>
+        <div className={`relative p-4 rounded-none transition-colors ${theme === 'dark' ? 'border-t border-gray-800 bg-gray-900 text-gray-100' : 'border-t border-gray-200 bg-white text-gray-900'}`}>
             {isEditing && (
                 <div className="mb-2 -mt-1 flex items-center justify-between rounded-md bg-amber-50 border border-amber-200 px-3 py-1.5 text-amber-800 text-sm">
                     <span>Editing message — press Enter to save</span>
@@ -198,12 +200,14 @@ const ChatInput = ({
             {pendingImages.length > 0 && (
                 <div className="mb-2 flex gap-2 overflow-x-auto no-scrollbar py-1">
                     {pendingImages.map(img => (
-                        <div key={img.id} className="relative w-16 h-16 border border-gray-200 rounded-md overflow-hidden">
-                            <img src={img.src} alt={img.name || 'upload'} className="w-full h-full object-cover" />
+                        <div key={img.id} className="relative w-16 h-16 shrink-0">
+                            <div className="w-full h-full border border-gray-200 rounded-md overflow-hidden">
+                                <img src={img.src} alt={img.name || 'upload'} className="w-full h-full object-cover" />
+                            </div>
                             <button
                                 type="button"
                                 onClick={() => onRemovePendingImage && onRemovePendingImage(img.id)}
-                                className="absolute -top-2 -right-2 bg-white border border-gray-300 rounded-full p-0.5 shadow hover:bg-gray-50"
+                                className="absolute top-1 right-1 z-10 bg-white border border-gray-300 rounded-full p-0.5 shadow hover:bg-gray-50"
                                 aria-label="Remove image"
                                 title="Remove image"
                             >
@@ -215,7 +219,13 @@ const ChatInput = ({
             )}
 
             {/* Text Input Area */}
-            <div className={`flex items-end rounded-lg px-3 py-1 mb-3 ${theme === 'dark' ? 'border border-gray-700 bg-gray-800' : 'border border-gray-300 bg-gray-50'}` }>
+            <div
+                className={`flex items-end rounded-lg px-3 py-1 mb-3 transition-colors ${
+                    theme === 'dark'
+                        ? (isDragActive ? 'border border-pink-400/80 bg-gray-800 ring-2 ring-pink-400/40' : 'border border-gray-700 bg-gray-800')
+                        : (isDragActive ? 'border border-pink-500/80 bg-pink-50 ring-2 ring-pink-500/40' : 'border border-gray-300 bg-gray-50')
+                }`}
+            >
                 {isRecording ? (
                     <div className="flex-1 flex items-center justify-center text-red-500 font-mono text-lg space-x-3 h-[42px]">
                         <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
@@ -242,6 +252,16 @@ const ChatInput = ({
 />
                 )}
             </div>
+
+            {isDragActive && (
+                <div className={`-mt-2 mb-3 flex items-center gap-2 text-xs font-medium ${theme === 'dark' ? 'text-pink-200' : 'text-pink-600'}`}>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
+                        <path d="M4 12l3-3 2.2 2.2L12.2 7 16 12" />
+                        <circle cx="7.5" cy="6.5" r="1.1" fill="currentColor" />
+                    </svg>
+                    <span>Release to attach your images</span>
+                </div>
+            )}
             
             {/* Toolbar for controls */}
             <div className="flex items-center justify-between">
@@ -263,44 +283,46 @@ const ChatInput = ({
                     >
                         <HiOutlineGlobeAlt className="h-6 w-6" />
                     </button>
-                    <button
-                        type="button"
-                        onClick={() => setIsModelMenuOpen((p) => !p)}
-                        disabled={isRecording || isTranscribing}
-                        className={`p-2 rounded-full disabled:opacity-50 ${theme === 'dark' ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`}
-                        aria-haspopup="menu"
-                        aria-expanded={isModelMenuOpen}
-                        aria-label="Select AI Model"
-                        title="Select AI Model"
-                    >
-                        <HiCpuChip className="h-6 w-6" />
-                    </button>
-                    <span
-                        className={`ml-2 text-xs ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'} max-w-[96px] truncate`}
-                        aria-hidden="true"
-                        onClick={() => setIsModelMenuOpen((p) => !p)}
-                    >
-                        {selectedModelLabel}
-                    </span>
-                    {isModelMenuOpen && (
-                        <div
-                            className={`absolute z-50 left-0 bottom-full mb-2 w-48 rounded-md shadow-lg overflow-hidden ${theme === 'dark' ? 'bg-gray-800 border border-gray-700 text-gray-100' : 'bg-white border border-gray-200 text-gray-900'}`}
-                            role="menu"
+                    <div className="relative ml-2">
+                        <button
+                            type="button"
+                            onClick={() => setIsModelMenuOpen((p) => !p)}
+                            disabled={isRecording || isTranscribing}
+                            className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm disabled:opacity-50 transition-colors ${
+                                theme === 'dark'
+                                    ? 'text-gray-200 hover:bg-gray-700'
+                                    : 'text-gray-700 hover:bg-gray-100'
+                            }`}
+                            aria-haspopup="menu"
+                            aria-expanded={isModelMenuOpen}
+                            aria-label={`Select AI Model (current: ${selectedModelLabel})`}
+                            title="Select AI Model"
                         >
-                            {/* ✅ Render the menu from our single source of truth */}
-                            {AVAILABLE_MODELS.map((opt) => (
-                                <button
-                                    key={opt.value}
-                                    type="button"
-                                    onClick={() => { setSelectedModel(opt.value); setIsModelMenuOpen(false); }}
-                                    className={`w-full text-left px-3 py-2 text-sm ${theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-50'} ${selectedModel === opt.value ? (theme === 'dark' ? 'bg-gray-700 font-medium' : 'bg-gray-100 font-medium') : ''}`}
-                                    role="menuitem"
-                                >
-                                    {opt.label}
-                                </button>
-                            ))}
-                        </div>
-                    )}
+                            <span className="truncate max-w-[96px]">
+                                {selectedModelLabel}
+                            </span>
+                            <HiChevronDown className="h-4 w-4" />
+                        </button>
+                        {isModelMenuOpen && (
+                            <div
+                                className={`absolute z-50 left-0 bottom-full mb-2 w-48 rounded-md shadow-lg overflow-hidden ${theme === 'dark' ? 'bg-gray-800 border border-gray-700 text-gray-100' : 'bg-white border border-gray-200 text-gray-900'}`}
+                                role="menu"
+                            >
+                                {/* ✅ Render the menu from our single source of truth */}
+                                {AVAILABLE_MODELS.map((opt) => (
+                                    <button
+                                        key={opt.value}
+                                        type="button"
+                                        onClick={() => { setSelectedModel(opt.value); setIsModelMenuOpen(false); }}
+                                        className={`w-full text-left px-3 py-2 text-sm ${theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-50'} ${selectedModel === opt.value ? (theme === 'dark' ? 'bg-gray-700 font-medium' : 'bg-gray-100 font-medium') : ''}`}
+                                        role="menuitem"
+                                    >
+                                        {opt.label}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Right side: Action Buttons */}

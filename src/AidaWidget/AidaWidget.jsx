@@ -22,6 +22,35 @@ import {
 
 import { CHAT_URL, TRANSCRIPTION_URL } from './utils/apiConfig';
 
+const IMAGE_FILE_PATTERN = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
+
+const isImageFile = (file) => {
+    if (!file) return false;
+    if (file.type && file.type.startsWith('image/')) return true;
+    return typeof file.name === 'string' && IMAGE_FILE_PATTERN.test(file.name);
+};
+
+const eventContainsImageFiles = (event) => {
+    const dataTransfer = event?.dataTransfer;
+    if (!dataTransfer) return false;
+
+    if (dataTransfer.items && dataTransfer.items.length > 0) {
+        for (let i = 0; i < dataTransfer.items.length; i += 1) {
+            const item = dataTransfer.items[i];
+            if (item.kind !== 'file') continue;
+            if (!item.type || item.type.startsWith('image/')) return true;
+        }
+    }
+
+    if (dataTransfer.files && dataTransfer.files.length > 0) {
+        for (const file of Array.from(dataTransfer.files)) {
+            if (isImageFile(file)) return true;
+        }
+    }
+
+    return false;
+};
+
 // Default props, now including the feature flags object
 const defaultProps = {
     apiConfig: { chatUrl: CHAT_URL, transcriptionUrl: TRANSCRIPTION_URL },
@@ -44,6 +73,7 @@ const defaultProps = {
 const AidaWidget = (props) => {
     // --- 1. SETUP: Props, Config, and Component-level State ---
     const { apiConfig, user, language, translations, pageContext, features } = { ...defaultProps, ...props };
+    const imageUploadEnabled = Boolean(features?.imageUpload);
 
     // State that is local to this component and passed into hooks
     const [currentMessage, setCurrentMessage] = useState('');
@@ -57,8 +87,10 @@ const AidaWidget = (props) => {
     const autoMobileFullscreenRef = useRef(false);
     const previousDesktopFullscreenRef = useRef(false);
     const viewportRafRef = useRef({ enter: null, settle: null });
+    const dragCounterRef = useRef(0);
     const [isMobileViewport, setIsMobileViewport] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
     const siteLanguage = language || 'en';
+    const [isDragOverWidget, setIsDragOverWidget] = useState(false);
 
     // --- 2. HOOKS: Call our custom hooks to manage state & logic ---
 
@@ -87,6 +119,49 @@ const AidaWidget = (props) => {
     
     // ✅ 2. Use the new hook to get the display text string
     const displayText = useDisplayAnimation({ isOpen, isLoading });
+
+    // Drag and drop support for image attachments
+    const handleWidgetDragEnter = useCallback((event) => {
+        if (!imageUploadEnabled || !eventContainsImageFiles(event)) return;
+        event.preventDefault();
+        dragCounterRef.current += 1;
+        setIsDragOverWidget(true);
+    }, [imageUploadEnabled]);
+
+    const handleWidgetDragOver = useCallback((event) => {
+        if (!imageUploadEnabled) return;
+        const hasImage = eventContainsImageFiles(event);
+        if (!isDragOverWidget && !hasImage) return;
+        event.preventDefault();
+        if (!isDragOverWidget && hasImage) {
+            dragCounterRef.current = Math.max(dragCounterRef.current, 1);
+            setIsDragOverWidget(true);
+        }
+        if (event.dataTransfer) {
+            event.dataTransfer.dropEffect = 'copy';
+        }
+    }, [imageUploadEnabled, isDragOverWidget]);
+
+    const handleWidgetDragLeave = useCallback((event) => {
+        if (!imageUploadEnabled || !isDragOverWidget) return;
+        event.preventDefault();
+        dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+        if (dragCounterRef.current === 0) {
+            setIsDragOverWidget(false);
+        }
+    }, [imageUploadEnabled, isDragOverWidget]);
+
+    const handleWidgetDrop = useCallback((event) => {
+        if (!imageUploadEnabled) return;
+        if (!isDragOverWidget && !eventContainsImageFiles(event)) return;
+        event.preventDefault();
+        const droppedFiles = Array.from(event.dataTransfer?.files || []).filter(isImageFile);
+        if (droppedFiles.length > 0) {
+            handleImagesSelected(droppedFiles);
+        }
+        dragCounterRef.current = 0;
+        setIsDragOverWidget(false);
+    }, [handleImagesSelected, imageUploadEnabled, isDragOverWidget]);
 
     // --- 3. ORCHESTRATION: Callbacks that coordinate multiple hooks ---
 
@@ -260,8 +335,37 @@ const AidaWidget = (props) => {
 
             {isOpen && (
                 <div className={`aida-widget-viewport z-50 ${isFullscreen ? 'aida-widget-viewport--fullscreen' : 'aida-widget-viewport--docked'}`}>
-                    <div ref={sidebarRef} data-theme={theme} style={sidebarInlineStyle} className={containerClasses}>
+                    <div
+                        ref={sidebarRef}
+                        data-theme={theme}
+                        style={sidebarInlineStyle}
+                        className={containerClasses}
+                        onDragEnter={handleWidgetDragEnter}
+                        onDragOver={handleWidgetDragOver}
+                        onDragLeave={handleWidgetDragLeave}
+                        onDrop={handleWidgetDrop}
+                    >
                         {features.resizable && !isFullscreen && !isMobileViewport && <div {...resizeHandleProps} />}
+
+                        {imageUploadEnabled && isDragOverWidget && (
+                            <div className="absolute inset-0 z-[55] pointer-events-none flex items-center justify-center px-4">
+                                <div
+                                    className={`pointer-events-none flex max-w-sm flex-col items-center gap-2 rounded-2xl border-2 border-dashed px-6 py-5 text-sm font-medium ${
+                                        theme === 'dark'
+                                            ? 'border-pink-400/80 bg-gray-900/80 text-pink-100'
+                                            : 'border-pink-500/60 bg-white/80 text-pink-600'
+                                    }`}
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="1.6">
+                                        <path d="M4 16l4.5-4.5 3.2 3.2 3.8-4.6 4.5 5.9" />
+                                        <circle cx="9.2" cy="8.8" r="1.4" fill="currentColor" />
+                                        <path d="M21 17.5V8a3 3 0 00-3-3h-1.5" strokeLinecap="round" />
+                                        <path d="M3 12V8a3 3 0 013-3h6" strokeLinecap="round" />
+                                    </svg>
+                                    <span>Drop images to attach</span>
+                                </div>
+                            </div>
+                        )}
 
                         {/* ✅ 3. Use the hook's return value here too */}
                         <ChatHeader displayText={displayText} lastCost={lastCost} userId={user?.id} resetChat={() => { saveCurrentChatToHistory(); setMessages([]); setCurrentSessionId(null); }} toggleFullscreen={() => setIsFullscreen(p => !p)} showFullscreenToggle={!isMobileViewport} isMobileViewport={isMobileViewport} toggleChat={toggleChat} theme={theme} onToggleTheme={() => setTheme(p => p === 'dark' ? 'light' : 'dark')} onToggleHistory={openPanel} onDisplayClick={features.customInstructions ? openPromptModal : undefined} />
@@ -270,7 +374,7 @@ const AidaWidget = (props) => {
 
                         <ChatDisplay messages={messages} isLoading={isLoading} siteLanguage={siteLanguage} theme={theme} onStartEdit={(id, text) => { setCurrentMessage(text); setEditingMessageId(id); inputRef.current?.focus(); }} onImagePreview={(img) => { setImagePreviewSrc(img); openImagePreview(); }} onRetryBotMessage={features.retryMessage ? handleRetry : undefined} />
 
-                        <ChatInput currentMessage={currentMessage} setCurrentMessage={(text) => { lastInputWasVoiceRef.current = false; cancelAutoSendTimer(); cancelAutoRecordTimer(); setCurrentMessage(text); }} handleSendMessage={stableHandleSendMessage} handleKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); stableHandleSendMessage(); } }} handleRecordButtonClick={handleRecordButtonClick} inputRef={inputRef} isLoading={isLoading} isTranscribing={isTranscribing} isRecording={isRecording} elapsedTime={elapsedTime} onImagesSelected={handleImagesSelected} pendingImages={pendingImages} onRemovePendingImage={removePendingImage} selectedModel={selectedModel} setSelectedModel={setSelectedModel} isWebSearchEnabled={isWebSearchEnabled} setIsWebSearchEnabled={setIsWebSearchEnabled} onStopStreaming={stopStreaming} theme={theme} siteLanguage={siteLanguage} translations={translations} isEditing={!!editingMessageId} cancelEdit={() => { setEditingMessageId(null); setCurrentMessage(''); }} autoSendCountdown={autoSendCountdown} cancelAutoSendTimer={cancelAutoSendTimer} setIsSendTimerPaused={setIsSendTimerPaused} autoRecordCountdown={autoRecordCountdown} cancelAutoRecordTimer={cancelAutoRecordTimer} setIsRecordTimerPaused={setIsRecordTimerPaused} features={features} />
+                        <ChatInput currentMessage={currentMessage} setCurrentMessage={(text) => { lastInputWasVoiceRef.current = false; cancelAutoSendTimer(); cancelAutoRecordTimer(); setCurrentMessage(text); }} handleSendMessage={stableHandleSendMessage} handleKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); stableHandleSendMessage(); } }} handleRecordButtonClick={handleRecordButtonClick} inputRef={inputRef} isLoading={isLoading} isTranscribing={isTranscribing} isRecording={isRecording} elapsedTime={elapsedTime} onImagesSelected={handleImagesSelected} pendingImages={pendingImages} onRemovePendingImage={removePendingImage} selectedModel={selectedModel} setSelectedModel={setSelectedModel} isWebSearchEnabled={isWebSearchEnabled} setIsWebSearchEnabled={setIsWebSearchEnabled} onStopStreaming={stopStreaming} theme={theme} siteLanguage={siteLanguage} translations={translations} isEditing={!!editingMessageId} cancelEdit={() => { setEditingMessageId(null); setCurrentMessage(''); }} autoSendCountdown={autoSendCountdown} cancelAutoSendTimer={cancelAutoSendTimer} setIsSendTimerPaused={setIsSendTimerPaused} autoRecordCountdown={autoRecordCountdown} cancelAutoRecordTimer={cancelAutoRecordTimer} setIsRecordTimerPaused={setIsRecordTimerPaused} features={features} isDragActive={imageUploadEnabled && isDragOverWidget} />
                     </div>
                 </div>
             )}
