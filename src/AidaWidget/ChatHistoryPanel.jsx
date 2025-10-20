@@ -829,7 +829,7 @@ const ChatHistoryPanel = ({
                               >
                                 Icon
                               </span>
-                              <div className="grid grid-cols-5 gap-2">
+                              <div className="grid grid-cols-6 gap-1.5">
                                 {PROJECT_ICON_OPTIONS.map((option) => {
                                   const OptionIcon = option.Icon || NotebookIcon;
                                   const isSelectedIcon =
