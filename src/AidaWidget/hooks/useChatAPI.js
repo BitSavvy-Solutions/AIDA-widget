@@ -1,12 +1,7 @@
+/* src/AidaWidget/hooks/useChatAPI.js */
 import { useState, useCallback, useRef } from 'react';
 import { franc } from 'franc';
 
-/**
- * The core engine for communicating with the chat API.
- * Manages sending, retrying, and stopping messages.
- * @param {object} config - Configuration object.
- * @returns An object with API status and control functions.
- */
 export const useChatAPI = ({
     apiConfig,
     messages,
@@ -24,7 +19,7 @@ export const useChatAPI = ({
     const langMap = { eng: "en", fra: "fr", ara: "ar", hin: "hi", tgl: "tl", ukr: "uk", san: "sa", nya: "ny" };
     const supportedLanguages = Object.values(langMap);
 
-    const buildMessageHistoryPayload = useCallback((history = []) => {
+    const buildMessageHistoryPayload = useCallback((history = [], attachments = []) => {
         const messageHistory = [];
         if (pageContext && Object.keys(pageContext).length > 0) {
             messageHistory.push({ type: 'ai', content: `<PageContext>\n${JSON.stringify(pageContext, null, 2)}\n</PageContext>` });
@@ -32,6 +27,21 @@ export const useChatAPI = ({
         if ((customPrompt || '').trim()) {
             messageHistory.push({ type: 'human', content: customPrompt.trim() });
         }
+
+        const textAndUrlAttachments = attachments.filter(att => att.type === 'text' || att.type === 'url');
+        if (textAndUrlAttachments.length > 0) {
+            let attachmentContext = '<Attachments>\n';
+            textAndUrlAttachments.forEach((att, idx) => {
+                if (att.type === 'text') {
+                    attachmentContext += `\n[Text File ${idx + 1}: ${att.name}]\n${att.content}\n`;
+                } else if (att.type === 'url') {
+                    attachmentContext += `\n[URL ${idx + 1}]: ${att.url}\n`;
+                }
+            });
+            attachmentContext += '\n</Attachments>';
+            messageHistory.push({ type: 'human', content: attachmentContext });
+        }
+
         messageHistory.push(...(history || []).map(m => ({
             type: m.sender === 'user' ? 'human' : 'ai',
             content: m.text || ''
@@ -39,14 +49,7 @@ export const useChatAPI = ({
         return messageHistory;
     }, [customPrompt, pageContext]);
 
-
-    /**
-     * The main function to send a message payload to the chat API and stream the response.
-     * @param {object} userMessage - The full user message object.
-     * @param {string} botMessageId - The ID for the upcoming bot response message.
-     * @param {Array} historyForPayload - The message history to send to the API.
-     */
-    const streamResponse = async ({ userMessage, botMessageId, historyForPayload }) => {
+    const streamResponse = async ({ userMessage, botMessageId, historyForPayload, attachments = [] }) => {
         setIsLoading(true);
         setLastCost(0);
 
@@ -55,17 +58,18 @@ export const useChatAPI = ({
 
         const detectedLang = franc(userMessage.text);
         const detectedLanguageCode = supportedLanguages.includes(langMap[detectedLang]) ? langMap[detectedLang] : "en";
-        const imageUrls = (userMessage.images || []).map(img => img.src).filter(Boolean);
+        const imageAttachments = attachments.filter(att => att.type === 'image');
+        const imageUrls = imageAttachments.map(img => img.src).filter(Boolean);
 
         try {
             const payload = {
                 user_input: userMessage.text,
-                message_history: buildMessageHistoryPayload(historyForPayload, pageContext),
+                message_history: buildMessageHistoryPayload(historyForPayload, attachments),
                 user_id: user.id,
                 email: user.email,
                 page_path: window.location.pathname,
                 language: detectedLanguageCode,
-                model: userMessage.model, // The model is now part of the userMessage object
+                model: userMessage.model,
             };
             if (imageUrls.length > 0) {
                 payload.image_data_urls = imageUrls;
@@ -89,11 +93,9 @@ export const useChatAPI = ({
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
-
                 buffer += decoder.decode(value, { stream: true });
                 const parts = buffer.split('\n\n');
-                buffer = parts.pop(); // Keep incomplete part for the next chunk
-
+                buffer = parts.pop();
                 for (const part of parts) {
                     if (part.startsWith('data: ')) {
                         try {
@@ -102,18 +104,13 @@ export const useChatAPI = ({
                                 setMessages(prev => {
                                     const updated = prev.map(m => m.id === botMessageId ? { ...m, text: m.text + data.delta_content } : m);
                                     if (currentSessionId) {
-                                        // This is a "live" update, don't need sanitized messages yet
                                         updateCurrentSession(updated);
                                     }
                                     return updated;
                                 });
                             }
-                            if (data.cost !== undefined) {
-                                setLastCost(data.cost);
-                            }
-                        } catch (e) {
-                            console.error("Stream parse error:", part, e);
-                        }
+                            if (data.cost !== undefined) setLastCost(data.cost);
+                        } catch (e) { console.error("Stream parse error:", part, e); }
                     }
                 }
             }
@@ -132,14 +129,9 @@ export const useChatAPI = ({
         }
     };
     
-    /**
-     * Stops the current streaming response, if one is in progress.
-     */
     const stopStreaming = useCallback(() => {
         if (streamAbortControllerRef.current) {
             streamAbortControllerRef.current.abort();
-            
-            // Clean up empty bot message placeholder
             setMessages(prev => {
                  for (let i = prev.length - 1; i >= 0; i--) {
                     if (prev[i].sender === 'bot' && prev[i].text.trim() === '') {
@@ -154,10 +146,5 @@ export const useChatAPI = ({
         }
     }, [setMessages, updateCurrentSession]);
 
-    return {
-        isLoading,
-        lastCost,
-        streamResponse,
-        stopStreaming,
-    };
+    return { isLoading, lastCost, streamResponse, stopStreaming };
 };
