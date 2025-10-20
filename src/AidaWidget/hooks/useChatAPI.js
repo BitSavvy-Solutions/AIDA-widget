@@ -63,7 +63,7 @@ export const useChatAPI = ({
             messageHistory.push({
                 type: m.sender === 'user' ? 'human' : 'ai',
                 // AI messages have no attachments, so this is safe for both.
-                content: formatMessageContent(m)
+                content: m.text || ''
             });
         });
 
