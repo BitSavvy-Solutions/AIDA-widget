@@ -65,6 +65,7 @@ const StethoscopeIcon = createLucideIcon(LuStethoscope);
 const PawPrintIcon = createLucideIcon(LuPawPrint);
 
 const DEFAULT_PROJECT_ICON_COLOR = '#9CA3AF';
+const BRAND_COLOR = '#FF5F90';
 
 const PROJECT_COLOR_OPTIONS = [
   { value: DEFAULT_PROJECT_ICON_COLOR, label: 'Neutral' },
@@ -74,16 +75,7 @@ const PROJECT_COLOR_OPTIONS = [
   { value: '#34D399', label: 'Green' },
   { value: '#38BDF8', label: 'Sky' },
   { value: '#818CF8', label: 'Indigo' },
-  { value: '#F472B6', label: 'Pink' },
-  {
-    value: '#FBCFE8',
-    label: 'Glitter',
-    previewStyle: {
-      backgroundImage: `radial-gradient(circle at 20% 20%, rgba(255,255,255,0.7) 0, rgba(255,255,255,0) 40%), radial-gradient(circle at 75% 35%, rgba(255,255,255,0.6) 0, rgba(255,255,255,0) 45%), radial-gradient(circle at 40% 75%, rgba(255,255,255,0.65) 0, rgba(255,255,255,0) 40%), linear-gradient(135deg, rgba(255,255,255,0.4), rgba(255,255,255,0))`,
-      backgroundSize: '120% 120%',
-      backgroundPosition: 'center',
-    },
-  },
+  { value: '#F472B6', label: 'Pink' }
 ];
 
 const PROJECT_ICON_OPTIONS = [
@@ -117,57 +109,6 @@ const PROJECT_ICON_OPTIONS = [
   { key: 'cog', label: 'Settings', Icon: HiOutlineCog6Tooth },
 ];
 
-const ICON_MENU_PALETTE = {
-  dark: {
-    background: '#101a2d',
-    border: '#1d2a45',
-    shadow: '0 28px 52px rgba(8, 12, 24, 0.75)',
-    text: '#f0f5ff',
-    mutedText: '#7e8dad',
-    headerBorder: '#1d2a45',
-    headerBackground: '#101a2d',
-    chipRing: '#9d4edd',
-    chipRingSoft: 'rgba(157, 78, 221, 0.38)',
-    chipShadow: '0 10px 20px rgba(8, 12, 24, 0.55)',
-    iconButtonBg: '#16223a',
-    iconButtonBorder: '#21304d',
-    iconButtonHover: '#253655',
-    iconButtonText: '#cad5f0',
-    iconButtonSelectedBg: '#2a1d3d',
-    iconButtonSelectedBorder: '#b984ff',
-    iconButtonSelectedText: '#f6ecff',
-    doneBg: '#6b1f7f',
-    doneHover: '#812895',
-    doneText: '#fef3ff',
-    divider: '#202d49',
-    footerBackground: '#10112a',
-  },
-  light: {
-    background: '#ffffff',
-    border: '#d5ddf1',
-    shadow: '0 24px 48px rgba(15, 23, 42, 0.15)',
-    text: '#151b2f',
-    mutedText: '#657091',
-    headerBorder: '#d5ddf1',
-    headerBackground: '#ffffff',
-    chipRing: '#7c3aed',
-    chipRingSoft: 'rgba(124, 58, 237, 0.25)',
-    chipShadow: '0 10px 18px rgba(15, 23, 42, 0.12)',
-    iconButtonBg: '#f3f5fb',
-    iconButtonBorder: '#d5ddf1',
-    iconButtonHover: '#e6eaf5',
-    iconButtonText: '#3b4662',
-    iconButtonSelectedBg: '#e4d7ff',
-    iconButtonSelectedBorder: '#7c3aed',
-    iconButtonSelectedText: '#2f1f4a',
-    doneBg: '#7c3aed',
-    doneHover: '#6d28d9',
-    doneText: '#f7f5ff',
-    divider: '#d5ddf1',
-    footerBackground: '#f7f8fd',
-  },
-};
-
 const hexToRgba = (hex, alpha = 1) => {
   if (!hex) return `rgba(255, 255, 255, ${alpha})`;
   const normalized = hex.replace('#', '');
@@ -184,6 +125,57 @@ const hexToRgba = (hex, alpha = 1) => {
   const b = parse(length === 3 ? 2 : 4);
 
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+const ICON_MENU_PALETTE = {
+  dark: {
+    background: '#101a2d',
+    border: '#1d2a45',
+    shadow: '0 28px 52px rgba(8, 12, 24, 0.75)',
+    text: '#f0f5ff',
+    mutedText: '#7e8dad',
+    headerBorder: '#1d2a45',
+    headerBackground: '#101a2d',
+    chipRing: BRAND_COLOR,
+    chipRingSoft: hexToRgba(BRAND_COLOR, 0.35),
+    chipShadow: '0 10px 20px rgba(8, 12, 24, 0.55)',
+    iconButtonBg: '#16223a',
+    iconButtonBorder: '#21304d',
+    iconButtonHover: '#253655',
+    iconButtonText: '#cad5f0',
+    iconButtonSelectedBg: hexToRgba(BRAND_COLOR, 0.28),
+    iconButtonSelectedBorder: BRAND_COLOR,
+    iconButtonSelectedText: '#ffffff',
+    doneBg: BRAND_COLOR,
+    doneHover: BRAND_COLOR,
+    doneText: '#ffffff',
+    divider: '#202d49',
+    footerBackground: '#10112a',
+  },
+  light: {
+    background: '#ffffff',
+    border: '#d5ddf1',
+    shadow: '0 24px 48px rgba(15, 23, 42, 0.15)',
+    text: '#151b2f',
+    mutedText: '#657091',
+    headerBorder: '#d5ddf1',
+    headerBackground: '#ffffff',
+    chipRing: BRAND_COLOR,
+    chipRingSoft: hexToRgba(BRAND_COLOR, 0.24),
+    chipShadow: '0 10px 18px rgba(15, 23, 42, 0.12)',
+    iconButtonBg: '#f3f5fb',
+    iconButtonBorder: '#d5ddf1',
+    iconButtonHover: '#e6eaf5',
+    iconButtonText: '#3b4662',
+    iconButtonSelectedBg: hexToRgba(BRAND_COLOR, 0.16),
+    iconButtonSelectedBorder: BRAND_COLOR,
+    iconButtonSelectedText: BRAND_COLOR,
+    doneBg: BRAND_COLOR,
+    doneHover: BRAND_COLOR,
+    doneText: '#ffffff',
+    divider: '#d5ddf1',
+    footerBackground: '#f7f8fd',
+  },
 };
 
 const createDefaultIconMenuPosition = () => ({
@@ -359,7 +351,8 @@ const ChatHistoryPanel = ({
     const updatePosition = () => {
       const anchorEl = iconAnchorRef.current;
       const menuEl = iconMenuRef.current;
-      if (!anchorEl || !menuEl) return;
+      const projectCardEl = projectCardRefs.current.get(iconMenuProjectId);
+      if (!anchorEl || !menuEl || !projectCardEl) return;
 
       const viewportWidth = window.innerWidth;
       if (viewportWidth < 640) {
@@ -370,13 +363,12 @@ const ChatHistoryPanel = ({
       }
 
       const viewportHeight = window.innerHeight;
-      const projectCardEl = projectCardRefs.current.get(iconMenuProjectId) || null;
-      const projectRect = projectCardEl?.getBoundingClientRect();
-      const anchorRect = anchorEl.getBoundingClientRect();
+      const projectRect = projectCardEl.getBoundingClientRect();
       const scrollRect = scrollContainerRef.current?.getBoundingClientRect();
       const gutter = 14;
 
-      const containerTop = scrollRect ? scrollRect.top + 4 : gutter;
+      // Position menu directly under the project card
+      const containerTop = projectRect.bottom + 4;
       const containerBottom = scrollRect ? scrollRect.bottom - 12 : viewportHeight - gutter;
       const containerLeft = scrollRect ? scrollRect.left + 2 : gutter;
       const containerRight = scrollRect ? scrollRect.right - 2 : viewportWidth - gutter;
@@ -400,14 +392,14 @@ const ChatHistoryPanel = ({
       const menuRect = menuEl.getBoundingClientRect();
       const referenceRect = projectRect || anchorRect;
 
-      let top = referenceRect.top;
+      // Position the menu directly below the project card
+      let top = projectRect.bottom + 4; // 4px gap between card and menu
       const maxTop = Math.max(containerTop, containerBottom - menuRect.height);
       if (top > maxTop) top = maxTop;
       if (top < containerTop) top = containerTop;
 
-      let left = projectRect
-        ? projectRect.left
-        : anchorRect.left + anchorRect.width / 2 - menuRect.width / 2;
+      // Align the menu with the left edge of the project card
+      let left = projectRect.left;
       const minLeft = containerLeft;
       const maxLeft = Math.max(minLeft, containerRight - menuRect.width);
       if (left < minLeft) left = minLeft;
@@ -766,7 +758,7 @@ const ChatHistoryPanel = ({
                           aria-label="Choose project icon"
                         >
                           <div
-                            className="px-4 py-3 border-b text-sm font-semibold tracking-tight"
+                            className="px-3 py-2 border-b text-sm font-semibold tracking-tight"
                             style={{
                               borderColor: iconMenuPalette.headerBorder,
                               backgroundColor: iconMenuPalette.headerBackground,
@@ -774,15 +766,15 @@ const ChatHistoryPanel = ({
                           >
                             Choose icon
                           </div>
-                          <div className="px-3 py-3 space-y-3">
-                            <div className="space-y-1.5">
+                          <div className="px-3 py-2 space-y-2.5">
+                            <div className="space-y-1">
                               <span
                                 className="text-[10px] uppercase tracking-[0.28em] font-semibold"
                                 style={{ color: iconMenuPalette.mutedText }}
                               >
                                 Colour
                               </span>
-                              <div className="flex flex-wrap gap-2">
+                              <div className="flex gap-1 overflow-x-auto sm:flex-wrap sm:overflow-visible">
                                 {PROJECT_COLOR_OPTIONS.map((option) => {
                                   const isSelectedColour =
                                     (project.iconColor || DEFAULT_PROJECT_ICON_COLOR) ===
@@ -807,7 +799,7 @@ const ChatHistoryPanel = ({
                                           iconColor: option.value,
                                         })
                                       }
-                                      className={`relative inline-flex h-8 w-8 items-center justify-center rounded-full border-2 transition-transform duration-150 hover:scale-[1.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0 ${
+                                      className={`relative inline-flex h-6 w-6 items-center justify-center rounded-full border-2 transition-transform duration-150 hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0 ${
                                         isDark
                                           ? 'focus-visible:ring-purple-400'
                                           : 'focus-visible:ring-purple-500'
@@ -822,14 +814,14 @@ const ChatHistoryPanel = ({
                                 })}
                               </div>
                             </div>
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                               <span
                                 className="text-[10px] uppercase tracking-[0.28em] font-semibold"
                                 style={{ color: iconMenuPalette.mutedText }}
                               >
                                 Icon
                               </span>
-                              <div className="grid grid-cols-6 gap-1.5">
+                              <div className="grid grid-cols-6 gap-1">
                                 {PROJECT_ICON_OPTIONS.map((option) => {
                                   const OptionIcon = option.Icon || NotebookIcon;
                                   const isSelectedIcon =
@@ -858,7 +850,7 @@ const ChatHistoryPanel = ({
                                           iconKey: option.key,
                                         })
                                       }
-                                      className={`h-8 w-8 rounded-lg border flex items-center justify-center text-base transition-transform duration-150 hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0 ${
+                                      className={`h-7 w-7 rounded-lg border flex items-center justify-center text-base transition-transform duration-150 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0 ${
                                         isDark
                                           ? 'hover:brightness-110 focus-visible:ring-purple-400'
                                           : 'hover:brightness-105 focus-visible:ring-purple-500'
@@ -867,7 +859,7 @@ const ChatHistoryPanel = ({
                                       aria-pressed={isSelectedIcon}
                                       aria-label={`Use ${option.label} icon`}
                                     >
-                                      <OptionIcon className="w-5 h-5" />
+                                      <OptionIcon className="w-4 h-4" />
                                     </button>
                                   );
                                 })}
@@ -875,7 +867,7 @@ const ChatHistoryPanel = ({
                             </div>
                           </div>
                           <div
-                            className="px-4 py-3 border-t"
+                            className="px-3 py-2 border-t"
                             style={{
                               borderColor: iconMenuPalette.divider,
                               backgroundColor: iconMenuPalette.footerBackground,
@@ -884,7 +876,7 @@ const ChatHistoryPanel = ({
                             <button
                               type="button"
                               onClick={() => setIconMenuProjectId(null)}
-                              className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold tracking-tight transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0 ${
+                              className={`w-full rounded-md px-3 py-1.5 text-xs font-semibold tracking-tight transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0 ${
                                 isDark
                                   ? 'focus-visible:ring-purple-400 hover:translate-y-[0.5px]'
                                   : 'focus-visible:ring-purple-500 hover:translate-y-[0.5px]'
@@ -892,7 +884,7 @@ const ChatHistoryPanel = ({
                               style={{
                                 backgroundColor: iconMenuPalette.doneBg,
                                 color: iconMenuPalette.doneText,
-                                boxShadow: '0 12px 28px rgba(18, 20, 35, 0.35)',
+                                boxShadow: '0 8px 20px rgba(18, 20, 35, 0.25)',
                                 transition:
                                   'background-color 160ms ease, transform 160ms ease, box-shadow 160ms ease',
                               }}
