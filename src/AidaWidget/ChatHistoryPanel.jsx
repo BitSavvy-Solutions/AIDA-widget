@@ -715,7 +715,24 @@ const ChatHistoryPanel = ({
                             width: iconMenuPosition.width ?? undefined,
                           }
                         : {};
-                      const mobileStyle = isMobileView
+                      
+                      // Get project card and scroll container positions for mobile
+                      const projectCardEl = projectCardRefs.current.get(iconMenuProjectId);
+                      const projectCardRect = projectCardEl?.getBoundingClientRect();
+                      const scrollContainerRect = scrollContainerRef.current?.getBoundingClientRect();
+                      
+                      const mobileStyle = isMobileView && projectCardRect && scrollContainerRect
+                        ? {
+                            top: projectCardRect.bottom + 4,
+                            left: projectCardRect.left,
+                            right: window.innerWidth - projectCardRect.right,
+                            width: 'auto',
+                            maxHeight: Math.min(
+                              window.innerHeight - projectCardRect.bottom - 24,
+                              window.innerHeight * 0.6
+                            ),
+                          }
+                        : isMobileView
                         ? {
                             top: 'auto',
                             right: 'auto',
