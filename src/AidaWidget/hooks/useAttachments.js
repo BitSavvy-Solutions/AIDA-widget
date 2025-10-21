@@ -2,6 +2,23 @@
 import { useState, useCallback } from 'react';
 import { SCRAPE_URL } from '../utils/apiConfig';
 
+const TEXT_MIME_TYPES = /^text\//;
+// From AttachmentModal's file input `accept` attribute
+const TEXT_EXTS = new Set([
+    '.md', '.json', '.yml', '.yaml', '.ini', '.log', '.env', '.py', '.js', '.jsx',
+    '.ts', '.tsx', '.html', '.css', '.scss', '.sh', '.bat', '.ps1', '.xml', '.csv',
+    '.java', '.c', '.cpp', '.h', '.cs', '.go', '.rb', '.php', '.sql', '.txt'
+]);
+
+const isKnownTextFile = (file) => {
+    if (!file || !file.name) return false;
+    if (TEXT_MIME_TYPES.test(file.type)) return true;
+    const extensionIndex = file.name.lastIndexOf('.');
+    if (extensionIndex === -1) return false;
+    const extension = file.name.slice(extensionIndex).toLowerCase();
+    return TEXT_EXTS.has(extension);
+};
+
 /**
  * Hook to manage all types of attachments (images, text files, URLs)
  * @param {Function} setSelectedModel - Function to update AI model selection
@@ -111,6 +128,44 @@ export const useAttachments = (setSelectedModel) => {
         }
     }, []);
 
+    // ✅ MODIFIED: Accepts an array of `{file, path}` objects.
+    const addFolderAttachments = useCallback(async (filesWithPaths) => {
+        if (!filesWithPaths || filesWithPaths.length === 0) return;
+
+        try {
+            const promises = filesWithPaths.map(async (item) => {
+                try {
+                    // Expect `item` to be `{ file: File, path: string }`
+                    const content = await readAsText(item.file);
+                    return {
+                        id: `text-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                        type: 'text',
+                        content,
+                        name: item.path, // Use the full path for the name
+                        size: item.file.size,
+                    };
+                } catch (readError) {
+                    console.warn(`Could not read file: ${item.path}`, readError);
+                    return null;
+                }
+            });
+
+            const newAttachments = (await Promise.all(promises)).filter(Boolean);
+
+            if (newAttachments.length > 0) {
+                setAttachments(prev => [...prev, ...newAttachments]);
+            }
+            // Optional: You might want to remove this alert if it becomes noisy.
+            if (newAttachments.length === 0 && filesWithPaths.length > 0) {
+                alert('No supported text files found in the selected folder.');
+            }
+        } catch (error) {
+            console.error('Failed to process folder', error);
+            alert('An error occurred while processing the folder.');
+        }
+    }, []);
+
+
     const addUrlAttachment = useCallback(async (url) => {
         const trimmedUrl = url.trim();
         if (!trimmedUrl) return;
@@ -144,25 +199,20 @@ export const useAttachments = (setSelectedModel) => {
                 throw new Error(errorData.error || `HTTP error ${response.status}`);
             }
             
-            // ✅ MODIFIED: Added robust parsing to handle the wrapped Python response.
             const responseBody = await response.json();
             let actualData;
 
-            // Check for the non-standard wrapped response format
             if (responseBody && typeof responseBody._HttpResponse__body === 'string') {
                 try {
-                    // Parse the inner JSON string
                     actualData = JSON.parse(responseBody._HttpResponse__body);
                 } catch (e) {
                     throw new Error("Failed to parse nested JSON from response body.");
                 }
             } else {
-                // If the response is standard JSON, use it directly (future-proof)
                 actualData = responseBody;
             }
 
             const markdownContent = actualData.content || '';
-            // ✅ END MODIFICATION
             
             const finalAttachment = {
                 id: tempId,
@@ -201,6 +251,7 @@ export const useAttachments = (setSelectedModel) => {
         attachments,
         addImageAttachments,
         addTextAttachment,
+        addFolderAttachments,
         addUrlAttachment,
         removeAttachment,
         clearAttachments,

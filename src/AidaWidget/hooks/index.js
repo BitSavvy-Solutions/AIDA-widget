@@ -1,3 +1,4 @@
+/* src/AidaWidget/hooks/index.js */
 export { useWidgetState } from './useWidgetState';
 export { useModal } from './useModal';
 export { useChatMessages } from './useChatMessages';
@@ -8,3 +9,4 @@ export { useVoiceInput } from './useVoiceInput';
 export { useCountdown } from './useTimers';
 export { useAttachments } from './useAttachments';
 export * from './useDisplayAnimation';
+export { useDragAndDrop } from './useDragAndDrop';
