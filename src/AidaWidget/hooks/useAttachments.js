@@ -128,35 +128,35 @@ export const useAttachments = (setSelectedModel) => {
         }
     }, []);
 
-    const addFolderAttachments = useCallback(async (files) => {
-        if (!files || files.length === 0) return;
+    // ✅ MODIFIED: Accepts an array of `{file, path}` objects.
+    const addFolderAttachments = useCallback(async (filesWithPaths) => {
+        if (!filesWithPaths || filesWithPaths.length === 0) return;
 
         try {
-            const promises = Array.from(files)
-                .filter(file => isKnownTextFile(file) && file.webkitRelativePath)
-                .map(async (file) => {
-                    try {
-                        const content = await readAsText(file);
-                        return {
-                            id: `text-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-                            type: 'text',
-                            content,
-                            name: file.webkitRelativePath, // Use the relative path
-                            size: file.size,
-                        };
-                    } catch (readError) {
-                        console.warn(`Could not read file: ${file.webkitRelativePath}`, readError);
-                        return null;
-                    }
-                });
+            const promises = filesWithPaths.map(async (item) => {
+                try {
+                    // Expect `item` to be `{ file: File, path: string }`
+                    const content = await readAsText(item.file);
+                    return {
+                        id: `text-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                        type: 'text',
+                        content,
+                        name: item.path, // Use the full path for the name
+                        size: item.file.size,
+                    };
+                } catch (readError) {
+                    console.warn(`Could not read file: ${item.path}`, readError);
+                    return null;
+                }
+            });
 
             const newAttachments = (await Promise.all(promises)).filter(Boolean);
 
             if (newAttachments.length > 0) {
                 setAttachments(prev => [...prev, ...newAttachments]);
-            } else {
-                // This alert can be annoying if a folder has no text files, so consider removing it.
-                // For now, it provides useful feedback.
+            }
+            // Optional: You might want to remove this alert if it becomes noisy.
+            if (newAttachments.length === 0 && filesWithPaths.length > 0) {
                 alert('No supported text files found in the selected folder.');
             }
         } catch (error) {
@@ -164,6 +164,7 @@ export const useAttachments = (setSelectedModel) => {
             alert('An error occurred while processing the folder.');
         }
     }, []);
+
 
     const addUrlAttachment = useCallback(async (url) => {
         const trimmedUrl = url.trim();
@@ -198,25 +199,20 @@ export const useAttachments = (setSelectedModel) => {
                 throw new Error(errorData.error || `HTTP error ${response.status}`);
             }
             
-            // ✅ MODIFIED: Added robust parsing to handle the wrapped Python response.
             const responseBody = await response.json();
             let actualData;
 
-            // Check for the non-standard wrapped response format
             if (responseBody && typeof responseBody._HttpResponse__body === 'string') {
                 try {
-                    // Parse the inner JSON string
                     actualData = JSON.parse(responseBody._HttpResponse__body);
                 } catch (e) {
                     throw new Error("Failed to parse nested JSON from response body.");
                 }
             } else {
-                // If the response is standard JSON, use it directly (future-proof)
                 actualData = responseBody;
             }
 
             const markdownContent = actualData.content || '';
-            // ✅ END MODIFICATION
             
             const finalAttachment = {
                 id: tempId,

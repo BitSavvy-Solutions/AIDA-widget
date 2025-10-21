@@ -19,19 +19,10 @@ import {
     useCountdown,
     useAttachments,
     useDisplayAnimation,
+    useDragAndDrop,
 } from './hooks';
 
 import { CHAT_URL, TRANSCRIPTION_URL } from './utils/apiConfig';
-
-const IMAGE_FILE_PATTERN = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
-const isImageFile = (file) => file?.type.startsWith('image/') || (typeof file?.name === 'string' && IMAGE_FILE_PATTERN.test(file.name));
-const eventContainsImageFiles = (event) => {
-    const dt = event?.dataTransfer;
-    if (!dt) return false;
-    for (const item of Array.from(dt.items || [])) if (item.kind === 'file' && item.type.startsWith('image/')) return true;
-    for (const file of Array.from(dt.files || [])) if (isImageFile(file)) return true;
-    return false;
-};
 
 const defaultProps = {
     apiConfig: { chatUrl: CHAT_URL, transcriptionUrl: TRANSCRIPTION_URL },
@@ -44,7 +35,7 @@ const defaultProps = {
 
 const AidaWidget = (props) => {
     const { apiConfig, user, language, translations, pageContext, features } = { ...defaultProps, ...props };
-    const imageUploadEnabled = Boolean(features?.imageUpload);
+    const attachmentsEnabled = Boolean(features?.imageUpload);
 
     const [currentMessage, setCurrentMessage] = useState('');
     const [selectedModel, setSelectedModel] = useState('deepseek/deepseek-chat-v3.1');
@@ -54,17 +45,23 @@ const AidaWidget = (props) => {
     const [promptDraft, setPromptDraft] = useState('');
     const [imagePreview, setImagePreview] = useState(null);
     const inputRef = useRef(null);
-    const dragCounterRef = useRef(0);
     const [isMobileViewport, setIsMobileViewport] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
     const siteLanguage = language || 'en';
-    const [isDragOverWidget, setIsDragOverWidget] = useState(false);
-
+    
+    // Core state and functionality hooks
     const { isOpen, isClosing, isFullscreen, theme, setTheme, setIsFullscreen, toggleChatVisibility } = useWidgetState();
     const { messages, setMessages, getSanitizedMessages } = useChatMessages();
     const { isPanelOpen, openPanel, closePanel, historyItems, projects, currentSessionId, setCurrentSessionId, createNewSession, updateCurrentSession, saveCurrentChatToHistory, historyHandlers } = useChatHistory(getSanitizedMessages);
     const { isOpen: isPromptModalOpen, open: openPromptModal, close: closePromptModal } = useModal();
     const { attachments, addImageAttachments, addTextAttachment, addFolderAttachments, addUrlAttachment, removeAttachment, clearAttachments, isAttachmentModalOpen, openModal: openAttachmentModal, closeModal: closeAttachmentModal } = useAttachments(setSelectedModel);
     
+    const { isDragOverWidget, dropZoneProps } = useDragAndDrop({
+        isEnabled: attachmentsEnabled,
+        addImageAttachments,
+        addTextAttachment,
+        addFolderAttachments
+    });
+
     const requestFullscreen = useCallback(() => setIsFullscreen(true), [setIsFullscreen]);
     const { sidebarRef, sidebarInlineStyle, resizeHandleProps, isResizing } = useResizableSidebar({ isOpen, isFullscreen, isMobileViewport, isEnabled: features.resizable, onRequestFullscreen: requestFullscreen });
     const { isLoading, lastCost, streamResponse, stopStreaming } = useChatAPI({ apiConfig, messages, setMessages, currentSessionId, updateCurrentSession, user, pageContext, customPrompt });
@@ -72,12 +69,7 @@ const AidaWidget = (props) => {
     const { countdown: autoSendCountdown, start: startAutoSendTimer, cancel: cancelAutoSendTimer, setIsPaused: setIsSendTimerPaused } = useCountdown(() => stableHandleSendMessage(), 3);
     const { countdown: autoRecordCountdown, start: startAutoRecordTimer, cancel: cancelAutoRecordTimer, setIsPaused: setIsRecordTimerPaused } = useCountdown(startRecording, 3);
     const displayText = useDisplayAnimation({ isOpen, isLoading });
-
-    const handleWidgetDragEnter = useCallback((e) => { if (imageUploadEnabled && eventContainsImageFiles(e)) { e.preventDefault(); dragCounterRef.current++; setIsDragOverWidget(true); } }, [imageUploadEnabled]);
-    const handleWidgetDragOver = useCallback((e) => { if (imageUploadEnabled && eventContainsImageFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }, [imageUploadEnabled]);
-    const handleWidgetDragLeave = useCallback((e) => { if (imageUploadEnabled) { e.preventDefault(); dragCounterRef.current = Math.max(0, dragCounterRef.current - 1); if (dragCounterRef.current === 0) setIsDragOverWidget(false); } }, [imageUploadEnabled]);
-    const handleWidgetDrop = useCallback((e) => { if (imageUploadEnabled && eventContainsImageFiles(e)) { e.preventDefault(); const imageFiles = Array.from(e.dataTransfer?.files || []).filter(isImageFile); if (imageFiles.length > 0) addImageAttachments(imageFiles); dragCounterRef.current = 0; setIsDragOverWidget(false); } }, [imageUploadEnabled, addImageAttachments]);
-
+    
     const getLocalizedGreeting = (lang) => ({ 'ar': "✨ مرحبًا! أنا آيدا، مساعدتك الرقمية الذكية 🤖💖 كيف يمكنني مساعدتك اليوم؟ 😊", 'fr': "👋 Coucou ! Moi c’est Aida, ta super assistante numérique ✨💻 Comment puis-je t’aider aujourd’hui ? 😄" }[lang] || "Hey hey! 👋 I'm Aida, your sparkly smart digital assistant 🤖💖 How can I help you today? 😄");
     const toggleChat = useCallback(() => { if (isOpen) { cancelAutoSendTimer(); cancelAutoRecordTimer(); if (isRecording) stopRecording(); if (isLoading) stopStreaming(); } else if (messages.length === 0) { setMessages([{ id: `bot-${Date.now()}`, text: getLocalizedGreeting(siteLanguage), sender: 'bot' }]); } toggleChatVisibility(); }, [isOpen, isRecording, isLoading, messages.length, siteLanguage, stopRecording, stopStreaming, toggleChatVisibility, setMessages, cancelAutoSendTimer, cancelAutoRecordTimer]);
     const resetChat = () => { saveCurrentChatToHistory(); setMessages([]); setCurrentSessionId(null); clearAttachments(); };
@@ -123,9 +115,14 @@ const AidaWidget = (props) => {
             {!isOpen && <div className="aida-widget-launcher fixed z-50"><button onClick={toggleChat} className="bg-gray-900 text-white rounded-lg p-2 flex"><div className="compact-lcd"><SevenSegmentDisplay text={displayText} className="animate-lcd-pulse" /></div></button></div>}
             {isOpen && (
                 <div className={`aida-widget-viewport z-50 ${isFullscreen ? 'aida-widget-viewport--fullscreen' : 'aida-widget-viewport--docked'}`}>
-                    <div ref={sidebarRef} data-theme={theme} style={sidebarInlineStyle} className={containerClasses} onDragEnter={handleWidgetDragEnter} onDragOver={handleWidgetDragOver} onDragLeave={handleWidgetDragLeave} onDrop={handleWidgetDrop}>
+                    <div ref={sidebarRef} data-theme={theme} style={sidebarInlineStyle} className={containerClasses} {...dropZoneProps}>
                         {features.resizable && !isFullscreen && !isMobileViewport && <div {...resizeHandleProps} />}
-                        {imageUploadEnabled && isDragOverWidget && <div className="absolute inset-0 z-[55] pointer-events-none flex items-center justify-center px-4"><div className={`pointer-events-none flex max-w-sm flex-col items-center gap-2 rounded-2xl border-2 border-dashed px-6 py-5 text-sm font-medium ${theme === 'dark' ? 'border-pink-400/80 bg-gray-900/80 text-pink-100' : 'border-pink-500/60 bg-white/80 text-pink-600'}`}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M4 16l4.5-4.5 3.2 3.2 3.8-4.6 4.5 5.9" /><circle cx="9.2" cy="8.8" r="1.4" fill="currentColor" /><path d="M21 17.5V8a3 3 0 00-3-3h-1.5" strokeLinecap="round" /><path d="M3 12V8a3 3 0 013-3h6" strokeLinecap="round" /></svg><span>Drop images to attach</span></div></div>}
+                        {attachmentsEnabled && isDragOverWidget && <div className="absolute inset-0 z-[55] pointer-events-none flex items-center justify-center px-4"><div className={`pointer-events-none flex max-w-sm flex-col items-center gap-2 rounded-2xl border-2 border-dashed px-6 py-5 text-sm font-medium ${theme === 'dark' ? 'border-pink-400/80 bg-gray-900/80 text-pink-100' : 'border-pink-500/60 bg-white/80 text-pink-600'}`}>
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" strokeWidth="1.5" className="h-10 w-10" fill="none" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m.75 12 3 3m0 0 3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                            </svg>
+                            <span>Drop files or folders to attach</span>
+                        </div></div>}
                         <ChatHeader displayText={displayText} lastCost={lastCost} userId={user?.id} resetChat={resetChat} toggleFullscreen={() => setIsFullscreen(p => !p)} showFullscreenToggle={!isMobileViewport} isMobileViewport={isMobileViewport} toggleChat={toggleChat} theme={theme} onToggleTheme={() => setTheme(p => p === 'dark' ? 'light' : 'dark')} onToggleHistory={openPanel} onDisplayClick={features.customInstructions ? openPromptModal : undefined} />
                         {features.historyProjects && <ChatHistoryPanel theme={theme} open={isPanelOpen} onClose={closePanel} sessions={historyItems} projects={projects} onSelect={(s) => { setMessages(s.messages || []); setCurrentSessionId(s.id); closePanel(); }} {...historyHandlers} />}
                         <ChatDisplay messages={messages} isLoading={isLoading} siteLanguage={siteLanguage} theme={theme} onStartEdit={(id, text) => { setCurrentMessage(text); setEditingMessageId(id); inputRef.current?.focus(); }} onImagePreview={setImagePreview} onRetryBotMessage={features.retryMessage ? handleRetry : undefined} />
@@ -134,7 +131,10 @@ const AidaWidget = (props) => {
                 </div>
             )}
             {isPromptModalOpen && <div role="dialog" aria-modal="true" className="fixed inset-0 z-[60] flex items-center justify-center"><div className="absolute inset-0 bg-black/50" onClick={closePromptModal}></div><div className={`relative z-10 w-11/12 max-w-md rounded-xl shadow-2xl p-5 ${theme === 'dark' ? 'bg-slate-900 border-white/10 text-gray-100' : 'bg-white border-gray-200 text-gray-900'}`}><h2 className="text-lg font-semibold">Custom Instructions</h2><p className={`text-sm mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>This text is sent first to give Aida context.</p><textarea value={promptDraft} onChange={(e) => setPromptDraft(e.target.value)} onFocus={() => setPromptDraft(customPrompt)} className={`w-full min-h-[140px] mt-4 p-3 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === 'dark' ? 'bg-slate-950 border-white/10' : 'bg-white border-gray-300'}`} placeholder="Provide guidance for Aida..." /><div className="mt-4 flex justify-end space-x-2"><button type="button" onClick={closePromptModal} className={`px-4 py-2 text-sm rounded-lg ${theme === 'dark' ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>Cancel</button><button type="button" onClick={() => { setCustomPrompt(promptDraft.trim()); localStorage.setItem('aida-widget-prompt', promptDraft.trim()); closePromptModal(); }} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500">Save</button></div></div></div>}
+            
+            {/* ✅ FIXED: Use the correctly renamed `closeAttachmentModal` function */}
             <AttachmentModal isOpen={isAttachmentModalOpen} onClose={closeAttachmentModal} attachments={attachments} onAddImages={addImageAttachments} onAddText={addTextAttachment} onAddFolder={addFolderAttachments} onAddUrl={addUrlAttachment} onRemove={removeAttachment} onImagePreview={setImagePreview} theme={theme}/>
+            
             {imagePreview && (
                 <div className="fixed inset-0 z-[65] flex items-center justify-center" onClick={() => setImagePreview(null)}>
                     <div className="absolute inset-0 bg-black/80"/>
