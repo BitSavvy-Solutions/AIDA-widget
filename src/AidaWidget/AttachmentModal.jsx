@@ -118,7 +118,7 @@ const AttachmentModal = ({
                                 </button>
                             </div>
                             <div className="flex items-center gap-2">
-                                <input ref={textInputRef} type="file" accept=".txt,.md,.json,.xml,.csv,.js,.jsx,.py" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) onAddText(file); e.target.value = ''; }}/>
+                                <input ref={textInputRef} type="file" accept="text/*,.md,.json,.yml,.yaml,.ini,.log,.env,.py,.js,.jsx,.ts,.tsx,.html,.css,.scss,.sh,.bat,.ps1,.xml,.csv,.java,.c,.cpp,.h,.cs,.go,.rb,.php,.sql" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) onAddText(file); e.target.value = ''; }}/>
                                 <button type="button" onClick={() => textInputRef.current?.click()} className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg border ${isDark ? 'border-gray-700 bg-gray-800 hover:bg-gray-700' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
                                     <HiDocumentText className="w-5 h-5" />
                                     <span className="text-sm font-medium">Add Text File</span>
