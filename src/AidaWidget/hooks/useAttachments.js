@@ -1,5 +1,6 @@
 /* src/AidaWidget/hooks/useAttachments.js */
 import { useState, useCallback } from 'react';
+import { SCRAPE_URL } from '../utils/apiConfig';
 
 /**
  * Hook to manage all types of attachments (images, text files, URLs)
@@ -111,23 +112,78 @@ export const useAttachments = (setSelectedModel) => {
     }, []);
 
     const addUrlAttachment = useCallback(async (url) => {
-        const trimmed = url.trim();
-        if (!trimmed) return;
+        const trimmedUrl = url.trim();
+        if (!trimmedUrl) return;
 
         try {
-            new URL(trimmed);
+            new URL(trimmedUrl);
         } catch {
             alert('Please enter a valid URL');
             return;
         }
 
-        const newAttachment = {
-            id: `url-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        const tempId = `scrape-${Date.now()}`;
+        const placeholder = {
+            id: tempId,
             type: 'url',
-            url: trimmed,
-            name: trimmed
+            url: trimmedUrl,
+            name: trimmedUrl,
+            status: 'scraping',
         };
-        setAttachments(prev => [...prev, newAttachment]);
+        setAttachments(prev => [...prev, placeholder]);
+
+        try {
+            const response = await fetch(SCRAPE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: trimmedUrl, include_metadata: false }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `HTTP error ${response.status}`);
+            }
+            
+            // ✅ MODIFIED: Added robust parsing to handle the wrapped Python response.
+            const responseBody = await response.json();
+            let actualData;
+
+            // Check for the non-standard wrapped response format
+            if (responseBody && typeof responseBody._HttpResponse__body === 'string') {
+                try {
+                    // Parse the inner JSON string
+                    actualData = JSON.parse(responseBody._HttpResponse__body);
+                } catch (e) {
+                    throw new Error("Failed to parse nested JSON from response body.");
+                }
+            } else {
+                // If the response is standard JSON, use it directly (future-proof)
+                actualData = responseBody;
+            }
+
+            const markdownContent = actualData.content || '';
+            // ✅ END MODIFICATION
+            
+            const finalAttachment = {
+                id: tempId,
+                type: 'text',
+                content: markdownContent,
+                name: trimmedUrl,
+                size: new Blob([markdownContent]).size,
+                status: 'success',
+            };
+
+            setAttachments(prev => prev.map(att => att.id === tempId ? finalAttachment : att));
+
+        } catch (error) {
+            console.error('Failed to scrape URL:', error);
+            const errorAttachment = {
+                ...placeholder,
+                status: 'error',
+                error: error.message || 'Scraping failed',
+            };
+            setAttachments(prev => prev.map(att => att.id === tempId ? errorAttachment : att));
+        }
     }, []);
 
     const removeAttachment = useCallback((id) => {
