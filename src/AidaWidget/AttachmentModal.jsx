@@ -13,6 +13,7 @@ const AttachmentModal = ({
     onAddFolder,
     onAddUrl,
     onRemove,
+    onClearAll,
     onImagePreview,
     theme = 'dark'
 }) => {
@@ -72,7 +73,23 @@ const AttachmentModal = ({
                 ) : (
                     <>
                         <div className={`flex items-center justify-between p-4 border-b ${borderClasses}`}>
-                            <h2 className="text-lg font-semibold">Attachments ({attachments.length})</h2>
+                            <div className="flex items-center gap-3">
+                                <h2 className="text-lg font-semibold">Attachments ({attachments.length})</h2>
+                                {attachments.length > 0 && onClearAll && (
+                                    <button
+                                        type="button"
+                                        onClick={onClearAll}
+                                        className={`text-sm font-medium transition-colors ${
+                                            isDark
+                                                ? 'text-red-400/90 hover:text-red-400'
+                                                : 'text-red-600 hover:text-red-700'
+                                        }`}
+                                        title="Clear all attachments"
+                                    >
+                                        Clear All
+                                    </button>
+                                )}
+                            </div>
                             <button type="button" onClick={onClose} className={`p-1 rounded-lg ${isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-100'}`} aria-label="Close">
                                 <HiXMark className="w-5 h-5" />
                             </button>
