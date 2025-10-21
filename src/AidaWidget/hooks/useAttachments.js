@@ -2,6 +2,23 @@
 import { useState, useCallback } from 'react';
 import { SCRAPE_URL } from '../utils/apiConfig';
 
+const TEXT_MIME_TYPES = /^text\//;
+// From AttachmentModal's file input `accept` attribute
+const TEXT_EXTS = new Set([
+    '.md', '.json', '.yml', '.yaml', '.ini', '.log', '.env', '.py', '.js', '.jsx',
+    '.ts', '.tsx', '.html', '.css', '.scss', '.sh', '.bat', '.ps1', '.xml', '.csv',
+    '.java', '.c', '.cpp', '.h', '.cs', '.go', '.rb', '.php', '.sql', '.txt'
+]);
+
+const isKnownTextFile = (file) => {
+    if (!file || !file.name) return false;
+    if (TEXT_MIME_TYPES.test(file.type)) return true;
+    const extensionIndex = file.name.lastIndexOf('.');
+    if (extensionIndex === -1) return false;
+    const extension = file.name.slice(extensionIndex).toLowerCase();
+    return TEXT_EXTS.has(extension);
+};
+
 /**
  * Hook to manage all types of attachments (images, text files, URLs)
  * @param {Function} setSelectedModel - Function to update AI model selection
@@ -111,6 +128,43 @@ export const useAttachments = (setSelectedModel) => {
         }
     }, []);
 
+    const addFolderAttachments = useCallback(async (files) => {
+        if (!files || files.length === 0) return;
+
+        try {
+            const promises = Array.from(files)
+                .filter(file => isKnownTextFile(file) && file.webkitRelativePath)
+                .map(async (file) => {
+                    try {
+                        const content = await readAsText(file);
+                        return {
+                            id: `text-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                            type: 'text',
+                            content,
+                            name: file.webkitRelativePath, // Use the relative path
+                            size: file.size,
+                        };
+                    } catch (readError) {
+                        console.warn(`Could not read file: ${file.webkitRelativePath}`, readError);
+                        return null;
+                    }
+                });
+
+            const newAttachments = (await Promise.all(promises)).filter(Boolean);
+
+            if (newAttachments.length > 0) {
+                setAttachments(prev => [...prev, ...newAttachments]);
+            } else {
+                // This alert can be annoying if a folder has no text files, so consider removing it.
+                // For now, it provides useful feedback.
+                alert('No supported text files found in the selected folder.');
+            }
+        } catch (error) {
+            console.error('Failed to process folder', error);
+            alert('An error occurred while processing the folder.');
+        }
+    }, []);
+
     const addUrlAttachment = useCallback(async (url) => {
         const trimmedUrl = url.trim();
         if (!trimmedUrl) return;
@@ -201,6 +255,7 @@ export const useAttachments = (setSelectedModel) => {
         attachments,
         addImageAttachments,
         addTextAttachment,
+        addFolderAttachments,
         addUrlAttachment,
         removeAttachment,
         clearAttachments,

@@ -1,6 +1,6 @@
 /* src/AidaWidget/AttachmentModal.jsx */
 import React, { useRef, useState } from 'react';
-import { HiXMark, HiPhoto, HiDocumentText, HiGlobeAlt, HiArrowPath } from 'react-icons/hi2';
+import { HiXMark, HiPhoto, HiDocumentText, HiGlobeAlt, HiArrowPath, HiOutlineFolder } from 'react-icons/hi2';
 import AttachmentItem from './AttachmentItem';
 import AttachmentPreview from './AttachmentPreview';
 
@@ -10,6 +10,7 @@ const AttachmentModal = ({
     attachments,
     onAddImages,
     onAddText,
+    onAddFolder,
     onAddUrl,
     onRemove,
     onImagePreview,
@@ -17,6 +18,7 @@ const AttachmentModal = ({
 }) => {
     const imageInputRef = useRef(null);
     const textInputRef = useRef(null);
+    const folderInputRef = useRef(null);
     const [urlInput, setUrlInput] = useState('');
     const [activeTab, setActiveTab] = useState('all');
     const [previewingAttachment, setPreviewingAttachment] = useState(null);
@@ -122,6 +124,14 @@ const AttachmentModal = ({
                                 <button type="button" onClick={() => textInputRef.current?.click()} className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg border ${isDark ? 'border-gray-700 bg-gray-800 hover:bg-gray-700' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
                                     <HiDocumentText className="w-5 h-5" />
                                     <span className="text-sm font-medium">Add Text File</span>
+                                </button>
+                            </div>
+                            {/* ✅ NEW: Folder Upload Button */}
+                            <div className="flex items-center gap-2">
+                                <input ref={folderInputRef} type="file" webkitdirectory="" directory="" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files || []); if (files.length) onAddFolder(files); e.target.value = ''; }}/>
+                                <button type="button" onClick={() => folderInputRef.current?.click()} className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg border ${isDark ? 'border-gray-700 bg-gray-800 hover:bg-gray-700' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
+                                    <HiOutlineFolder className="w-5 h-5" />
+                                    <span className="text-sm font-medium">Add Folder</span>
                                 </button>
                             </div>
                             {/* ✅ MODIFIED: Logic to disable input and button while scraping */}
