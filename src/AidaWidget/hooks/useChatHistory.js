@@ -87,6 +87,98 @@ export const useChatHistory = (getSanitizedMessages) => {
         }
     }, [getSanitizedMessages, currentSessionId, historyItems, buildTitleFromMessages, updateCurrentSession]);
 
+    const copyTextToClipboard = useCallback(async (text) => {
+        if (typeof text !== 'string' || text.length === 0) return false;
+
+        if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+            try {
+                await navigator.clipboard.writeText(text);
+                return true;
+            } catch (_) {
+                // Fall through to legacy fallback
+            }
+        }
+
+        if (typeof document === 'undefined') return false;
+
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.top = '-9999px';
+        textarea.style.opacity = '0';
+        textarea.style.pointerEvents = 'none';
+
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+
+        let success = false;
+        try {
+            success = document.execCommand('copy');
+        } catch (_) {
+            success = false;
+        } finally {
+            document.body.removeChild(textarea);
+        }
+
+        return success;
+    }, []);
+
+    const formatChatForShare = useCallback((session) => {
+        if (!session) return '';
+        const { title, createdAt, messages } = session;
+        const lines = [];
+        const trimmedTitle = (title || '').trim();
+
+        if (trimmedTitle) {
+            lines.push(`Title: ${trimmedTitle}`);
+        }
+
+        if (createdAt) {
+            const date = new Date(createdAt);
+            if (!Number.isNaN(date.getTime())) {
+                lines.push(`Created: ${date.toLocaleString()}`);
+            }
+        }
+
+        if (lines.length) {
+            lines.push('');
+        }
+
+        if (!Array.isArray(messages) || messages.length === 0) {
+            lines.push('No messages available.');
+        } else {
+            messages.forEach((message, index) => {
+                const rawSender = (message && (message.sender || message.role)) || 'user';
+                const sender = typeof rawSender === 'string' && rawSender.trim()
+                    ? rawSender.trim()
+                    : 'user';
+                const label = sender === 'bot'
+                    ? 'Aida'
+                    : sender.charAt(0).toUpperCase() + sender.slice(1);
+                const content = typeof message?.text === 'string' ? message.text : '';
+                const hasContent = content.trim().length > 0;
+
+                if (hasContent) {
+                    lines.push(`${label}: ${content}`);
+                } else {
+                    lines.push(`${label}:`);
+                }
+
+                if (index !== messages.length - 1) {
+                    lines.push('');
+                }
+            });
+        }
+
+        while (lines.length > 0 && lines[lines.length - 1] === '') {
+            lines.pop();
+        }
+
+        return lines.join('\n');
+    }, []);
+
 
     // --- Handlers for ChatHistoryPanel ---
     const handlers = useMemo(() => ({
@@ -131,8 +223,12 @@ export const useChatHistory = (getSanitizedMessages) => {
             if (!projectId || !updates) return;
             persistProjects(projects.map(p => p.id === projectId ? ensureProjectDefaults({ ...p, ...updates }) : p));
         },
-        onShare: async (session) => { /* Share logic remains the same */ }
-    }), [historyItems, projects]);
+        onShare: async (session) => {
+            const transcript = formatChatForShare(session);
+            if (!transcript) return false;
+            return copyTextToClipboard(transcript);
+        }
+    }), [historyItems, projects, copyTextToClipboard, formatChatForShare]);
 
     return {
         isPanelOpen,

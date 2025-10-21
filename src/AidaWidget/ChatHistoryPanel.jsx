@@ -35,6 +35,7 @@ import {
   HiOutlineCircleStack,
   HiOutlineBuildingOffice,
   HiOutlineCog6Tooth,
+  HiOutlineShare,
 } from 'react-icons/hi2';
 import { LuDumbbell, LuStethoscope, LuPawPrint } from 'react-icons/lu';
 
@@ -216,6 +217,7 @@ const ChatHistoryPanel = ({
   const projectEditInputRef = useRef(null);
   const [draggingChatId, setDraggingChatId] = useState(null);
   const [draggingOverProjectId, setDraggingOverProjectId] = useState(null);
+  const [copiedSession, setCopiedSession] = useState(null);
   const [iconMenuProjectId, setIconMenuProjectId] = useState(null);
   const iconMenuRef = useRef(null);
   const iconAnchorRef = useRef(null);
@@ -342,6 +344,12 @@ const ChatHistoryPanel = ({
       resetIconMenuPosition();
     }
   }, [iconMenuProjectId, resetIconMenuPosition]);
+
+  useEffect(() => {
+    if (!copiedSession) return;
+    const timeout = setTimeout(() => setCopiedSession(null), 1200);
+    return () => clearTimeout(timeout);
+  }, [copiedSession]);
 
   useLayoutEffect(() => {
     if (!iconMenuProjectId || !iconAnchorRef.current || !iconMenuRef.current) {
@@ -604,7 +612,7 @@ const ChatHistoryPanel = ({
         </div>
         <div
           ref={scrollContainerRef}
-          className="flex-1 overflow-y-auto p-3 space-y-3"
+          className="flex-1 overflow-y-auto p-2 space-y-2"
         >
           <div className={`sticky top-0 z-10 pb-3 ${isDark ? 'bg-gray-900' : 'bg-white'}`}>
             <div className="space-y-2">
@@ -1123,10 +1131,28 @@ const ChatHistoryPanel = ({
             const isEditing = editingId === session.id;
             const displayTitle = (session.title || '').trim() || 'Untitled chat';
             const allowDrag = !isEditing && !!onAssignChatToProject;
+            const isCopied = copiedSession?.id === session.id;
+            const baseShareClass = isDark
+              ? 'hover:bg-gray-800 text-gray-300'
+              : 'hover:bg-gray-100 text-gray-600';
+            const copiedShareClass = isDark
+              ? 'text-green-300 hover:bg-gray-800/80'
+              : 'text-green-600 hover:bg-gray-100/70';
+            const shareButtonClass = `p-1 rounded ${baseShareClass} ${
+              isCopied ? copiedShareClass : ''
+            }`;
+            const deleteButtonClass = `inline-flex items-center justify-center rounded border p-0 transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 ${
+              isDark
+                ? 'border-red-500/60 text-red-400 hover:bg-red-500/10 focus-visible:ring-red-500/60 focus-visible:ring-offset-slate-900'
+                : 'border-red-400 text-red-500 hover:bg-red-100 focus-visible:ring-red-500/60 focus-visible:ring-offset-white'
+            }`;
+            const editButtonClass = `p-1 rounded ${
+              isDark ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100 text-gray-600'
+            }`;
             return (
               <div
                 key={session.id}
-                className={`group rounded-lg border px-3 py-2 ${
+                className={`group rounded-lg border px-3 py-3 ${
                   isDark
                     ? 'border-gray-800 bg-gray-900/70 hover:border-gray-700'
                     : 'border-gray-200 bg-white hover:border-gray-300'
@@ -1198,76 +1224,83 @@ const ChatHistoryPanel = ({
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-start justify-between gap-2">
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-xs opacity-60 leading-tight">
+                          {new Date(session.createdAt).toLocaleString()}
+                        </span>
+                        <div className="flex items-center justify-end gap-1">
+                          {onShare && (
+                            <button
+                              type="button"
+                              className={shareButtonClass}
+                              onClick={async (event) => {
+                                event.stopPropagation();
+                                try {
+                                  const success = await onShare?.(session);
+                                  if (success) {
+                                    setCopiedSession({ id: session.id, timestamp: Date.now() });
+                                  }
+                                } catch (error) {
+                                  // ignore copy failures in UI
+                                }
+                              }}
+                              aria-label={isCopied ? 'Chat copied to clipboard' : 'Copy chat transcript'}
+                              title={isCopied ? 'Copied' : 'Copy chat transcript'}
+                            >
+                              {isCopied ? (
+                                <HiCheck className="w-4 h-4" />
+                              ) : (
+                                <HiOutlineShare className="w-4 h-4" />
+                              )}
+                            </button>
+                          )}
+                          {onRename && (
+                            <button
+                              type="button"
+                              className={editButtonClass}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                startEditing(session);
+                              }}
+                              aria-label="Rename chat"
+                              title="Rename chat"
+                            >
+                              <HiPencilSquare className="w-4 h-4" />
+                            </button>
+                          )}
+                          {onDelete && (
+                            <button
+                              type="button"
+                              className={deleteButtonClass}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                if (
+                                  window.confirm(
+                                    `Delete "${displayTitle}"? This action cannot be undone.`,
+                                  )
+                                ) {
+                                  onDelete(session.id);
+                                }
+                              }}
+                              aria-label="Delete chat"
+                              title="Delete chat"
+                            >
+                              <HiXMark className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
                       <button
                         type="button"
-                        className="flex-1 min-w-0 text-left"
+                        className="w-full text-left px-1 py-0.5"
                         onClick={() => onSelect?.(session)}
                         title={displayTitle}
                       >
                         <div className="flex flex-col min-w-0">
                           <span className="text-sm font-medium truncate block">{displayTitle}</span>
-                          <span className="text-[11px] opacity-60 mt-0.5">
-                            {new Date(session.createdAt).toLocaleString()}
-                          </span>
                         </div>
                       </button>
-                      {onRename && (
-                        <button
-                          type="button"
-                          className={`p-1.5 rounded-md border ${
-                            isDark
-                              ? 'border-gray-800 text-gray-400 hover:bg-gray-800 hover:text-gray-200'
-                              : 'border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-700'
-                          }`}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            startEditing(session);
-                          }}
-                          aria-label="Rename chat"
-                          title="Rename chat"
-                        >
-                          <HiPencilSquare className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                    <div className="mt-2 flex items-center justify-end gap-2">
-                      {onShare && (
-                        <button
-                          type="button"
-                          className={`text-xs px-2 py-1 rounded-md border ${
-                            isDark
-                              ? 'border-gray-700 text-gray-300 hover:bg-gray-800'
-                              : 'border-gray-300 text-gray-600 hover:bg-gray-100'
-                          }`}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onShare?.(session);
-                          }}
-                          aria-label="Share chat"
-                          title="Share chat"
-                        >
-                          Share
-                        </button>
-                      )}
-                      {onDelete && (
-                        <button
-                          type="button"
-                          className={`text-xs px-2 py-1 rounded-md border ${
-                            isDark
-                              ? 'border-red-500/40 text-red-300 hover:bg-red-500/10'
-                              : 'border-red-300 text-red-600 hover:bg-red-100'
-                          }`}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onDelete(session.id);
-                          }}
-                          aria-label="Delete chat"
-                          title="Delete chat"
-                        >
-                          Delete
-                        </button>
-                      )}
                     </div>
                   </>
                 )}
