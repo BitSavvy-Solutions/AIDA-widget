@@ -23,7 +23,7 @@ const AttachmentModal = ({
     const [activeTab, setActiveTab] = useState('all');
     const [previewingAttachment, setPreviewingAttachment] = useState(null);
 
-    // ✅ ADDED: A derived state to check if any URL is currently being scraped.
+    // A derived state to check if any URL is currently being scraped.
     const isScraping = attachments.some(att => att.status === 'scraping');
 
     if (!isOpen) return null;
@@ -49,7 +49,7 @@ const AttachmentModal = ({
         : attachments.filter(att => {
             if (activeTab === 'images') return att.type === 'image';
             if (activeTab === 'text') return att.type === 'text';
-            // ✅ MODIFIED: Also show scraped URLs in the 'text' tab after success
+            // Also show scraped URLs in the 'text' tab after success
             if (activeTab === 'urls') return att.type === 'url';
             return true;
         });
@@ -111,38 +111,76 @@ const AttachmentModal = ({
                                 ))
                             )}
                         </div>
+                        {/* Compact footer with clearer URL input */}
                         <div className={`p-4 border-t space-y-3 ${borderClasses}`}>
-                            <div className="flex items-center gap-2">
-                                <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files || []); if (files.length) onAddImages(files); e.target.value = ''; }}/>
-                                <button type="button" onClick={() => imageInputRef.current?.click()} className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg border ${isDark ? 'border-gray-700 bg-gray-800 hover:bg-gray-700' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
-                                    <HiPhoto className="w-5 h-5" />
-                                    <span className="text-sm font-medium">Add Images</span>
+                            
+                            {/* Hidden file inputs */}
+                            <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files || []); if (files.length) onAddImages(files); e.target.value = ''; }}/>
+                            <input ref={textInputRef} type="file" accept="text/*,.md,.json,.yml,.yaml,.ini,.log,.env,.py,.js,.jsx,.ts,.tsx,.html,.css,.scss,.sh,.bat,.ps1,.xml,.csv,.java,.c,.cpp,.h,.cs,.go,.rb,.php,.sql" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) onAddText(file); e.target.value = ''; }}/>
+                            
+                            {/* ✅ FIXED: The onChange handler now creates the same data structure as drag-and-drop. */}
+                            <input
+                                ref={folderInputRef}
+                                type="file"
+                                webkitdirectory=""
+                                directory=""
+                                multiple
+                                className="hidden"
+                                onChange={(e) => {
+                                    const files = Array.from(e.target.files || []);
+                                    if (files.length > 0) {
+                                        const filesWithPaths = files.map(file => ({
+                                            file: file,
+                                            path: file.webkitRelativePath,
+                                        }));
+                                        onAddFolder(filesWithPaths);
+                                    }
+                                    e.target.value = ''; // Clear input for re-selection
+                                }}
+                            />
+                            
+                            {/* Action buttons */}
+                            <div className="grid grid-cols-3 gap-3">
+                                <button type="button" onClick={() => imageInputRef.current?.click()} className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg border transition-colors ${isDark ? 'border-gray-700 bg-gray-800/50 hover:bg-gray-800' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}`} title="Add Images">
+                                    <HiPhoto className="w-6 h-6" />
+                                    <span className="text-xs font-medium">Images</span>
+                                </button>
+                                <button type="button" onClick={() => textInputRef.current?.click()} className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg border transition-colors ${isDark ? 'border-gray-700 bg-gray-800/50 hover:bg-gray-800' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}`} title="Add Text File">
+                                    <HiDocumentText className="w-6 h-6" />
+                                    <span className="text-xs font-medium">Text File</span>
+                                </button>
+                                <button type="button" onClick={() => folderInputRef.current?.click()} className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg border transition-colors ${isDark ? 'border-gray-700 bg-gray-800/50 hover:bg-gray-800' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}`} title="Add Folder">
+                                    <HiOutlineFolder className="w-6 h-6" />
+                                    <span className="text-xs font-medium">Folder</span>
                                 </button>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <input ref={textInputRef} type="file" accept="text/*,.md,.json,.yml,.yaml,.ini,.log,.env,.py,.js,.jsx,.ts,.tsx,.html,.css,.scss,.sh,.bat,.ps1,.xml,.csv,.java,.c,.cpp,.h,.cs,.go,.rb,.php,.sql" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) onAddText(file); e.target.value = ''; }}/>
-                                <button type="button" onClick={() => textInputRef.current?.click()} className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg border ${isDark ? 'border-gray-700 bg-gray-800 hover:bg-gray-700' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
-                                    <HiDocumentText className="w-5 h-5" />
-                                    <span className="text-sm font-medium">Add Text File</span>
-                                </button>
-                            </div>
-                            {/* ✅ NEW: Folder Upload Button */}
-                            <div className="flex items-center gap-2">
-                                <input ref={folderInputRef} type="file" webkitdirectory="" directory="" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files || []); if (files.length) onAddFolder(files); e.target.value = ''; }}/>
-                                <button type="button" onClick={() => folderInputRef.current?.click()} className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg border ${isDark ? 'border-gray-700 bg-gray-800 hover:bg-gray-700' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
-                                    <HiOutlineFolder className="w-5 h-5" />
-                                    <span className="text-sm font-medium">Add Folder</span>
-                                </button>
-                            </div>
-                            {/* ✅ MODIFIED: Logic to disable input and button while scraping */}
-                            <div className="flex items-center gap-2">
-                                <input type="url" value={urlInput} onChange={(e) => setUrlInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddUrl(); } }} placeholder="https://example.com" disabled={isScraping} className={`flex-1 px-3 py-2 rounded-lg border ${isDark ? 'bg-gray-800 border-gray-700 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'} focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed`}/>
-                                <button type="button" onClick={handleAddUrl} disabled={!urlInput.trim() || isScraping} className={`px-4 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-wait ${isDark ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}>
-                                    {isScraping ? (
-                                        <HiArrowPath className="w-5 h-5 animate-spin" />
-                                    ) : (
-                                        <HiGlobeAlt className="w-5 h-5" />
-                                    )}
+
+                            {/* URL input */}
+                            <div className="relative flex items-center">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                                    { isScraping 
+                                        ? <HiArrowPath className={`w-5 h-5 animate-spin ${isDark ? 'text-gray-400' : 'text-gray-500'}`} /> 
+                                        : <HiGlobeAlt className={`w-5 h-5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                                    }
+                                </span>
+
+                                <input
+                                    type="url"
+                                    value={urlInput}
+                                    onChange={(e) => setUrlInput(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddUrl(); } }}
+                                    placeholder="Paste URL to read a webpage"
+                                    disabled={isScraping}
+                                    className={`w-full text-sm pl-10 pr-20 py-2.5 rounded-lg border ${isDark ? 'bg-gray-800 border-gray-700 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'} focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed`}
+                                />
+
+                                <button
+                                    type="button"
+                                    onClick={handleAddUrl}
+                                    disabled={!urlInput.trim() || isScraping}
+                                    className={`absolute right-1.5 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-wait ${isDark ? 'bg-blue-600 hover:bg-blue-500 text-white disabled:bg-blue-600/50' : 'bg-blue-600 hover:bg-blue-700 text-white disabled:bg-blue-600/50'}`}
+                                >
+                                    {isScraping ? "Reading..." : "Read"}
                                 </button>
                             </div>
                         </div>
