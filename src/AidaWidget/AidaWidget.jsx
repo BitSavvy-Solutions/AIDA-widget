@@ -45,7 +45,11 @@ const AidaWidget = (props) => {
     const [promptDraft, setPromptDraft] = useState('');
     const [imagePreview, setImagePreview] = useState(null);
     const inputRef = useRef(null);
+    const messagesEndRef = useRef(null);
+    const programmaticScrollRef = useRef(false);
     const [isMobileViewport, setIsMobileViewport] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
+    const [isAtBottom, setIsAtBottom] = useState(true);
+    const [isAutoScrollPaused, setIsAutoScrollPaused] = useState(false);
     const siteLanguage = language || 'en';
     
     // Core state and functionality hooks
@@ -69,6 +73,21 @@ const AidaWidget = (props) => {
     const { countdown: autoSendCountdown, start: startAutoSendTimer, cancel: cancelAutoSendTimer, setIsPaused: setIsSendTimerPaused } = useCountdown(() => stableHandleSendMessage(), 3);
     const { countdown: autoRecordCountdown, start: startAutoRecordTimer, cancel: cancelAutoRecordTimer, setIsPaused: setIsRecordTimerPaused } = useCountdown(startRecording, 3);
     const displayText = useDisplayAnimation({ isOpen, isLoading });
+    
+    useEffect(() => {
+        if (!isLoading) setIsAutoScrollPaused(false);
+    }, [isLoading]);
+    
+    const handleScrollStateChange = useCallback((atBottom) => {
+        setIsAtBottom(atBottom);
+        if (atBottom) setIsAutoScrollPaused(false);
+    }, []);
+    
+    const handleUserScrollAway = useCallback(() => {
+        if (isLoading) setIsAutoScrollPaused(true);
+    }, [isLoading]);
+    
+    const shouldAutoScroll = isLoading ? !isAutoScrollPaused : isAtBottom;
     
     const getLocalizedGreeting = (lang) => ({ 'ar': "✨ مرحبًا! أنا آيدا، مساعدتك الرقمية الذكية 🤖💖 كيف يمكنني مساعدتك اليوم؟ 😊", 'fr': "👋 Coucou ! Moi c’est Aida, ta super assistante numérique ✨💻 Comment puis-je t’aider aujourd’hui ? 😄" }[lang] || "Hey hey! 👋 I'm Aida, your sparkly smart digital assistant 🤖💖 How can I help you today? 😄");
     const toggleChat = useCallback(() => { if (isOpen) { cancelAutoSendTimer(); cancelAutoRecordTimer(); if (isRecording) stopRecording(); if (isLoading) stopStreaming(); } else if (messages.length === 0) { setMessages([{ id: `bot-${Date.now()}`, text: getLocalizedGreeting(siteLanguage), sender: 'bot' }]); } toggleChatVisibility(); }, [isOpen, isRecording, isLoading, messages.length, siteLanguage, stopRecording, stopStreaming, toggleChatVisibility, setMessages, cancelAutoSendTimer, cancelAutoRecordTimer]);
@@ -125,7 +144,20 @@ const AidaWidget = (props) => {
                         </div></div>}
                         <ChatHeader displayText={displayText} lastCost={lastCost} userId={user?.id} resetChat={resetChat} toggleFullscreen={() => setIsFullscreen(p => !p)} showFullscreenToggle={!isMobileViewport} isMobileViewport={isMobileViewport} toggleChat={toggleChat} theme={theme} onToggleTheme={() => setTheme(p => p === 'dark' ? 'light' : 'dark')} onToggleHistory={openPanel} onDisplayClick={features.customInstructions ? openPromptModal : undefined} />
                         {features.historyProjects && <ChatHistoryPanel theme={theme} open={isPanelOpen} onClose={closePanel} sessions={historyItems} projects={projects} onSelect={(s) => { setMessages(s.messages || []); setCurrentSessionId(s.id); closePanel(); }} {...historyHandlers} />}
-                        <ChatDisplay messages={messages} isLoading={isLoading} siteLanguage={siteLanguage} theme={theme} onStartEdit={(id, text) => { setCurrentMessage(text); setEditingMessageId(id); inputRef.current?.focus(); }} onImagePreview={setImagePreview} onRetryBotMessage={features.retryMessage ? handleRetry : undefined} />
+                        <ChatDisplay
+                            messages={messages}
+                            isLoading={isLoading}
+                            siteLanguage={siteLanguage}
+                            theme={theme}
+                            messagesEndRef={messagesEndRef}
+                            programmaticScrollRef={programmaticScrollRef}
+                            shouldAutoScroll={shouldAutoScroll}
+                            onScrollStateChange={handleScrollStateChange}
+                            onUserScrollAway={handleUserScrollAway}
+                            onStartEdit={(id, text) => { setCurrentMessage(text); setEditingMessageId(id); inputRef.current?.focus(); }}
+                            onImagePreview={setImagePreview}
+                            onRetryBotMessage={features.retryMessage ? handleRetry : undefined}
+                        />
                         <ChatInput {...{ currentMessage, setCurrentMessage, handleSendMessage: stableHandleSendMessage, handleKeyDown: (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); stableHandleSendMessage(); } }, handleRecordButtonClick, inputRef, isLoading, isTranscribing, isRecording, elapsedTime, siteLanguage, theme, autoSendCountdown, cancelAutoSendTimer, setIsSendTimerPaused, autoRecordCountdown, cancelAutoRecordTimer, setIsRecordTimerPaused, selectedModel, setSelectedModel, translations, isEditing: !!editingMessageId, cancelEdit: () => { setEditingMessageId(null); setCurrentMessage(''); }, attachmentCount: attachments.length, onOpenAttachments: openAttachmentModal, isWebSearchEnabled, setIsWebSearchEnabled, onStopStreaming: stopStreaming, features }}/>
                     </div>
                 </div>
