@@ -1,7 +1,10 @@
 /* src/AidaWidget/utils/apiConfig.js */
 // This file centralizes API configuration and switches endpoints based on the deployment environment.
 
-const isBetaEnvironment = window.location.hostname === 'beta-aitut.iverse.space';
+
+const isBetaEnvironment = 
+  window.location.hostname === 'beta-aitut.iverse.space' || 
+  window.location.hostname === 'aida.iverse.space';
 
 // --- Agent Backend Configuration (Chat & Transcription) ---
 const AGENT_PROD_HOST = 'https://aitut-agentbackend.azurewebsites.net';
