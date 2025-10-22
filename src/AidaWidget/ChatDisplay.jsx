@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkGfm from 'remark-gfm';
+import { HiSpeakerWave, HiPlay, HiPause } from 'react-icons/hi2';
 
 const CodeBlock = ({ inline, className, children, ...props }) => {
     // If react-markdown says it's inline, great! But if it's being dramatic,
@@ -52,6 +53,15 @@ const CodeBlock = ({ inline, className, children, ...props }) => {
     );
 };
 
+// ✅ ADDED: Function to remove emojis and other non-speakable symbols.
+const cleanTextForSpeech = (text) => {
+    if (!text) return '';
+    // This regex covers most emojis, symbols, and pictographs.
+    const EMOJI_REGEX = /([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g;
+    return text.replace(EMOJI_REGEX, '').replace(/\s+/g, ' ').trim();
+};
+
+
 const ChatDisplay = ({
     messages,
     messagesEndRef,
@@ -68,6 +78,76 @@ const ChatDisplay = ({
 }) => {
     const [copiedId, setCopiedId] = useState(null);
     const containerRef = useRef(null);
+    const messageBodyRefs = useRef(new Map());
+
+    // State and handlers for Text-to-Speech functionality
+    const [speakingMessageId, setSpeakingMessageId] = useState(null);
+    const [speechStatus, setSpeechStatus] = useState('idle'); // 'idle', 'speaking', 'paused'
+    const utteranceRef = useRef(null);
+
+    // Check for browser support just once.
+    const speechApiSupported = useMemo(() => typeof window !== 'undefined' && 'speechSynthesis' in window, []);
+
+    // Cleanup speech synthesis on component unmount
+    useEffect(() => {
+        return () => {
+            if (speechApiSupported) {
+                window.speechSynthesis.cancel();
+            }
+        };
+    }, [speechApiSupported]);
+
+    // The main handler for starting, pausing, and resuming speech
+    const handleToggleSpeech = useCallback((message) => {
+        if (!speechApiSupported) return;
+
+        const isCurrentMessage = message.id === speakingMessageId;
+
+        // If it's the current message, toggle pause/resume
+        if (isCurrentMessage) {
+            if (speechStatus === 'speaking') {
+                window.speechSynthesis.pause();
+            } else if (speechStatus === 'paused') {
+                window.speechSynthesis.resume();
+            }
+            return;
+        }
+
+        // If it's a new message, stop any previous speech and start the new one.
+        if (window.speechSynthesis.speaking) {
+            window.speechSynthesis.cancel();
+        }
+
+        const messageNode = messageBodyRefs.current.get(message.id);
+        const rawText = messageNode?.innerText || message.text;
+        // ✅ MODIFIED: Use the cleaning function
+        const textToSpeak = cleanTextForSpeech(rawText);
+
+        // Don't try to speak if the message was only emojis/symbols
+        if (!textToSpeak) {
+            console.warn("No speakable content found in the message.");
+            return;
+        }
+
+        const utterance = new SpeechSynthesisUtterance(textToSpeak);
+        utterance.lang = siteLanguage;
+
+        utterance.onstart = () => {
+            setSpeakingMessageId(message.id);
+            setSpeechStatus('speaking');
+        };
+        utterance.onend = () => { // Fired on completion or cancellation
+            setSpeakingMessageId(null);
+            setSpeechStatus('idle');
+            utteranceRef.current = null;
+        };
+        utterance.onpause = () => { if (window.speechSynthesis.paused) setSpeechStatus('paused'); };
+        utterance.onresume = () => setSpeechStatus('speaking');
+        utterance.onerror = (e) => { console.error("Speech synthesis error:", e); setSpeakingMessageId(null); setSpeechStatus('idle'); };
+
+        utteranceRef.current = utterance;
+        window.speechSynthesis.speak(utterance);
+    }, [speechApiSupported, speakingMessageId, speechStatus, siteLanguage]);
 
     // Observe the anchor at the bottom; when it's visible at all, we are at-bottom
     useEffect(() => {
@@ -162,6 +242,10 @@ const ChatDisplay = ({
                     <div key={message.id} className={`flex ${message.sender === 'user' ? 'justify-end pl-10' : 'justify-start'}`}>
                         <div className={`flex flex-col w-full ${message.sender === 'user' ? 'items-end' : 'items-start'}`}>
                             <div
+                                ref={(el) => {
+                                    if (el) messageBodyRefs.current.set(message.id, el);
+                                    else messageBodyRefs.current.delete(message.id);
+                                }}
                                 className={`${message.sender === 'user' ? 'user-message rounded-l-xl' : 'bot-message'}`}
                                 dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'}
                             >
@@ -226,6 +310,30 @@ const ChatDisplay = ({
                                             <path d="M16 1H4c-1.1 0-2 .9-2 2v12h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
                                         </svg>
                                     </button>
+                                    {/* Text to Speech Button */}
+                                    {isBot && speechApiSupported && trimmedText !== '' && (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleToggleSpeech(message)}
+                                            className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+                                            aria-label={
+                                                speakingMessageId === message.id && speechStatus === 'speaking' ? 'Pause speech'
+                                                : speakingMessageId === message.id && speechStatus === 'paused' ? 'Resume speech'
+                                                : 'Read message aloud'
+                                            }
+                                            title={
+                                                speakingMessageId === message.id && speechStatus === 'speaking' ? 'Pause speech'
+                                                : speakingMessageId === message.id && speechStatus === 'paused' ? 'Resume speech'
+                                                : 'Read message aloud'
+                                            }
+                                        >
+                                            {speakingMessageId === message.id && speechStatus !== 'idle' ? (
+                                                speechStatus === 'speaking' ? <HiPause className="w-4 h-4" /> : <HiPlay className="w-4 h-4" />
+                                            ) : (
+                                                <HiSpeakerWave className="w-4 h-4" />
+                                            )}
+                                        </button>
+                                    )}
                                     {message.sender === 'bot' && onRetryBotMessage && canRetry && (
                                         <button
                                             type="button"

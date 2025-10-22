@@ -90,7 +90,12 @@ const AidaWidget = (props) => {
     const shouldAutoScroll = isLoading ? !isAutoScrollPaused : isAtBottom;
     
     const getLocalizedGreeting = (lang) => ({ 'ar': "✨ مرحبًا! أنا آيدا، مساعدتك الرقمية الذكية 🤖💖 كيف يمكنني مساعدتك اليوم؟ 😊", 'fr': "👋 Coucou ! Moi c’est Aida, ta super assistante numérique ✨💻 Comment puis-je t’aider aujourd’hui ? 😄" }[lang] || "Hey hey! 👋 I'm Aida, your sparkly smart digital assistant 🤖💖 How can I help you today? 😄");
-    const toggleChat = useCallback(() => { if (isOpen) { cancelAutoSendTimer(); cancelAutoRecordTimer(); if (isRecording) stopRecording(); if (isLoading) stopStreaming(); } else if (messages.length === 0) { setMessages([{ id: `bot-${Date.now()}`, text: getLocalizedGreeting(siteLanguage), sender: 'bot' }]); } toggleChatVisibility(); }, [isOpen, isRecording, isLoading, messages.length, siteLanguage, stopRecording, stopStreaming, toggleChatVisibility, setMessages, cancelAutoSendTimer, cancelAutoRecordTimer]);
+    const toggleChat = useCallback(() => { if (isOpen) { cancelAutoSendTimer(); cancelAutoRecordTimer(); if (isRecording) stopRecording(); if (isLoading) stopStreaming(); 
+            // ✅ ADDED: Stop any active speech synthesis when closing the widget.
+            if (typeof window !== 'undefined' && window.speechSynthesis) {
+                window.speechSynthesis.cancel();
+            }
+        } else if (messages.length === 0) { setMessages([{ id: `bot-${Date.now()}`, text: getLocalizedGreeting(siteLanguage), sender: 'bot' }]); } toggleChatVisibility(); }, [isOpen, isRecording, isLoading, messages.length, siteLanguage, stopRecording, stopStreaming, toggleChatVisibility, setMessages, cancelAutoSendTimer, cancelAutoRecordTimer]);
     const resetChat = () => { saveCurrentChatToHistory(); setMessages([]); setCurrentSessionId(null); clearAttachments(); };
     const handleRecordButtonClick = useCallback(() => { if (isLoading || isTranscribing) return; cancelAutoRecordTimer(); isRecording ? stopRecording() : startRecording(); }, [isRecording, isLoading, isTranscribing, stopRecording, startRecording, cancelAutoRecordTimer]);
 
