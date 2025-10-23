@@ -230,10 +230,14 @@ export const useChatHistory = (getSanitizedMessages) => {
         }
     }), [historyItems, projects, copyTextToClipboard, formatChatForShare]);
 
+    // ✅ MODIFIED: Memoize panel handlers with useCallback.
+    const openPanel = useCallback(() => setIsPanelOpen(true), []);
+    const closePanel = useCallback(() => setIsPanelOpen(false), []);
+
     return {
         isPanelOpen,
-        openPanel: () => setIsPanelOpen(true),
-        closePanel: () => setIsPanelOpen(false),
+        openPanel,
+        closePanel,
         historyItems,
         projects,
         currentSessionId,
