@@ -1,3 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* You can add any other base styles for your dev page here */
+body {
+  font-family: sans-serif;
+  padding: 1rem;
+}
 /* ===== Seven-Segment LCD Display Styling ===== */
 
 .compact-lcd {
@@ -140,10 +149,10 @@
   margin: 1.6rem 0 1rem 0;
 }
 
-/* ✅ MARKDOWN STYLING ADDED FOR CODE BLOCKS */
+/* ✅ MARKDOWN STYLING MIGRATED TO SHIKI */
+/* Shiki generates its own <pre> tag with inline background/color styles.
+  We apply layout, font, and spacing styles to it. */
 .bot-message pre {
-  background-color: #1e1e1e;
-  color: #f8f8f2;
   padding: 1rem;
   border-radius: 0.5rem;
   overflow-x: auto;
@@ -153,6 +162,14 @@
   margin-top: 2rem;
   margin-bottom: 2rem;
 }
+
+/* This is for the fallback/loading state before Shiki renders the highlighted code.
+  It mimics the old appearance. */
+.bot-message pre.shiki-fallback {
+  background-color: #1e1e1e;
+  color: #f8f8f2;
+}
+
 
 /* react-syntax-highlighter container (PreTag="div") */
 
@@ -452,9 +469,8 @@ body.aida-widget-resizing * {
   font-size: 0.85rem;
 }
 
+/* ✅ MODIFIED: User message code blocks now also driven by Shiki */
 .user-message pre {
-  background-color: #1e1e1e;
-  color: #f8f8f2;
   padding: 1rem;
   border-radius: 0.5rem;
   overflow-x: auto;
@@ -464,6 +480,12 @@ body.aida-widget-resizing * {
   margin-top: 0.5rem;
   margin-bottom: 0.5rem;
 }
+
+.user-message pre.shiki-fallback {
+  background-color: #1e1e1e;
+  color: #f8f8f2;
+}
+
 
 .user-message pre code {
   background-color: transparent;

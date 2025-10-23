@@ -1,20 +1,28 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+// ✅ REMOVED: react-syntax-highlighter imports
+// import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+// import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkGfm from 'remark-gfm';
 import { HiSpeakerWave, HiPlay, HiPause } from 'react-icons/hi2';
 
-const CodeBlock = ({ inline, className, children, ...props }) => {
-    // If react-markdown says it's inline, great! But if it's being dramatic,
-    // we'll add a check: if there are no newlines, it's definitely inline. Period. 💅
-    if (inline || !String(children).includes('\n')) {
+// ✅ ADDED: Imports from react-shiki
+import ShikiHighlighter, { isInlineCode } from 'react-shiki';
+
+// ✅ MODIFIED: The CodeBlock component is now powered by react-shiki
+const CodeBlock = ({ className, children, node, ...props }) => {
+    // Determine if the code is an inline snippet or a block
+    const isInline = node ? isInlineCode(node) : !String(children).includes('\n');
+
+    // For inline code, render a simple <code> tag as before.
+    if (isInline) {
         return <code className={className} {...props}>{children}</code>;
     }
 
-    // The rest of this is for your actual, multi-line, block-level code parties.
+    // For block-level code, use the performant ShikiHighlighter.
     const [copied, setCopied] = useState(false);
     const match = /language-(\w+)/.exec(className || '');
+    const language = match ? match[1] : 'text'; // Default to 'text' if no language is specified
     const code = String(children).replace(/\n$/, '');
 
     const onCopy = async () => {
@@ -41,17 +49,18 @@ const CodeBlock = ({ inline, className, children, ...props }) => {
                 </svg>
                 {copied ? 'Copied' : 'Copy'}
             </button>
-            <SyntaxHighlighter
-                style={oneDark}
-                language={match ? match[1] : 'text'}
-                PreTag="div"
+            {/* The old SyntaxHighlighter is replaced with ShikiHighlighter */}
+            <ShikiHighlighter
+                language={language}
+                theme="github-dark" // A popular and clean theme. Shiki offers many others.
                 {...props}
             >
                 {code}
-            </SyntaxHighlighter>
+            </ShikiHighlighter>
         </div>
     );
 };
+
 
 // ✅ ADDED: Function to remove emojis and other non-speakable symbols.
 const cleanTextForSpeech = (text) => {
@@ -270,11 +279,11 @@ const ChatDisplay = ({
                                     </div>
                                 )}
                                 {trimmedText !== '' ? (
-                                    // Replace literal <br> tags with Markdown line breaks so they render
-                                    // correctly inside tables and paragraphs when parsed by ReactMarkdown.
+                                    // ReactMarkdown will now pass props to our updated CodeBlock
                                     <ReactMarkdown
                                         remarkPlugins={[remarkGfm]}
                                         components={{
+                                            // The magic happens here!
                                             code: CodeBlock,
                                             a({ href, children }) {
                                                 return (
