@@ -1,4 +1,5 @@
 import React, {
+  memo, // ✅ Import memo
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -38,6 +39,7 @@ import {
   HiOutlineShare,
 } from 'react-icons/hi2';
 import { LuDumbbell, LuStethoscope, LuPawPrint } from 'react-icons/lu';
+
 
 const NotebookIcon = ({ className = '' }) => (
   <svg
@@ -1313,4 +1315,4 @@ const ChatHistoryPanel = ({
   );
 };
 
-export default ChatHistoryPanel;
+export default memo(ChatHistoryPanel);

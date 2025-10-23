@@ -142,19 +142,17 @@
 
 /* ✅ MARKDOWN STYLING ADDED FOR CODE BLOCKS */
 .bot-message pre {
-  background-color: #1e1e1e;
-  color: #f8f8f2;
-  padding: 1rem;
+  background-color: #1e1e1e; /* This is now provided by Shiki's inline styles */
+  color: #f8f8f2; /* This is also provided by Shiki */
+  /* ✅ MODIFIED: Reduced padding for a tighter look */
+  padding: 0.4rem;
   border-radius: 0.5rem;
   overflow-x: auto;
   font-size: 0.85rem;
   line-height: 1.5;
   font-family: 'Fira Code', monospace;
-  margin-top: 2rem;
-  margin-bottom: 2rem;
+  /* ✅ MODIFIED: Reduced margins to decrease space around code blocks */
 }
-
-/* react-syntax-highlighter container (PreTag="div") */
 
 .bot-message code {
   background-color: rgba(0, 0, 0, 0.04);
@@ -165,16 +163,18 @@
   font-size: 0.85rem;
 }
 
-[data-theme='dark'] .bot-message code {
+[data-theme='dark'] .bot-message :not(pre) > code {
   background-color: rgba(255, 255, 255, 0.08);
   color: #f472b6; /* pink-400 */
 }
 
+/* This rule specifically targets code inside a Shiki block to remove the inner background */
 .bot-message pre code {
   background-color: transparent;
   color: inherit;
   padding: 0;
 }
+
 
 .bot-message h1,
 .bot-message h2,
@@ -246,7 +246,7 @@
 .user-message table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 0.5rem;
+  margin-top: _0.5rem_;
   overflow-x: auto;
   display: block;
 }
@@ -455,14 +455,12 @@ body.aida-widget-resizing * {
 .user-message pre {
   background-color: #1e1e1e;
   color: #f8f8f2;
-  padding: 1rem;
+  padding: 0.4rem;
   border-radius: 0.5rem;
   overflow-x: auto;
   font-size: 0.85rem;
   line-height: 1.5;
   font-family: 'Fira Code', monospace;
-  margin-top: 0.5rem;
-  margin-bottom: 0.5rem;
 }
 
 .user-message pre code {

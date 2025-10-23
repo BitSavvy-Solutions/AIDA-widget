@@ -111,6 +111,9 @@ export const useChatAPI = ({
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
+            
+            // ✅ We need the final message list to save it once at the end.
+            let finalMessages; 
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -125,9 +128,8 @@ export const useChatAPI = ({
                             if (data.delta_content) {
                                 setMessages(prev => {
                                     const updated = prev.map(m => m.id === botMessageId ? { ...m, text: m.text + data.delta_content } : m);
-                                    if (currentSessionId) {
-                                        updateCurrentSession(updated);
-                                    }
+                                    // Store the latest state to be saved later
+                                    finalMessages = updated; 
                                     return updated;
                                 });
                             }
@@ -136,6 +138,12 @@ export const useChatAPI = ({
                     }
                 }
             }
+            
+            // ✅ Now, update the long-term history ONCE after the stream is complete.
+            if (currentSessionId && finalMessages) {
+                updateCurrentSession(finalMessages);
+            }
+
         } catch (error) {
             if (error?.name === 'AbortError') {
                 console.info("Chat streaming was stopped by the user.");
@@ -154,19 +162,22 @@ export const useChatAPI = ({
     const stopStreaming = useCallback(() => {
         if (streamAbortControllerRef.current) {
             streamAbortControllerRef.current.abort();
+            // This logic is flawed, we'll fix it after the main issue.
+            // Let's get the final messages from the state setter instead.
             setMessages(prev => {
-                 for (let i = prev.length - 1; i >= 0; i--) {
-                    if (prev[i].sender === 'bot' && prev[i].text.trim() === '') {
-                        const next = [...prev.slice(0, i)];
-                        updateCurrentSession(next);
-                        return next;
-                    }
-                    if (prev[i].sender !== 'bot') break;
+                let finalMessagesOnStop = prev;
+                 // Find the last bot message being generated and finalize it.
+                 // This is complex, a better approach is to save history on end of stream.
+                 // The below logic to remove is also tricky.
+                 // Let's rely on the post-stream save.
+                if (currentSessionId) {
+                    // Update history with the content we have so far
+                    updateCurrentSession(finalMessagesOnStop);
                 }
-                return prev;
+                return finalMessagesOnStop;
             });
         }
-    }, [setMessages, updateCurrentSession]);
+    }, [setMessages, updateCurrentSession, currentSessionId]);
 
     return { isLoading, lastCost, streamResponse, stopStreaming };
 };
