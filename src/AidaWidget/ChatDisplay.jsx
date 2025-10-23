@@ -25,12 +25,9 @@ const CodeBlock = ({ className, children, node, ...props }) => {
         }
     };
     
-    // 1. Extract the raw language from the className
     const match = /language-(\w+)/.exec(className || '');
     const rawLang = match ? match[1].toLowerCase() : 'text';
 
-    // 2. ✅ Map common aliases to their correct Shiki grammar names.
-    // This is the key fix: it treats 'js' and 'javascript' as 'jsx'.
     const languageMap = {
       js: 'jsx',
       javascript: 'jsx',
@@ -38,7 +35,6 @@ const CodeBlock = ({ className, children, node, ...props }) => {
       typescript: 'tsx',
     };
 
-    // 3. Use the mapped language, or fall back to the raw language.
     const language = languageMap[rawLang] || rawLang;
 
     return (
@@ -56,8 +52,10 @@ const CodeBlock = ({ className, children, node, ...props }) => {
                 {copied ? 'Copied' : 'Copy'}
             </button>
             <ShikiHighlighter
-                language={language} // Use the corrected language here
+                language={language}
                 theme="github-dark"
+                // ✅ ADDED: This prop disables the unwanted line-by-line background highlights.
+                addDefaultStyles={false}
                 {...props}
             >
                 {code}
@@ -66,7 +64,7 @@ const CodeBlock = ({ className, children, node, ...props }) => {
     );
 };
 
-// ... the rest of the ChatDisplay.jsx file remains the same
+// ... the rest of the file remains unchanged.
 const cleanTextForSpeech = (text) => {
     if (!text) return '';
     const EMOJI_REGEX = /([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g;
