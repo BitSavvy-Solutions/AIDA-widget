@@ -1,28 +1,18 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
-// ✅ REMOVED: react-syntax-highlighter imports
-// import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-// import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkGfm from 'remark-gfm';
 import { HiSpeakerWave, HiPlay, HiPause } from 'react-icons/hi2';
 
-// ✅ ADDED: Imports from react-shiki
 import ShikiHighlighter, { isInlineCode } from 'react-shiki';
 
-// ✅ MODIFIED: The CodeBlock component is now powered by react-shiki
 const CodeBlock = ({ className, children, node, ...props }) => {
-    // Determine if the code is an inline snippet or a block
     const isInline = node ? isInlineCode(node) : !String(children).includes('\n');
 
-    // For inline code, render a simple <code> tag as before.
     if (isInline) {
         return <code className={className} {...props}>{children}</code>;
     }
 
-    // For block-level code, use the performant ShikiHighlighter.
     const [copied, setCopied] = useState(false);
-    const match = /language-(\w+)/.exec(className || '');
-    const language = match ? match[1] : 'text'; // Default to 'text' if no language is specified
     const code = String(children).replace(/\n$/, '');
 
     const onCopy = async () => {
@@ -34,6 +24,22 @@ const CodeBlock = ({ className, children, node, ...props }) => {
             // ignore
         }
     };
+    
+    // 1. Extract the raw language from the className
+    const match = /language-(\w+)/.exec(className || '');
+    const rawLang = match ? match[1].toLowerCase() : 'text';
+
+    // 2. ✅ Map common aliases to their correct Shiki grammar names.
+    // This is the key fix: it treats 'js' and 'javascript' as 'jsx'.
+    const languageMap = {
+      js: 'jsx',
+      javascript: 'jsx',
+      ts: 'tsx',
+      typescript: 'tsx',
+    };
+
+    // 3. Use the mapped language, or fall back to the raw language.
+    const language = languageMap[rawLang] || rawLang;
 
     return (
         <div className="relative group">
@@ -49,10 +55,9 @@ const CodeBlock = ({ className, children, node, ...props }) => {
                 </svg>
                 {copied ? 'Copied' : 'Copy'}
             </button>
-            {/* The old SyntaxHighlighter is replaced with ShikiHighlighter */}
             <ShikiHighlighter
-                language={language}
-                theme="github-dark" // A popular and clean theme. Shiki offers many others.
+                language={language} // Use the corrected language here
+                theme="github-dark"
                 {...props}
             >
                 {code}
@@ -61,11 +66,9 @@ const CodeBlock = ({ className, children, node, ...props }) => {
     );
 };
 
-
-// ✅ ADDED: Function to remove emojis and other non-speakable symbols.
+// ... the rest of the ChatDisplay.jsx file remains the same
 const cleanTextForSpeech = (text) => {
     if (!text) return '';
-    // This regex covers most emojis, symbols, and pictographs.
     const EMOJI_REGEX = /([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g;
     return text.replace(EMOJI_REGEX, '').replace(/\s+/g, ' ').trim();
 };
@@ -89,15 +92,12 @@ const ChatDisplay = ({
     const containerRef = useRef(null);
     const messageBodyRefs = useRef(new Map());
 
-    // State and handlers for Text-to-Speech functionality
     const [speakingMessageId, setSpeakingMessageId] = useState(null);
-    const [speechStatus, setSpeechStatus] = useState('idle'); // 'idle', 'speaking', 'paused'
+    const [speechStatus, setSpeechStatus] = useState('idle');
     const utteranceRef = useRef(null);
 
-    // Check for browser support just once.
     const speechApiSupported = useMemo(() => typeof window !== 'undefined' && 'speechSynthesis' in window, []);
 
-    // Cleanup speech synthesis on component unmount
     useEffect(() => {
         return () => {
             if (speechApiSupported) {
@@ -106,13 +106,11 @@ const ChatDisplay = ({
         };
     }, [speechApiSupported]);
 
-    // The main handler for starting, pausing, and resuming speech
     const handleToggleSpeech = useCallback((message) => {
         if (!speechApiSupported) return;
 
         const isCurrentMessage = message.id === speakingMessageId;
 
-        // If it's the current message, toggle pause/resume
         if (isCurrentMessage) {
             if (speechStatus === 'speaking') {
                 window.speechSynthesis.pause();
@@ -122,17 +120,14 @@ const ChatDisplay = ({
             return;
         }
 
-        // If it's a new message, stop any previous speech and start the new one.
         if (window.speechSynthesis.speaking) {
             window.speechSynthesis.cancel();
         }
 
         const messageNode = messageBodyRefs.current.get(message.id);
         const rawText = messageNode?.innerText || message.text;
-        // ✅ MODIFIED: Use the cleaning function
         const textToSpeak = cleanTextForSpeech(rawText);
 
-        // Don't try to speak if the message was only emojis/symbols
         if (!textToSpeak) {
             console.warn("No speakable content found in the message.");
             return;
@@ -145,7 +140,7 @@ const ChatDisplay = ({
             setSpeakingMessageId(message.id);
             setSpeechStatus('speaking');
         };
-        utterance.onend = () => { // Fired on completion or cancellation
+        utterance.onend = () => {
             setSpeakingMessageId(null);
             setSpeechStatus('idle');
             utteranceRef.current = null;
@@ -158,7 +153,6 @@ const ChatDisplay = ({
         window.speechSynthesis.speak(utterance);
     }, [speechApiSupported, speakingMessageId, speechStatus, siteLanguage]);
 
-    // Observe the anchor at the bottom; when it's visible at all, we are at-bottom
     useEffect(() => {
         const root = containerRef.current;
         const target = messagesEndRef?.current;
@@ -174,41 +168,33 @@ const ChatDisplay = ({
         return () => observer.disconnect();
     }, [messagesEndRef, onScrollStateChange]);
 
-    // Ensure we remain pinned to the bottom while streaming if allowed
     useEffect(() => {
         if (!shouldAutoScroll) return;
         const el = containerRef.current;
         if (!el) return;
         if (programmaticScrollRef) programmaticScrollRef.current = true;
-        // Jump to bottom to keep up with streaming content
         el.scrollTop = el.scrollHeight;
-        // Inform parent that we're at bottom after programmatic scroll
         if (onScrollStateChange) onScrollStateChange(true);
-        // Clear programmatic flag on next frame
         requestAnimationFrame(() => {
             if (programmaticScrollRef) programmaticScrollRef.current = false;
         });
     }, [messages, shouldAutoScroll, programmaticScrollRef]);
 
-    // Detect user scrolling away from bottom to signal parent to pause auto-scroll while streaming
     useEffect(() => {
         const el = containerRef.current;
         if (!el || !onUserScrollAway) return;
         let prevDistance = 0;
-        const threshold = 24; // px increase away from bottom counts as intent
+        const threshold = 24;
         const onScroll = () => {
             if (programmaticScrollRef && programmaticScrollRef.current) return;
             const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
             if (distance - prevDistance > threshold) onUserScrollAway();
             prevDistance = distance;
         };
-        // initialize distance
         prevDistance = el.scrollHeight - el.scrollTop - el.clientHeight;
         el.addEventListener('scroll', onScroll, { passive: true });
         return () => el.removeEventListener('scroll', onScroll);
     }, [onUserScrollAway, programmaticScrollRef]);
-
-    // No manual-scroll override listener in this version
 
     const handleCopy = async (text, id) => {
         try {
@@ -258,7 +244,6 @@ const ChatDisplay = ({
                                 className={`${message.sender === 'user' ? 'user-message rounded-l-xl' : 'bot-message'}`}
                                 dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'}
                             >
-                                {/* Attached images (if any) */}
                                 {hasImages && (
                                     <div className="space-y-2 mb-2">
                                         {message.images.map((img) => (
@@ -279,11 +264,9 @@ const ChatDisplay = ({
                                     </div>
                                 )}
                                 {trimmedText !== '' ? (
-                                    // ReactMarkdown will now pass props to our updated CodeBlock
                                     <ReactMarkdown
                                         remarkPlugins={[remarkGfm]}
                                         components={{
-                                            // The magic happens here!
                                             code: CodeBlock,
                                             a({ href, children }) {
                                                 return (
@@ -319,7 +302,6 @@ const ChatDisplay = ({
                                             <path d="M16 1H4c-1.1 0-2 .9-2 2v12h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
                                         </svg>
                                     </button>
-                                    {/* Text to Speech Button */}
                                     {isBot && speechApiSupported && trimmedText !== '' && (
                                         <button
                                             type="button"
@@ -376,8 +358,8 @@ const ChatDisplay = ({
                                     {message.sender === 'user' && message.edited && (
                                         <span className="text-xs text-gray-400">Edited</span>
                                     )}
-                                </div>
-                            )}
+                                 </div>
+                             )}
                         </div>
                     </div>
                 );

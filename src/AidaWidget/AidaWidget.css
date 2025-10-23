@@ -1,12 +1,3 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-/* You can add any other base styles for your dev page here */
-body {
-  font-family: sans-serif;
-  padding: 1rem;
-}
 /* ===== Seven-Segment LCD Display Styling ===== */
 
 .compact-lcd {
@@ -149,29 +140,19 @@ body {
   margin: 1.6rem 0 1rem 0;
 }
 
-/* ✅ MARKDOWN STYLING MIGRATED TO SHIKI */
-/* Shiki generates its own <pre> tag with inline background/color styles.
-  We apply layout, font, and spacing styles to it. */
+/* ✅ MARKDOWN STYLING ADDED FOR CODE BLOCKS */
 .bot-message pre {
-  padding: 1rem;
+  background-color: #1e1e1e; /* This is now provided by Shiki's inline styles */
+  color: #f8f8f2; /* This is also provided by Shiki */
+  /* ✅ MODIFIED: Reduced padding for a tighter look */
+  padding: 0.4rem;
   border-radius: 0.5rem;
   overflow-x: auto;
   font-size: 0.85rem;
   line-height: 1.5;
   font-family: 'Fira Code', monospace;
-  margin-top: 2rem;
-  margin-bottom: 2rem;
+  /* ✅ MODIFIED: Reduced margins to decrease space around code blocks */
 }
-
-/* This is for the fallback/loading state before Shiki renders the highlighted code.
-  It mimics the old appearance. */
-.bot-message pre.shiki-fallback {
-  background-color: #1e1e1e;
-  color: #f8f8f2;
-}
-
-
-/* react-syntax-highlighter container (PreTag="div") */
 
 .bot-message code {
   background-color: rgba(0, 0, 0, 0.04);
@@ -187,11 +168,13 @@ body {
   color: #f472b6; /* pink-400 */
 }
 
+/* This rule specifically targets code inside a Shiki block to remove the inner background */
 .bot-message pre code {
   background-color: transparent;
   color: inherit;
   padding: 0;
 }
+
 
 .bot-message h1,
 .bot-message h2,
@@ -263,7 +246,7 @@ body {
 .user-message table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 0.5rem;
+  margin-top: _0.5rem_;
   overflow-x: auto;
   display: block;
 }
@@ -469,23 +452,16 @@ body.aida-widget-resizing * {
   font-size: 0.85rem;
 }
 
-/* ✅ MODIFIED: User message code blocks now also driven by Shiki */
 .user-message pre {
-  padding: 1rem;
+  background-color: #1e1e1e;
+  color: #f8f8f2;
+  padding: 0.4rem;
   border-radius: 0.5rem;
   overflow-x: auto;
   font-size: 0.85rem;
   line-height: 1.5;
   font-family: 'Fira Code', monospace;
-  margin-top: 0.5rem;
-  margin-bottom: 0.5rem;
 }
-
-.user-message pre.shiki-fallback {
-  background-color: #1e1e1e;
-  color: #f8f8f2;
-}
-
 
 .user-message pre code {
   background-color: transparent;
