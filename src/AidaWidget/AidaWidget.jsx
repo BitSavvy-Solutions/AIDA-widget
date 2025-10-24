@@ -54,6 +54,7 @@ const AidaWidget = (props) => {
     const [customPrompt, setCustomPrompt] = useState(() => localStorage.getItem('aida-widget-prompt') || '');
     const [promptDraft, setPromptDraft] = useState('');
     const [imagePreview, setImagePreview] = useState(null);
+    const [viewingMessageAttachments, setViewingMessageAttachments] = useState(null); // ✅ ADDED: State for viewing past attachments
     const inputRef = useRef(null);
     const messagesEndRef = useRef(null);
     const programmaticScrollRef = useRef(false);
@@ -67,7 +68,8 @@ const AidaWidget = (props) => {
     const { messages, setMessages, getSanitizedMessages } = useChatMessages();
     const { isPanelOpen, openPanel, closePanel, historyItems, projects, currentSessionId, setCurrentSessionId, createNewSession, updateCurrentSession, saveCurrentChatToHistory, historyHandlers } = useChatHistory(getSanitizedMessages);
     const { isOpen: isPromptModalOpen, open: openPromptModal, close: closePromptModal } = useModal();
-    const { attachments, addImageAttachments, addTextAttachment, addFolderAttachments, addUrlAttachment, removeAttachment, clearAttachments, isAttachmentModalOpen, openModal: openAttachmentModal, closeModal: closeAttachmentModal } = useAttachments(setSelectedModel);
+    // ✅ MODIFIED: Destructure `setAttachments` for editing functionality
+    const { attachments, setAttachments, addImageAttachments, addTextAttachment, addFolderAttachments, addUrlAttachment, removeAttachment, clearAttachments, isAttachmentModalOpen, openModal: openAttachmentModal, closeModal: closeAttachmentModal } = useAttachments(setSelectedModel);
     
     const { isDragOverWidget, dropZoneProps } = useDragAndDrop({
         isEnabled: attachmentsEnabled,
@@ -97,6 +99,29 @@ const AidaWidget = (props) => {
     const handleUserScrollAway = useCallback(() => {
         if (isLoading) setIsAutoScrollPaused(true);
     }, [isLoading]);
+
+    // ✅ ADDED: Handler to open the read-only attachment viewer
+    const handleViewAttachments = useCallback((message) => {
+        setViewingMessageAttachments(message);
+    }, []);
+
+    // ✅ ADDED: Handler to start editing a message (loads text and attachments)
+    const handleStartEdit = useCallback((messageId) => {
+        const messageToEdit = messages.find(m => m.id === messageId);
+        if (!messageToEdit) return;
+
+        setCurrentMessage(messageToEdit.text || '');
+        setAttachments(messageToEdit.attachments || []);
+        setEditingMessageId(messageId);
+        inputRef.current?.focus();
+    }, [messages, setAttachments]);
+    
+    // ✅ ADDED: Handler to cancel an edit (clears text and loaded attachments)
+    const cancelEdit = useCallback(() => {
+        setEditingMessageId(null);
+        setCurrentMessage('');
+        clearAttachments();
+    }, [clearAttachments]);
     
     const shouldAutoScroll = isLoading ? !isAutoScrollPaused : isAtBottom;
     
@@ -136,7 +161,7 @@ const AidaWidget = (props) => {
         await streamResponse({ userMessage, botMessageId, historyForPayload });
     }, [currentMessage, attachments, isLoading, editingMessageId, selectedModel, isWebSearchEnabled, messages, currentSessionId, streamResponse, setMessages, createNewSession, cancelAutoSendTimer, cancelAutoRecordTimer, clearAttachments]);
 
-    const handleRetry = useCallback(async (botMessageId) => { if (isLoading) return; const botIndex = messages.findIndex(m => m.id === botMessageId); if (botIndex === -1) return; let userIndex = -1; for (let i = botIndex - 1; i >= 0; i--) { if (messages[i].sender === 'user' && (messages[i].text || messages[i].attachments?.length > 0)) { userIndex = i; break; } } if (userIndex === -1) return; const userMessageToRetry = messages[userIndex]; const historyForPayload = messages.slice(0, userIndex); const newBotMessageId = `bot-${Date.now()}`; setMessages([...historyForPayload, userMessageToRetry, { id: newBotMessageId, sender: 'bot', text: '' }]); await streamResponse({ userMessage: userMessageToRetry, botMessageId: newBotMessageId, historyForPayload }); }, [isLoading, messages, streamResponse, setMessages, selectedModel, isWebSearchEnabled]);
+    const handleRetry = useCallback(async (botMessageId) => { if (isLoading) return; const botIndex = messages.findIndex(m => m.id === botMessageId); if (botIndex === -1) return; let userIndex = -1; for (let i = botIndex - 1; i >= 0; i--) { if (messages[i].sender === 'user' && (messages[i].text || messages[i].attachments?.length > 0)) { userIndex = i; break; } } if (userIndex === -1) return; const userMessageToRetry = messages[userIndex]; const historyForPayload = messages.slice(0, userIndex); const newBotMessageId = `bot-${Date.now()}`; setMessages([...historyForPayload, userMessageToRetry, { id: newBotMessageId, sender: 'bot', text: '' }]); await streamResponse({ userMessage: userMessageToRetry, botMessageId: newBotMessageId, historyForPayload }); }, [isLoading, messages, streamResponse, setMessages]);
     
     const handleHistorySelect = useCallback((session) => {
         setMessages(session.messages || []);
@@ -176,11 +201,12 @@ const AidaWidget = (props) => {
                             shouldAutoScroll={shouldAutoScroll}
                             onScrollStateChange={handleScrollStateChange}
                             onUserScrollAway={handleUserScrollAway}
-                            onStartEdit={(id, text) => { setCurrentMessage(text); setEditingMessageId(id); inputRef.current?.focus(); }}
+                            onStartEdit={handleStartEdit}
                             onImagePreview={setImagePreview}
                             onRetryBotMessage={features.retryMessage ? handleRetry : undefined}
+                            onViewAttachments={handleViewAttachments}
                         />
-                        <ChatInput {...{ currentMessage, setCurrentMessage, handleSendMessage: stableHandleSendMessage, handleKeyDown: (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); stableHandleSendMessage(); } }, handleRecordButtonClick, inputRef, isLoading, isTranscribing, isRecording, elapsedTime, siteLanguage, theme, autoSendCountdown, cancelAutoSendTimer, setIsSendTimerPaused, autoRecordCountdown, cancelAutoRecordTimer, setIsRecordTimerPaused, selectedModel, setSelectedModel, translations, isEditing: !!editingMessageId, cancelEdit: () => { setEditingMessageId(null); setCurrentMessage(''); }, attachmentCount: attachments.length, onOpenAttachments: openAttachmentModal, isWebSearchEnabled, setIsWebSearchEnabled, onStopStreaming: stopStreaming, features }}/>
+                        <ChatInput {...{ currentMessage, setCurrentMessage, handleSendMessage: stableHandleSendMessage, handleKeyDown: (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); stableHandleSendMessage(); } }, handleRecordButtonClick, inputRef, isLoading, isTranscribing, isRecording, elapsedTime, siteLanguage, theme, autoSendCountdown, cancelAutoSendTimer, setIsSendTimerPaused, autoRecordCountdown, cancelAutoRecordTimer, setIsRecordTimerPaused, selectedModel, setSelectedModel, translations, isEditing: !!editingMessageId, cancelEdit: cancelEdit, attachmentCount: attachments.length, onOpenAttachments: openAttachmentModal, isWebSearchEnabled, setIsWebSearchEnabled, onStopStreaming: stopStreaming, features }}/>
                     </div>
                 </div>
             )}
@@ -188,6 +214,16 @@ const AidaWidget = (props) => {
             
             <AttachmentModal isOpen={isAttachmentModalOpen} onClose={closeAttachmentModal} attachments={attachments} onAddImages={addImageAttachments} onAddText={addTextAttachment} onAddFolder={addFolderAttachments} onAddUrl={addUrlAttachment} onRemove={removeAttachment} onClearAll={clearAttachments} onImagePreview={setImagePreview} theme={theme}/>
             
+            {/* ✅ ADDED: Read-only modal for viewing past message attachments */}
+            <AttachmentModal
+                isOpen={!!viewingMessageAttachments}
+                onClose={() => setViewingMessageAttachments(null)}
+                attachments={viewingMessageAttachments?.attachments || []}
+                onImagePreview={setImagePreview}
+                theme={theme}
+                isReadOnly={true}
+            />
+
             {imagePreview && (
                 <div className="fixed inset-0 z-[65] flex items-center justify-center" onClick={() => setImagePreview(null)}>
                     <div className="absolute inset-0 bg-black/80"/>

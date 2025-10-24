@@ -5,8 +5,8 @@ import { useState, useEffect, useCallback } from 'react';
 // This function is kept local as it's only used here and by the hook's return.
 const sanitizeMessagesForStorage = (msgs) => {
     if (!Array.isArray(msgs)) return [];
-    // ✅ MODIFIED: Also remove the 'reasoning' field before storage.
-    return msgs.map(({ images, reasoning, ...m }) => m);
+    // ✨ MODIFIED: Also remove 'attachments' to prevent large data from bloating localStorage.
+    return msgs.map(({ images, reasoning, attachments, ...m }) => m);
 };
 
 /**

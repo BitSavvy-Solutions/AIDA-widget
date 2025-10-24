@@ -15,7 +15,8 @@ const AttachmentModal = ({
     onRemove,
     onClearAll,
     onImagePreview,
-    theme = 'dark'
+    theme = 'dark',
+    isReadOnly = false // ✅ ADDED: New prop to control UI
 }) => {
     const imageInputRef = useRef(null);
     const textInputRef = useRef(null);
@@ -75,7 +76,8 @@ const AttachmentModal = ({
                         <div className={`flex items-center justify-between p-4 border-b ${borderClasses}`}>
                             <div className="flex items-center gap-3">
                                 <h2 className="text-lg font-semibold">Attachments ({attachments.length})</h2>
-                                {attachments.length > 0 && onClearAll && (
+                                {/* ✅ MODIFIED: Hide Clear All button in read-only mode */}
+                                {attachments.length > 0 && onClearAll && !isReadOnly && (
                                     <button
                                         type="button"
                                         onClick={onClearAll}
@@ -121,86 +123,89 @@ const AttachmentModal = ({
                                     <AttachmentItem
                                         key={attachment.id}
                                         attachment={attachment}
-                                        onRemove={onRemove}
+                                        onRemove={isReadOnly ? undefined : onRemove} // ✅ MODIFIED: Pass undefined if read-only
                                         onPreview={handlePreview}
                                         theme={theme}
                                     />
                                 ))
                             )}
                         </div>
-                        {/* Compact footer with clearer URL input */}
-                        <div className={`p-4 border-t space-y-3 ${borderClasses}`}>
-                            
-                            {/* Hidden file inputs */}
-                            <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files || []); if (files.length) onAddImages(files); e.target.value = ''; }}/>
-                            <input ref={textInputRef} type="file" accept="text/*,.md,.json,.yml,.yaml,.ini,.log,.env,.py,.js,.jsx,.ts,.tsx,.html,.css,.scss,.sh,.bat,.ps1,.xml,.csv,.java,.c,.cpp,.h,.cs,.go,.rb,.php,.sql" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) onAddText(file); e.target.value = ''; }}/>
-                            
-                            {/* ✅ FIXED: The onChange handler now creates the same data structure as drag-and-drop. */}
-                            <input
-                                ref={folderInputRef}
-                                type="file"
-                                webkitdirectory=""
-                                directory=""
-                                multiple
-                                className="hidden"
-                                onChange={(e) => {
-                                    const files = Array.from(e.target.files || []);
-                                    if (files.length > 0) {
-                                        const filesWithPaths = files.map(file => ({
-                                            file: file,
-                                            path: file.webkitRelativePath,
-                                        }));
-                                        onAddFolder(filesWithPaths);
-                                    }
-                                    e.target.value = ''; // Clear input for re-selection
-                                }}
-                            />
-                            
-                            {/* Action buttons */}
-                            <div className="grid grid-cols-3 gap-3">
-                                <button type="button" onClick={() => imageInputRef.current?.click()} className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg border transition-colors ${isDark ? 'border-gray-700 bg-gray-800/50 hover:bg-gray-800' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}`} title="Add Images">
-                                    <HiPhoto className="w-6 h-6" />
-                                    <span className="text-xs font-medium">Images</span>
-                                </button>
-                                <button type="button" onClick={() => textInputRef.current?.click()} className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg border transition-colors ${isDark ? 'border-gray-700 bg-gray-800/50 hover:bg-gray-800' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}`} title="Add Text File">
-                                    <HiDocumentText className="w-6 h-6" />
-                                    <span className="text-xs font-medium">Text File</span>
-                                </button>
-                                <button type="button" onClick={() => folderInputRef.current?.click()} className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg border transition-colors ${isDark ? 'border-gray-700 bg-gray-800/50 hover:bg-gray-800' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}`} title="Add Folder">
-                                    <HiOutlineFolder className="w-6 h-6" />
-                                    <span className="text-xs font-medium">Folder</span>
-                                </button>
-                            </div>
-
-                            {/* URL input */}
-                            <div className="relative flex items-center">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                                    { isScraping 
-                                        ? <HiArrowPath className={`w-5 h-5 animate-spin ${isDark ? 'text-gray-400' : 'text-gray-500'}`} /> 
-                                        : <HiGlobeAlt className={`w-5 h-5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-                                    }
-                                </span>
-
+                        
+                        {/* ✅ MODIFIED: Conditionally render the entire footer */}
+                        {!isReadOnly && (
+                            <div className={`p-4 border-t space-y-3 ${borderClasses}`}>
+                                
+                                {/* Hidden file inputs */}
+                                <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files || []); if (files.length) onAddImages(files); e.target.value = ''; }}/>
+                                <input ref={textInputRef} type="file" accept="text/*,.md,.json,.yml,.yaml,.ini,.log,.env,.py,.js,.jsx,.ts,.tsx,.html,.css,.scss,.sh,.bat,.ps1,.xml,.csv,.java,.c,.cpp,.h,.cs,.go,.rb,.php,.sql" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) onAddText(file); e.target.value = ''; }}/>
+                                
+                                {/* ✅ FIXED: The onChange handler now creates the same data structure as drag-and-drop. */}
                                 <input
-                                    type="url"
-                                    value={urlInput}
-                                    onChange={(e) => setUrlInput(e.target.value)}
-                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddUrl(); } }}
-                                    placeholder="Paste URL to read a webpage"
-                                    disabled={isScraping}
-                                    className={`w-full text-sm pl-10 pr-20 py-2.5 rounded-lg border ${isDark ? 'bg-gray-800 border-gray-700 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'} focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed`}
+                                    ref={folderInputRef}
+                                    type="file"
+                                    webkitdirectory=""
+                                    directory=""
+                                    multiple
+                                    className="hidden"
+                                    onChange={(e) => {
+                                        const files = Array.from(e.target.files || []);
+                                        if (files.length > 0) {
+                                            const filesWithPaths = files.map(file => ({
+                                                file: file,
+                                                path: file.webkitRelativePath,
+                                            }));
+                                            onAddFolder(filesWithPaths);
+                                        }
+                                        e.target.value = ''; // Clear input for re-selection
+                                    }}
                                 />
+                                
+                                {/* Action buttons */}
+                                <div className="grid grid-cols-3 gap-3">
+                                    <button type="button" onClick={() => imageInputRef.current?.click()} className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg border transition-colors ${isDark ? 'border-gray-700 bg-gray-800/50 hover:bg-gray-800' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}`} title="Add Images">
+                                        <HiPhoto className="w-6 h-6" />
+                                        <span className="text-xs font-medium">Images</span>
+                                    </button>
+                                    <button type="button" onClick={() => textInputRef.current?.click()} className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg border transition-colors ${isDark ? 'border-gray-700 bg-gray-800/50 hover:bg-gray-800' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}`} title="Add Text File">
+                                        <HiDocumentText className="w-6 h-6" />
+                                        <span className="text-xs font-medium">Text File</span>
+                                    </button>
+                                    <button type="button" onClick={() => folderInputRef.current?.click()} className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg border transition-colors ${isDark ? 'border-gray-700 bg-gray-800/50 hover:bg-gray-800' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}`} title="Add Folder">
+                                        <HiOutlineFolder className="w-6 h-6" />
+                                        <span className="text-xs font-medium">Folder</span>
+                                    </button>
+                                </div>
 
-                                <button
-                                    type="button"
-                                    onClick={handleAddUrl}
-                                    disabled={!urlInput.trim() || isScraping}
-                                    className={`absolute right-1.5 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-wait ${isDark ? 'bg-blue-600 hover:bg-blue-500 text-white disabled:bg-blue-600/50' : 'bg-blue-600 hover:bg-blue-700 text-white disabled:bg-blue-600/50'}`}
-                                >
-                                    {isScraping ? "Reading..." : "Read"}
-                                </button>
+                                {/* URL input */}
+                                <div className="relative flex items-center">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                                        { isScraping 
+                                            ? <HiArrowPath className={`w-5 h-5 animate-spin ${isDark ? 'text-gray-400' : 'text-gray-500'}`} /> 
+                                            : <HiGlobeAlt className={`w-5 h-5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                                        }
+                                    </span>
+
+                                    <input
+                                        type="url"
+                                        value={urlInput}
+                                        onChange={(e) => setUrlInput(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddUrl(); } }}
+                                        placeholder="Paste URL to read a webpage"
+                                        disabled={isScraping}
+                                        className={`w-full text-sm pl-10 pr-20 py-2.5 rounded-lg border ${isDark ? 'bg-gray-800 border-gray-700 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'} focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed`}
+                                    />
+
+                                    <button
+                                        type="button"
+                                        onClick={handleAddUrl}
+                                        disabled={!urlInput.trim() || isScraping}
+                                        className={`absolute right-1.5 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-wait ${isDark ? 'bg-blue-600 hover:bg-blue-500 text-white disabled:bg-blue-600/50' : 'bg-blue-600 hover:bg-blue-700 text-white disabled:bg-blue-600/50'}`}
+                                    >
+                                        {isScraping ? "Reading..." : "Read"}
+                                    </button>
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </>
                 )}
             </div>

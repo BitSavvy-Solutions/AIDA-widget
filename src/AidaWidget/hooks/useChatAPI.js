@@ -22,7 +22,7 @@ export const useChatAPI = ({
     const langMap = { eng: "en", fra: "fr", ara: "ar", hin: "hi", tgl: "tl", ukr: "uk", san: "sa", nya: "ny" };
     const supportedLanguages = Object.values(langMap);
 
-    const formatMessageContent = (message) => {
+    const formatMessageContent = useCallback((message) => {
         if (!message) return '';
         let content = message.text || '';
 
@@ -47,7 +47,7 @@ export const useChatAPI = ({
             }
         }
         return content;
-    };
+    }, []);
 
 
     const buildMessageHistoryPayload = useCallback((history = []) => {
@@ -59,14 +59,25 @@ export const useChatAPI = ({
             messageHistory.push({ type: 'human', content: customPrompt.trim() });
         }
         (history || []).forEach(m => {
-            messageHistory.push({
+            const messagePayload = {
                 type: m.sender === 'user' ? 'human' : 'ai',
-                content: m.text || ''
-            });
+                content: formatMessageContent(m)
+            };
+
+            // ✅ FIX: Check for and attach images to historical user messages as well.
+            // The AI was losing visual context from previous turns.
+            if (m.sender === 'user' && Array.isArray(m.images) && m.images.length > 0) {
+                const imageUrls = m.images.map(img => img.src).filter(Boolean);
+                if (imageUrls.length > 0) {
+                    messagePayload.image_data_urls = imageUrls;
+                }
+            }
+            
+            messageHistory.push(messagePayload);
         });
 
         return messageHistory;
-    }, [customPrompt, pageContext]);
+    }, [customPrompt, pageContext, formatMessageContent]);
 
     const streamResponse = async ({ userMessage, botMessageId, historyForPayload }) => {
         setIsLoading(true);
