@@ -39,7 +39,6 @@ const defaultProps = {
         retryMessage: true,
         customInstructions: true,
         historyProjects: true,
-        // ✨ ADDED: Configuration for the payment/support link
         paymentLink: null
     }
 };
@@ -79,7 +78,8 @@ const AidaWidget = (props) => {
 
     const requestFullscreen = useCallback(() => setIsFullscreen(true), [setIsFullscreen]);
     const { sidebarRef, sidebarInlineStyle, resizeHandleProps, isResizing } = useResizableSidebar({ isOpen, isFullscreen, isMobileViewport, isEnabled: features.resizable, onRequestFullscreen: requestFullscreen });
-    const { isLoading, lastCost, streamResponse, stopStreaming } = useChatAPI({ apiConfig, messages, setMessages, currentSessionId, updateCurrentSession, user, pageContext, customPrompt });
+    // ✨ MODIFIED: Destructure liveReasoning from useChatAPI
+    const { isLoading, lastCost, liveReasoning, streamResponse, stopStreaming } = useChatAPI({ apiConfig, messages, setMessages, currentSessionId, updateCurrentSession, user, pageContext, customPrompt });
     const { isRecording, isTranscribing, elapsedTime, startRecording, stopRecording, lastInputWasVoiceRef } = useVoiceInput({ transcriptionUrl: apiConfig.transcriptionUrl, onTranscriptionComplete: (text) => { setCurrentMessage(p => p.trim() ? `${p} ${text}` : text); if (text) startAutoSendTimer(); } });
     const { countdown: autoSendCountdown, start: startAutoSendTimer, cancel: cancelAutoSendTimer, setIsPaused: setIsSendTimerPaused } = useCountdown(() => stableHandleSendMessage(), 3);
     const { countdown: autoRecordCountdown, start: startAutoRecordTimer, cancel: cancelAutoRecordTimer, setIsPaused: setIsRecordTimerPaused } = useCountdown(startRecording, 3);
@@ -138,7 +138,6 @@ const AidaWidget = (props) => {
 
     const handleRetry = useCallback(async (botMessageId) => { if (isLoading) return; const botIndex = messages.findIndex(m => m.id === botMessageId); if (botIndex === -1) return; let userIndex = -1; for (let i = botIndex - 1; i >= 0; i--) { if (messages[i].sender === 'user' && (messages[i].text || messages[i].attachments?.length > 0)) { userIndex = i; break; } } if (userIndex === -1) return; const userMessageToRetry = messages[userIndex]; const historyForPayload = messages.slice(0, userIndex); const newBotMessageId = `bot-${Date.now()}`; setMessages([...historyForPayload, userMessageToRetry, { id: newBotMessageId, sender: 'bot', text: '' }]); await streamResponse({ userMessage: userMessageToRetry, botMessageId: newBotMessageId, historyForPayload }); }, [isLoading, messages, streamResponse, setMessages, selectedModel, isWebSearchEnabled]);
     
-    // ✅ MODIFIED: Create a memoized handler for selecting a history item.
     const handleHistorySelect = useCallback((session) => {
         setMessages(session.messages || []);
         setCurrentSessionId(session.id);
@@ -165,11 +164,11 @@ const AidaWidget = (props) => {
                             <span>Drop files or folders to attach</span>
                         </div></div>}
                         <ChatHeader displayText={displayText} lastCost={lastCost} userId={user?.id} paymentLinkConfig={features.paymentLink} resetChat={resetChat} toggleFullscreen={() => setIsFullscreen(p => !p)} showFullscreenToggle={!isMobileViewport} isMobileViewport={isMobileViewport} toggleChat={toggleChat} theme={theme} onToggleTheme={() => setTheme(p => p === 'dark' ? 'light' : 'dark')} onToggleHistory={openPanel} onDisplayClick={features.customInstructions ? openPromptModal : undefined} />
-                        {/* ✅ MODIFIED: Pass the stable handler to onSelect. */}
                         {features.historyProjects && <ChatHistoryPanel theme={theme} open={isPanelOpen} onClose={closePanel} sessions={historyItems} projects={projects} onSelect={handleHistorySelect} {...historyHandlers} />}
                         <ChatDisplay
                             messages={messages}
                             isLoading={isLoading}
+                            liveReasoning={liveReasoning}
                             siteLanguage={siteLanguage}
                             theme={theme}
                             messagesEndRef={messagesEndRef}

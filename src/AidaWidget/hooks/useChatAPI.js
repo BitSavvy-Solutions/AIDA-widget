@@ -14,12 +14,14 @@ export const useChatAPI = ({
 }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [lastCost, setLastCost] = useState(0);
+    // ✨ MODIFIED: Added `contentHasStarted` to the state shape.
+    const [liveReasoning, setLiveReasoning] = useState({ text: '', botId: null, contentHasStarted: false });
+    const liveReasoningTextRef = useRef('');
     const streamAbortControllerRef = useRef(null);
 
     const langMap = { eng: "en", fra: "fr", ara: "ar", hin: "hi", tgl: "tl", ukr: "uk", san: "sa", nya: "ny" };
     const supportedLanguages = Object.values(langMap);
 
-    // Helper to combine a message's text with its text/URL attachments into a single string.
     const formatMessageContent = (message) => {
         if (!message) return '';
         let content = message.text || '';
@@ -37,7 +39,6 @@ export const useChatAPI = ({
                     }
                 });
 
-                // Append or replace content based on whether text was present
                 if (content.trim()) {
                     content = attachmentContent + content;
                 } else {
@@ -57,12 +58,9 @@ export const useChatAPI = ({
         if ((customPrompt || '').trim()) {
             messageHistory.push({ type: 'human', content: customPrompt.trim() });
         }
-
-        // Process full history, formatting each message to include its attachments
         (history || []).forEach(m => {
             messageHistory.push({
                 type: m.sender === 'user' ? 'human' : 'ai',
-                // AI messages have no attachments, so this is safe for both.
                 content: m.text || ''
             });
         });
@@ -73,6 +71,9 @@ export const useChatAPI = ({
     const streamResponse = async ({ userMessage, botMessageId, historyForPayload }) => {
         setIsLoading(true);
         setLastCost(0);
+        // ✨ MODIFIED: Reset the full liveReasoning state object.
+        setLiveReasoning({ text: '', botId: botMessageId, contentHasStarted: false });
+        liveReasoningTextRef.current = '';
 
         const abortController = new AbortController();
         streamAbortControllerRef.current = abortController;
@@ -111,9 +112,7 @@ export const useChatAPI = ({
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
-            
-            // ✅ We need the final message list to save it once at the end.
-            let finalMessages; 
+            let finalMessages;
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -128,18 +127,36 @@ export const useChatAPI = ({
                             if (data.delta_content) {
                                 setMessages(prev => {
                                     const updated = prev.map(m => m.id === botMessageId ? { ...m, text: m.text + data.delta_content } : m);
-                                    // Store the latest state to be saved later
                                     finalMessages = updated; 
                                     return updated;
                                 });
+                                // ✅ NEW: Signal that the main content stream has started.
+                                setLiveReasoning(prev => {
+                                    if (!prev.contentHasStarted) {
+                                        return { ...prev, contentHasStarted: true };
+                                    }
+                                    return prev; // No state change needed if already started.
+                                });
+                            }
+                            if (data.reasoning_content) {
+                                liveReasoningTextRef.current += data.reasoning_content;
+                                // ✨ MODIFIED: Update only the text, preserving other flags.
+                                setLiveReasoning(prev => ({ ...prev, text: liveReasoningTextRef.current }));
                             }
                             if (data.cost !== undefined) setLastCost(data.cost);
                         } catch (e) { console.error("Stream parse error:", part, e); }
                     }
                 }
             }
+
+            if (liveReasoningTextRef.current) {
+                setMessages(prev => prev.map(m =>
+                    m.id === botMessageId
+                        ? { ...m, reasoning: liveReasoningTextRef.current }
+                        : m
+                ));
+            }
             
-            // ✅ Now, update the long-term history ONCE after the stream is complete.
             if (currentSessionId && finalMessages) {
                 updateCurrentSession(finalMessages);
             }
@@ -156,22 +173,17 @@ export const useChatAPI = ({
                 streamAbortControllerRef.current = null;
             }
             setIsLoading(false);
+            // ✨ MODIFIED: Reset the full reasoning state.
+            setLiveReasoning({ text: '', botId: null, contentHasStarted: false });
         }
     };
     
     const stopStreaming = useCallback(() => {
         if (streamAbortControllerRef.current) {
             streamAbortControllerRef.current.abort();
-            // This logic is flawed, we'll fix it after the main issue.
-            // Let's get the final messages from the state setter instead.
             setMessages(prev => {
                 let finalMessagesOnStop = prev;
-                 // Find the last bot message being generated and finalize it.
-                 // This is complex, a better approach is to save history on end of stream.
-                 // The below logic to remove is also tricky.
-                 // Let's rely on the post-stream save.
                 if (currentSessionId) {
-                    // Update history with the content we have so far
                     updateCurrentSession(finalMessagesOnStop);
                 }
                 return finalMessagesOnStop;
@@ -179,5 +191,5 @@ export const useChatAPI = ({
         }
     }, [setMessages, updateCurrentSession, currentSessionId]);
 
-    return { isLoading, lastCost, streamResponse, stopStreaming };
+    return { isLoading, lastCost, liveReasoning, streamResponse, stopStreaming };
 };

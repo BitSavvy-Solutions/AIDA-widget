@@ -1,10 +1,12 @@
+/* src/AidaWidget/hooks/useChatMessages.js */
 import { useState, useEffect, useCallback } from 'react';
 
 // Helper to remove heavy data (like base64 image strings) before storage.
 // This function is kept local as it's only used here and by the hook's return.
 const sanitizeMessagesForStorage = (msgs) => {
     if (!Array.isArray(msgs)) return [];
-    return msgs.map(({ images, ...m }) => m);
+    // ✅ MODIFIED: Also remove the 'reasoning' field before storage.
+    return msgs.map(({ images, reasoning, ...m }) => m);
 };
 
 /**

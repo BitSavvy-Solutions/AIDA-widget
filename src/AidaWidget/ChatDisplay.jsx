@@ -1,7 +1,9 @@
+/* src/AidaWidget/ChatDisplay.jsx */
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { HiSpeakerWave, HiPlay, HiPause } from 'react-icons/hi2';
+import ReasoningDisplay from './ReasoningDisplay';
 
 import ShikiHighlighter, { isInlineCode } from 'react-shiki';
 
@@ -54,7 +56,6 @@ const CodeBlock = ({ className, children, node, ...props }) => {
             <ShikiHighlighter
                 language={language}
                 theme="github-dark"
-                // ✅ ADDED: This prop disables the unwanted line-by-line background highlights.
                 addDefaultStyles={false}
                 {...props}
             >
@@ -64,7 +65,6 @@ const CodeBlock = ({ className, children, node, ...props }) => {
     );
 };
 
-// ... the rest of the file remains unchanged.
 const cleanTextForSpeech = (text) => {
     if (!text) return '';
     const EMOJI_REGEX = /([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g;
@@ -85,6 +85,7 @@ const ChatDisplay = ({
     onImagePreview,
     onRetryBotMessage,
     isLoading = false,
+    liveReasoning,
 }) => {
     const [copiedId, setCopiedId] = useState(null);
     const containerRef = useRef(null);
@@ -94,8 +95,43 @@ const ChatDisplay = ({
     const [speechStatus, setSpeechStatus] = useState('idle');
     const utteranceRef = useRef(null);
 
+    const [finalReasoningDurations, setFinalReasoningDurations] = useState({});
+    const [liveReasoningInfo, setLiveReasoningInfo] = useState({ botId: null, startTime: null });
+
     const speechApiSupported = useMemo(() => typeof window !== 'undefined' && 'speechSynthesis' in window, []);
 
+    // ✨ MODIFIED: Timer logic now stops when `contentHasStarted` is true.
+    useEffect(() => {
+        // Condition for the timer to be running: Reasoning has started, but main content has not.
+        const isTimerTicking = isLoading &&
+                              liveReasoning?.botId &&
+                              liveReasoning.text.trim().length > 0 &&
+                              !liveReasoning.contentHasStarted;
+
+        const currentLiveBotId = liveReasoning?.botId;
+
+        if (isTimerTicking) {
+            // Timer should be running.
+            if (currentLiveBotId && currentLiveBotId !== liveReasoningInfo.botId) {
+                // It's a new session, record the start time.
+                setLiveReasoningInfo({ botId: currentLiveBotId, startTime: Date.now() });
+            }
+        } else {
+            // Timer should stop.
+            if (liveReasoningInfo.startTime) {
+                // A timer was running, and now we need to finalize it.
+                const finalDuration = (Date.now() - liveReasoningInfo.startTime) / 1000;
+                setFinalReasoningDurations(prev => ({
+                    ...prev,
+                    [liveReasoningInfo.botId]: finalDuration,
+                }));
+                // Reset the live info.
+                setLiveReasoningInfo({ botId: null, startTime: null });
+            }
+        }
+    // Dependency array is updated to react to the new signal.
+    }, [isLoading, liveReasoning, liveReasoningInfo.botId, liveReasoningInfo.startTime]);
+    
     useEffect(() => {
         return () => {
             if (speechApiSupported) {
@@ -216,8 +252,22 @@ const ChatDisplay = ({
                 const trimmedText = messageText.trim();
                 const hasImages = Array.isArray(message.images) && message.images.length > 0;
                 const isBot = message.sender === 'bot';
-                const showThinkingDots = isBot && !hasImages && trimmedText === '' && isLoading;
-                const hideBotMessage = isBot && !hasImages && trimmedText === '' && !isLoading;
+
+                const isLastMessage = index === messages.length - 1;
+                const isBotLoading = isBot && isLastMessage && isLoading;
+                
+                const hasBakedInReasoning = message.reasoning && message.reasoning.trim().length > 0;
+                
+                const isLiveReasoningActive = isBotLoading && liveReasoning?.botId === message.id && liveReasoning.text.trim().length > 0;
+                // ✨ MODIFIED: The "isLive" flag for the display is now more specific.
+                const isTimerDisplayLive = isLiveReasoningActive && !liveReasoning.contentHasStarted;
+
+                const showReasoning = hasBakedInReasoning || isLiveReasoningActive;
+                const reasoningTextToShow = hasBakedInReasoning ? message.reasoning : (liveReasoning?.text || '');
+                
+                const showThinkingDots = isBotLoading && !showReasoning && trimmedText === '' && !hasImages;
+                const hideBotMessage = isBot && !isBotLoading && trimmedText === '' && !hasImages && !hasBakedInReasoning;
+                
                 let canRetry = false;
                 if (isBot && onRetryBotMessage) {
                     for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
@@ -234,6 +284,16 @@ const ChatDisplay = ({
                 return (
                     <div key={message.id} className={`flex ${message.sender === 'user' ? 'justify-end pl-10' : 'justify-start'}`}>
                         <div className={`flex flex-col w-full ${message.sender === 'user' ? 'items-end' : 'items-start'}`}>
+                            {/* ✨ MODIFIED: Pass the new `isLive` flag. */}
+                            {showReasoning && (
+                                <ReasoningDisplay
+                                    text={reasoningTextToShow}
+                                    theme={theme}
+                                    isLive={isTimerDisplayLive}
+                                    startTime={isTimerDisplayLive ? liveReasoningInfo.startTime : null}
+                                    finalDuration={finalReasoningDurations[message.id] ?? null}
+                                />
+                            )}
                             <div
                                 ref={(el) => {
                                     if (el) messageBodyRefs.current.set(message.id, el);
@@ -287,7 +347,7 @@ const ChatDisplay = ({
                                     ) : null
                                 )}
                             </div>
-                            {!showThinkingDots && (
+                            {!isBotLoading && (
                                 <div className="mt-3 flex items-center gap-2 select-none">
                                     <button
                                         type="button"
