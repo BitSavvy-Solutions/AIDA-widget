@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { HiSpeakerWave, HiPlay, HiPause } from 'react-icons/hi2';
+import { HiSpeakerWave, HiPlay, HiPause, HiPaperClip } from 'react-icons/hi2';
 import ReasoningDisplay from './ReasoningDisplay';
 
 import ShikiHighlighter, { isInlineCode } from 'react-shiki';
@@ -86,6 +86,7 @@ const ChatDisplay = ({
     onRetryBotMessage,
     isLoading = false,
     liveReasoning,
+    onViewAttachments, // ✅ ADDED: Prop for viewing past attachments
 }) => {
     const [copiedId, setCopiedId] = useState(null);
     const containerRef = useRef(null);
@@ -245,12 +246,16 @@ const ChatDisplay = ({
         return () => clearTimeout(t);
     }, [copiedId]);
 
+    const isDark = theme === 'dark';
+
     return (
-        <div ref={containerRef} className={`relative flex-1 overflow-y-auto p-4 space-y-4 ${theme === 'dark' ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
+        <div ref={containerRef} className={`relative flex-1 overflow-y-auto p-4 space-y-4 ${isDark ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
             {messages.map((message, index) => {
                 const messageText = typeof message.text === 'string' ? message.text : '';
                 const trimmedText = messageText.trim();
                 const hasImages = Array.isArray(message.images) && message.images.length > 0;
+                // ✅ MODIFIED: Check for any attachments, not just images, for the new button.
+                const hasAttachments = Array.isArray(message.attachments) && message.attachments.length > 0;
                 const isBot = message.sender === 'bot';
 
                 const isLastMessage = index === messages.length - 1;
@@ -273,7 +278,7 @@ const ChatDisplay = ({
                     for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
                         const candidate = messages[cursor];
                         if (candidate.sender !== 'user') continue;
-                        if ((candidate.text || '').trim() === '') continue;
+                        if ((candidate.text || '').trim() === '' && (!candidate.attachments || candidate.attachments.length === 0)) continue;
                         canRetry = true;
                         break;
                     }
@@ -347,6 +352,26 @@ const ChatDisplay = ({
                                     ) : null
                                 )}
                             </div>
+                           
+                            {/* ✅ ADDED: Attachment button for user messages */}
+                            {message.sender === 'user' && hasAttachments && onViewAttachments && (
+                                <div className="mt-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => onViewAttachments(message)}
+                                        className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
+                                            isDark 
+                                                ? 'bg-gray-800/80 border-gray-700/70 text-gray-300 hover:bg-gray-700/80 hover:border-gray-600'
+                                                : 'bg-gray-100 border-gray-200 text-gray-700 hover:bg-gray-200 hover:border-gray-300'
+                                        }`}
+                                        title="View attachments"
+                                    >
+                                        <HiPaperClip className="w-4 h-4" />
+                                        <span>{message.attachments.length} attachment{message.attachments.length > 1 ? 's' : ''}</span>
+                                    </button>
+                                </div>
+                            )}
+
                             {!isBotLoading && (
                                 <div className="mt-3 flex items-center gap-2 select-none">
                                     <button
@@ -400,7 +425,7 @@ const ChatDisplay = ({
                                     {message.sender === 'user' && (
                                         <button
                                             type="button"
-                                            onClick={() => onStartEdit && onStartEdit(message.id, message.text)}
+                                            onClick={() => onStartEdit && onStartEdit(message.id)}
                                             className="text-gray-400 hover:text-gray-600 transition-colors p-1"
                                             aria-label="Edit message"
                                             title="Edit message"

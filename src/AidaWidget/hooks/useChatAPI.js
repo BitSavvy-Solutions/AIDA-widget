@@ -22,7 +22,7 @@ export const useChatAPI = ({
     const langMap = { eng: "en", fra: "fr", ara: "ar", hin: "hi", tgl: "tl", ukr: "uk", san: "sa", nya: "ny" };
     const supportedLanguages = Object.values(langMap);
 
-    const formatMessageContent = (message) => {
+    const formatMessageContent = useCallback((message) => {
         if (!message) return '';
         let content = message.text || '';
 
@@ -47,7 +47,7 @@ export const useChatAPI = ({
             }
         }
         return content;
-    };
+    }, []);
 
 
     const buildMessageHistoryPayload = useCallback((history = []) => {
@@ -61,12 +61,15 @@ export const useChatAPI = ({
         (history || []).forEach(m => {
             messageHistory.push({
                 type: m.sender === 'user' ? 'human' : 'ai',
-                content: m.text || ''
+                // ✅ FIX: Use formatMessageContent for historical messages.
+                // This ensures that text/URL attachment content from previous user
+                // messages is included in the context for subsequent API calls.
+                content: formatMessageContent(m)
             });
         });
 
         return messageHistory;
-    }, [customPrompt, pageContext]);
+    }, [customPrompt, pageContext, formatMessageContent]);
 
     const streamResponse = async ({ userMessage, botMessageId, historyForPayload }) => {
         setIsLoading(true);

@@ -88,14 +88,17 @@ const AttachmentItem = ({ attachment, onRemove, onPreview, theme = 'dark' }) => 
                     </p>
                 )}
             </div>
-            <button
-                type="button"
-                onClick={() => onRemove(attachment.id)}
-                className={`p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors`}
-                aria-label="Remove attachment"
-            >
-                <HiXMark className="w-4 h-4" />
-            </button>
+            {/* ✅ MODIFIED: Only show remove button if onRemove is provided */}
+            {onRemove && (
+                <button
+                    type="button"
+                    onClick={() => onRemove(attachment.id)}
+                    className={`p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors`}
+                    aria-label="Remove attachment"
+                >
+                    <HiXMark className="w-4 h-4" />
+                </button>
+            )}
         </div>
     );
 };

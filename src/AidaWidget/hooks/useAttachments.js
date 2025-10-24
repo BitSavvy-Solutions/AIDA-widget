@@ -249,6 +249,7 @@ export const useAttachments = (setSelectedModel) => {
 
     return {
         attachments,
+        setAttachments, // ✅ ADDED: Expose setter for editing functionality
         addImageAttachments,
         addTextAttachment,
         addFolderAttachments,
