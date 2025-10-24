@@ -59,13 +59,21 @@ export const useChatAPI = ({
             messageHistory.push({ type: 'human', content: customPrompt.trim() });
         }
         (history || []).forEach(m => {
-            messageHistory.push({
+            const messagePayload = {
                 type: m.sender === 'user' ? 'human' : 'ai',
-                // ✅ FIX: Use formatMessageContent for historical messages.
-                // This ensures that text/URL attachment content from previous user
-                // messages is included in the context for subsequent API calls.
                 content: formatMessageContent(m)
-            });
+            };
+
+            // ✅ FIX: Check for and attach images to historical user messages as well.
+            // The AI was losing visual context from previous turns.
+            if (m.sender === 'user' && Array.isArray(m.images) && m.images.length > 0) {
+                const imageUrls = m.images.map(img => img.src).filter(Boolean);
+                if (imageUrls.length > 0) {
+                    messagePayload.image_data_urls = imageUrls;
+                }
+            }
+            
+            messageHistory.push(messagePayload);
         });
 
         return messageHistory;
