@@ -30,7 +30,18 @@ const defaultProps = {
     translations: { transcribing: 'Transcribing...', inputPlaceholder: 'Type a message to Aida...' },
     user: {},
     pageContext: {},
-    features: { resizable: true, modelSelection: true, voiceInput: true, webSearch: true, imageUpload: true, retryMessage: true, customInstructions: true, historyProjects: true }
+    features: {
+        resizable: true,
+        modelSelection: true,
+        voiceInput: true,
+        webSearch: true,
+        imageUpload: true,
+        retryMessage: true,
+        customInstructions: true,
+        historyProjects: true,
+        // ✨ ADDED: Configuration for the payment/support link
+        paymentLink: null
+    }
 };
 
 const AidaWidget = (props) => {
@@ -153,7 +164,7 @@ const AidaWidget = (props) => {
                             </svg>
                             <span>Drop files or folders to attach</span>
                         </div></div>}
-                        <ChatHeader displayText={displayText} lastCost={lastCost} userId={user?.id} resetChat={resetChat} toggleFullscreen={() => setIsFullscreen(p => !p)} showFullscreenToggle={!isMobileViewport} isMobileViewport={isMobileViewport} toggleChat={toggleChat} theme={theme} onToggleTheme={() => setTheme(p => p === 'dark' ? 'light' : 'dark')} onToggleHistory={openPanel} onDisplayClick={features.customInstructions ? openPromptModal : undefined} />
+                        <ChatHeader displayText={displayText} lastCost={lastCost} userId={user?.id} paymentLinkConfig={features.paymentLink} resetChat={resetChat} toggleFullscreen={() => setIsFullscreen(p => !p)} showFullscreenToggle={!isMobileViewport} isMobileViewport={isMobileViewport} toggleChat={toggleChat} theme={theme} onToggleTheme={() => setTheme(p => p === 'dark' ? 'light' : 'dark')} onToggleHistory={openPanel} onDisplayClick={features.customInstructions ? openPromptModal : undefined} />
                         {/* ✅ MODIFIED: Pass the stable handler to onSelect. */}
                         {features.historyProjects && <ChatHistoryPanel theme={theme} open={isPanelOpen} onClose={closePanel} sessions={historyItems} projects={projects} onSelect={handleHistorySelect} {...historyHandlers} />}
                         <ChatDisplay

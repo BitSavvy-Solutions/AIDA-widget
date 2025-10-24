@@ -1,6 +1,7 @@
 // src/AidaWidget/ChatHeader.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { HiPlus, HiOutlineSun, HiOutlineMoon, HiClock, HiEllipsisVertical, HiMinusSmall, HiOutlineArrowsPointingOut } from 'react-icons/hi2';
+import { LuHandHeart } from 'react-icons/lu'; // ✨ ADDED: Import the heart-in-hand icon
 import SevenSegmentDisplay from './SevenSegmentDisplay';
 import CreditsDisplay from './CreditsDisplay';
 
@@ -12,6 +13,7 @@ const ChatHeader = ({
     toggleFullscreen,
     toggleChat,
     theme = 'dark',
+    paymentLinkConfig, 
     onToggleTheme,
     onToggleHistory,
     onDisplayClick,
@@ -41,21 +43,34 @@ const ChatHeader = ({
 
     return (
         <div className={`${headerColors} glass-header pl-2 pr-1 py-2 flex justify-between items-center rounded-none relative`}>
-            <div className="flex items-center">
+            <div className="flex items-center gap-3">
                 {onDisplayClick ? (
                     <button
                         type="button"
                         onClick={onDisplayClick}
-                        className="mr-3 p-0 bg-transparent border-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 rounded-md"
+                        className="p-0 bg-transparent border-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 rounded-md"
                         aria-label="Configure instructions"
                     >
                         <SevenSegmentDisplay text={displayText} />
                     </button>
                 ) : (
-                    <SevenSegmentDisplay text={displayText} className="mr-3" />
+                    <SevenSegmentDisplay text={displayText} />
                 )}
-                {/* Use the new CreditsDisplay component */}
                 <CreditsDisplay userId={userId} lastCost={lastCost} theme={theme} />
+
+                {/* ✨ NEW: Support/Payment Button */}
+                {paymentLinkConfig?.show && paymentLinkConfig?.url && (
+                    <a
+                        href={paymentLinkConfig.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-1 flex items-center gap-1.5 text-xs font-semibold px-2 py-1.5 rounded-md transition-colors bg-white/10 hover:bg-white/20 text-white shadow-sm"
+                        title={paymentLinkConfig.text || 'Support Us'}
+                    >
+                        <LuHandHeart className="w-4 h-4 text-brand-coral" />
+                        {paymentLinkConfig.text}
+                    </a>
+                )}
             </div>
             <div className="flex items-center space-x-2 pr-1">
                 {showFullscreenToggle && typeof toggleFullscreen === 'function' && (

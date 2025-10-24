@@ -56,10 +56,23 @@ if (import.meta.env.DEV) {
     // You can put default props here for testing
     language: 'en',
     user: { email: 'dev-user@example.com', id: 'dev-id' },
-    translations: {
-      transcribing: 'Transcribing...',
-      inputPlaceholder: 'Type a message to Aida...'
-    }
+    translations: { transcribing: 'Transcribing...', inputPlaceholder: 'Type a message to Aida...' },
+    // ✨ ADDED: Feature configuration for local development
+    features: {
+      resizable: true,
+      modelSelection: true,
+      voiceInput: true,
+      webSearch: true,
+      imageUpload: true,
+      retryMessage: true,
+      customInstructions: true,
+      historyProjects: true,
+      paymentLink: {
+        show: true,
+        url: 'https://buy.stripe.com/5kQ8wO11A3y97tjcThabK00',
+        text: '' // Custom text for dev environment
+      }
+    },
   });
 }
 
