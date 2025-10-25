@@ -54,7 +54,7 @@ const AidaWidget = (props) => {
     const [customPrompt, setCustomPrompt] = useState(() => localStorage.getItem('aida-widget-prompt') || '');
     const [promptDraft, setPromptDraft] = useState('');
     const [imagePreview, setImagePreview] = useState(null);
-    const [viewingMessageAttachments, setViewingMessageAttachments] = useState(null); // ✅ ADDED: State for viewing past attachments
+    const [viewingMessageAttachments, setViewingMessageAttachments] = useState(null);
     const inputRef = useRef(null);
     const messagesEndRef = useRef(null);
     const programmaticScrollRef = useRef(false);
@@ -68,7 +68,6 @@ const AidaWidget = (props) => {
     const { messages, setMessages, getSanitizedMessages } = useChatMessages();
     const { isPanelOpen, openPanel, closePanel, historyItems, projects, currentSessionId, setCurrentSessionId, createNewSession, updateCurrentSession, saveCurrentChatToHistory, historyHandlers } = useChatHistory(getSanitizedMessages);
     const { isOpen: isPromptModalOpen, open: openPromptModal, close: closePromptModal } = useModal();
-    // ✅ MODIFIED: Destructure `setAttachments` for editing functionality
     const { attachments, setAttachments, addImageAttachments, addTextAttachment, addFolderAttachments, addUrlAttachment, removeAttachment, clearAttachments, isAttachmentModalOpen, openModal: openAttachmentModal, closeModal: closeAttachmentModal } = useAttachments(setSelectedModel);
     
     const { isDragOverWidget, dropZoneProps } = useDragAndDrop({
@@ -80,7 +79,6 @@ const AidaWidget = (props) => {
 
     const requestFullscreen = useCallback(() => setIsFullscreen(true), [setIsFullscreen]);
     const { sidebarRef, sidebarInlineStyle, resizeHandleProps, isResizing } = useResizableSidebar({ isOpen, isFullscreen, isMobileViewport, isEnabled: features.resizable, onRequestFullscreen: requestFullscreen });
-    // ✨ MODIFIED: Destructure liveReasoning from useChatAPI
     const { isLoading, lastCost, liveReasoning, streamResponse, stopStreaming } = useChatAPI({ apiConfig, messages, setMessages, currentSessionId, updateCurrentSession, user, pageContext, customPrompt });
     const { isRecording, isTranscribing, elapsedTime, startRecording, stopRecording, lastInputWasVoiceRef } = useVoiceInput({ transcriptionUrl: apiConfig.transcriptionUrl, onTranscriptionComplete: (text) => { setCurrentMessage(p => p.trim() ? `${p} ${text}` : text); if (text) startAutoSendTimer(); } });
     const { countdown: autoSendCountdown, start: startAutoSendTimer, cancel: cancelAutoSendTimer, setIsPaused: setIsSendTimerPaused } = useCountdown(() => stableHandleSendMessage(), 3);
@@ -100,12 +98,38 @@ const AidaWidget = (props) => {
         if (isLoading) setIsAutoScrollPaused(true);
     }, [isLoading]);
 
-    // ✅ ADDED: Handler to open the read-only attachment viewer
     const handleViewAttachments = useCallback((message) => {
         setViewingMessageAttachments(message);
     }, []);
 
-    // ✅ ADDED: Handler to start editing a message (loads text and attachments)
+    // ✅ MODIFIED: This function now updates both `attachments` and `images` arrays.
+    const handleRemoveAttachmentFromMessage = useCallback((messageId, attachmentId) => {
+        // Update the main messages array
+        setMessages(prevMessages =>
+            prevMessages.map(msg => {
+                if (msg.id === messageId) {
+                    // Filter the general attachments list
+                    const updatedAttachments = (msg.attachments || []).filter(att => att.id !== attachmentId);
+                    
+                    // ALSO filter the specific 'images' list to remove the data URL
+                    const updatedImages = (msg.images || []).filter(img => img.id !== attachmentId);
+
+                    return { ...msg, attachments: updatedAttachments, images: updatedImages };
+                }
+                return msg;
+            })
+        );
+
+        // Also update the state that controls the modal, so it re-renders immediately
+        setViewingMessageAttachments(prevViewingMsg => {
+            if (prevViewingMsg && prevViewingMsg.id === messageId) {
+                const updatedAttachments = (prevViewingMsg.attachments || []).filter(att => att.id !== attachmentId);
+                return { ...prevViewingMsg, attachments: updatedAttachments };
+            }
+            return prevViewingMsg;
+        });
+    }, [setMessages]);
+
     const handleStartEdit = useCallback((messageId) => {
         const messageToEdit = messages.find(m => m.id === messageId);
         if (!messageToEdit) return;
@@ -116,7 +140,6 @@ const AidaWidget = (props) => {
         inputRef.current?.focus();
     }, [messages, setAttachments]);
     
-    // ✅ ADDED: Handler to cancel an edit (clears text and loaded attachments)
     const cancelEdit = useCallback(() => {
         setEditingMessageId(null);
         setCurrentMessage('');
@@ -214,7 +237,6 @@ const AidaWidget = (props) => {
             
             <AttachmentModal isOpen={isAttachmentModalOpen} onClose={closeAttachmentModal} attachments={attachments} onAddImages={addImageAttachments} onAddText={addTextAttachment} onAddFolder={addFolderAttachments} onAddUrl={addUrlAttachment} onRemove={removeAttachment} onClearAll={clearAttachments} onImagePreview={setImagePreview} theme={theme}/>
             
-            {/* ✅ ADDED: Read-only modal for viewing past message attachments */}
             <AttachmentModal
                 isOpen={!!viewingMessageAttachments}
                 onClose={() => setViewingMessageAttachments(null)}
@@ -222,6 +244,11 @@ const AidaWidget = (props) => {
                 onImagePreview={setImagePreview}
                 theme={theme}
                 isReadOnly={true}
+                onRemove={(attachmentId) => {
+                    if (viewingMessageAttachments) {
+                        handleRemoveAttachmentFromMessage(viewingMessageAttachments.id, attachmentId);
+                    }
+                }}
             />
 
             {imagePreview && (

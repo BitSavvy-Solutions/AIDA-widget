@@ -16,7 +16,7 @@ const AttachmentModal = ({
     onClearAll,
     onImagePreview,
     theme = 'dark',
-    isReadOnly = false // ✅ ADDED: New prop to control UI
+    isReadOnly = false
 }) => {
     const imageInputRef = useRef(null);
     const textInputRef = useRef(null);
@@ -76,7 +76,6 @@ const AttachmentModal = ({
                         <div className={`flex items-center justify-between p-4 border-b ${borderClasses}`}>
                             <div className="flex items-center gap-3">
                                 <h2 className="text-lg font-semibold">Attachments ({attachments.length})</h2>
-                                {/* ✅ MODIFIED: Hide Clear All button in read-only mode */}
                                 {attachments.length > 0 && onClearAll && !isReadOnly && (
                                     <button
                                         type="button"
@@ -123,7 +122,7 @@ const AttachmentModal = ({
                                     <AttachmentItem
                                         key={attachment.id}
                                         attachment={attachment}
-                                        onRemove={isReadOnly ? undefined : onRemove} // ✅ MODIFIED: Pass undefined if read-only
+                                        onRemove={onRemove} // ✅ MODIFIED: Pass onRemove directly. The parent now controls if removal is possible.
                                         onPreview={handlePreview}
                                         theme={theme}
                                     />
@@ -131,7 +130,6 @@ const AttachmentModal = ({
                             )}
                         </div>
                         
-                        {/* ✅ MODIFIED: Conditionally render the entire footer */}
                         {!isReadOnly && (
                             <div className={`p-4 border-t space-y-3 ${borderClasses}`}>
                                 
@@ -139,7 +137,6 @@ const AttachmentModal = ({
                                 <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files || []); if (files.length) onAddImages(files); e.target.value = ''; }}/>
                                 <input ref={textInputRef} type="file" accept="text/*,.md,.json,.yml,.yaml,.ini,.log,.env,.py,.js,.jsx,.ts,.tsx,.html,.css,.scss,.sh,.bat,.ps1,.xml,.csv,.java,.c,.cpp,.h,.cs,.go,.rb,.php,.sql" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) onAddText(file); e.target.value = ''; }}/>
                                 
-                                {/* ✅ FIXED: The onChange handler now creates the same data structure as drag-and-drop. */}
                                 <input
                                     ref={folderInputRef}
                                     type="file"
