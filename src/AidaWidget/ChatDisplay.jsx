@@ -27,8 +27,19 @@ const CodeBlock = ({ className, children, node, ...props }) => {
         }
     };
     
-    const match = /language-(\w+)/.exec(className || '');
-    const rawLang = match ? match[1].toLowerCase() : 'text';
+    // ✅ FIXED: Correctly parse language from file paths (e.g., "language-src/main.css")
+    const getLangFromClassName = (cn) => {
+        if (!cn || !cn.startsWith('language-')) {
+            return 'text';
+        }
+        const specifier = cn.substring('language-'.length);
+        const parts = specifier.split('.');
+        const lang = parts[parts.length - 1];
+        // In case of something like `language-weird.`, return 'text'
+        return lang ? lang.toLowerCase() : 'text';
+    };
+
+    const rawLang = getLangFromClassName(className);
 
     const languageMap = {
       js: 'jsx',
