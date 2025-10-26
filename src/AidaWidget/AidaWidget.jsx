@@ -61,7 +61,7 @@ const AidaWidget = (props) => {
     const [selectedModel, setSelectedModel] = useState('deepseek/deepseek-chat-v3.1');
     const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false);
     const [editingMessageId, setEditingMessageId] = useState(null);
-    const [customPrompt, setCustomPrompt] = useState(() => localStorage.getItem('aida-widget-prompt') || "You are EduCare AI Assistant, a helpful and professional educational tutor. Your tone should be encouraging, clear, and supportive, but not overly casual or 'snappy'. Avoid excessive emojis. Your primary goal is to help students learn and understand concepts.");
+    const [customPrompt, setCustomPrompt] = useState(() => localStorage.getItem('aida-widget-prompt') || "");
     const [promptDraft, setPromptDraft] = useState('');
     const [imagePreviewSrc, setImagePreviewSrc] = useState(null);
     const inputRef = useRef(null);
