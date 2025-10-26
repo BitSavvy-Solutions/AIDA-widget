@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { fetchUserCredits } from './utils/creditsApi';
 
 const CreditsDisplay = ({ userId, lastCost, theme = 'dark' }) => {
+  const [isBalanceVisible, setIsBalanceVisible] = useState(false); // ✨ ADDED: State to toggle balance visibility
   const [balance, setBalance] = useState(null);
   const [displayBalance, setDisplayBalance] = useState(0);
   const [showDeduction, setShowDeduction] = useState(false);
@@ -22,7 +23,7 @@ const CreditsDisplay = ({ userId, lastCost, theme = 'dark' }) => {
     return `$${num.toFixed(5)}`;
   };
 
-  // Fetch initial balance on mount or when userId changes
+  // ✅ MODIFIED: Fetch balance only when it becomes visible
   useEffect(() => {
     const loadBalance = async () => {
       if (!userId) {
@@ -30,18 +31,24 @@ const CreditsDisplay = ({ userId, lastCost, theme = 'dark' }) => {
         setDisplayBalance(0);
         return;
       }
-
+      
+      // Show loading state while fetching
+      setBalance(null);
       const fetchedBalance = await fetchUserCredits(userId);
       const newBalance = fetchedBalance !== null ? fetchedBalance : 0;
       setBalance(newBalance);
       setDisplayBalance(newBalance);
     };
 
-    loadBalance();
-  }, [userId]);
+    if (isBalanceVisible) {
+      loadBalance();
+    }
+  }, [userId, isBalanceVisible]);
 
-  // Handle cost changes and deduction animation
+  // ✅ MODIFIED: Handle cost changes only when balance is visible
   useEffect(() => {
+    if (!isBalanceVisible) return; // Don't process deductions if hidden
+
     if (lastCost > 0 && lastCost !== prevCostRef.current) {
       prevCostRef.current = lastCost;
 
@@ -63,10 +70,8 @@ const CreditsDisplay = ({ userId, lastCost, theme = 'dark' }) => {
         // Fetch actual balance from server (async)
         if (userId) {
           const actualBalance = await fetchUserCredits(userId);
-          // ✅ MODIFIED: Only update if the fetched balance is lower than what we're displaying
           if (actualBalance !== null && actualBalance < newBalance) {
             setBalance(actualBalance);
-            // If there's a discrepancy, smoothly adjust
             if (Math.abs(actualBalance - newBalance) > 0.00001) {
               animateBalanceChange(newBalance, actualBalance);
             }
@@ -74,7 +79,7 @@ const CreditsDisplay = ({ userId, lastCost, theme = 'dark' }) => {
         }
       }, 2000);
     }
-  }, [lastCost, balance, displayBalance, userId]);
+  }, [lastCost, balance, displayBalance, userId, isBalanceVisible]); // Added isBalanceVisible dependency
 
   // Smooth animation for balance changes
   const animateBalanceChange = (from, to) => {
@@ -89,7 +94,6 @@ const CreditsDisplay = ({ userId, lastCost, theme = 'dark' }) => {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1);
 
-      // Easing function
       const easeOutQuad = progress * (2 - progress);
       const current = from + (to - from) * easeOutQuad;
 
@@ -113,6 +117,20 @@ const CreditsDisplay = ({ userId, lastCost, theme = 'dark' }) => {
   }, []);
 
   const isDark = theme === 'dark';
+
+  // ✨ ADDED: Conditional rendering for showing/hiding balance
+  if (!isBalanceVisible) {
+    return (
+      <button
+        onClick={() => setIsBalanceVisible(true)}
+        className="flex items-center gap-1.5 text-xs font-semibold px-2 py-1.5 rounded-md transition-colors bg-white/10 hover:bg-white/20 text-white shadow-sm"
+        title="Show account balance"
+      >
+        Show Balance
+      </button>
+    );
+  }
+
   const balanceColor = displayBalance < 0
     ? 'text-red-400'
     : displayBalance === 0
@@ -120,20 +138,31 @@ const CreditsDisplay = ({ userId, lastCost, theme = 'dark' }) => {
       : 'text-green-400';
 
   return (
-    <div className="flex flex-col items-start relative">
-      <div className="text-xs opacity-60 leading-tight">
-        Balance
-      </div>
-      <div className={`text-xs font-mono font-semibold leading-tight ${balanceColor} transition-colors duration-300`}>
-        {balance === null ? '$-.-----' : formatCredits(displayBalance)}
-      </div>
-
-      {/* Deduction indicator */}
-      {showDeduction && (
-        <div className={`absolute top-full mt-1 text-xs font-mono text-red-400 animate-pulse whitespace-nowrap`}>
-          - {formatCredits(deductionAmount)}
+    // ✨ MODIFIED: Wrapped in a flex container to include the "Hide" button
+    <div className="flex items-center gap-2">
+      <div className="flex flex-col items-start relative">
+        <div className="text-xs opacity-60 leading-tight">
+          Balance
         </div>
-      )}
+        <div className={`text-xs font-mono font-semibold leading-tight ${balanceColor} transition-colors duration-300`}>
+          {balance === null ? 'Loading...' : formatCredits(displayBalance)}
+        </div>
+
+        {/* Deduction indicator */}
+        {showDeduction && (
+          <div className={`absolute top-full mt-1 text-xs font-mono text-red-400 animate-pulse whitespace-nowrap`}>
+            - {formatCredits(deductionAmount)}
+          </div>
+        )}
+      </div>
+      {/* ✨ ADDED: Hide button */}
+      <button
+        onClick={() => setIsBalanceVisible(false)}
+        className="text-xs font-medium text-gray-400 hover:text-white transition-colors px-1 py-0.5 rounded"
+        title="Hide balance"
+      >
+        Hide
+      </button>
     </div>
   );
 };
