@@ -31,6 +31,7 @@ const SEGMENT_MAPS = {
   '9': [true, true, true, true, false, true, true],  // a, b, c, d, f, g
   'A': [true, true, true, false, true, true, true],  // a, b, c, e, f, g
   'I': [false, false, false, false, true, true, false],  // b, c
+  'L': [false, true, true, false, false, false, false],  // b, c
   'D': [false, true, true, true, true, false, true],  // b, c, d, e, g
   'E': [true, false, false, true, true, true, true],  // a, d, e, f, g
   'R': [false, false, false, false, true, false, true],  // e, g (simplified)
