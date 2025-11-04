@@ -11,7 +11,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
  * @returns {string} The text string to be displayed.
  */
 export const useDisplayAnimation = ({ isOpen, isLoading }) => {
-    const [displayText, setDisplayText] = useState("ED:AL");
+    const [displayText, setDisplayText] = useState("AL:LY");
     const [eyeState, setEyeState] = useState('open');
     const blinkTimerRef = useRef(null);
     const loadingIntervalRef = useRef(null);
@@ -69,7 +69,7 @@ export const useDisplayAnimation = ({ isOpen, isLoading }) => {
             if (isOpen) {
                 startBlinking();
             } else {
-                setDisplayText("ED:AL");
+                setDisplayText("AL:LY");
             }
         }
         // Cleanup on unmount or when dependencies change
