@@ -13,7 +13,7 @@ const AGENT_BETA_HOST = 'https://aitut-agentbackend-beta-g3a7fndzdadbbafd.canada
 const agentHost = isBetaEnvironment ? AGENT_BETA_HOST : AGENT_PROD_HOST;
 
 export const CHAT_URL = `${agentHost}/iverse_agent`;
-export const TRANSCRIPTION_URL = `${agentHost}/transcribe_audio`;
+export const TRANSCRIPTION_URL = `${agentHost}/transcribe_audios`;
 // ✅ ADDED: New endpoint for the URL scraper
 export const SCRAPE_URL = `${agentHost}/scrape_url_to_markdown`;
 

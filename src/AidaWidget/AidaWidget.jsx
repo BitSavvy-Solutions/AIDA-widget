@@ -80,7 +80,8 @@ const AidaWidget = (props) => {
     const requestFullscreen = useCallback(() => setIsFullscreen(true), [setIsFullscreen]);
     const { sidebarRef, sidebarInlineStyle, resizeHandleProps, isResizing } = useResizableSidebar({ isOpen, isFullscreen, isMobileViewport, isEnabled: features.resizable, onRequestFullscreen: requestFullscreen });
     const { isLoading, lastCost, liveReasoning, streamResponse, stopStreaming } = useChatAPI({ apiConfig, messages, setMessages, currentSessionId, updateCurrentSession, user, pageContext, customPrompt });
-    const { isRecording, isTranscribing, elapsedTime, startRecording, stopRecording, lastInputWasVoiceRef } = useVoiceInput({ transcriptionUrl: apiConfig.transcriptionUrl, onTranscriptionComplete: (text) => { setCurrentMessage(p => p.trim() ? `${p} ${text}` : text); if (text) startAutoSendTimer(); } });
+    // ✨ MODIFIED: Destructure isNearingTimeLimit from useVoiceInput
+    const { isRecording, isTranscribing, elapsedTime, startRecording, stopRecording, cancelTranscription, lastInputWasVoiceRef, transcriptionError, retryTranscription, clearFailedTranscription, isNearingTimeLimit } = useVoiceInput({ transcriptionUrl: apiConfig.transcriptionUrl, onTranscriptionComplete: (text) => { setCurrentMessage(p => p.trim() ? `${p} ${text}` : text); if (text) startAutoSendTimer(); } });
     const { countdown: autoSendCountdown, start: startAutoSendTimer, cancel: cancelAutoSendTimer, setIsPaused: setIsSendTimerPaused } = useCountdown(() => stableHandleSendMessage(), 3);
     const { countdown: autoRecordCountdown, start: startAutoRecordTimer, cancel: cancelAutoRecordTimer, setIsPaused: setIsRecordTimerPaused } = useCountdown(startRecording, 3);
     const displayText = useDisplayAnimation({ isOpen, isLoading });
@@ -102,7 +103,6 @@ const AidaWidget = (props) => {
         setViewingMessageAttachments(message);
     }, []);
 
-    // ✅ MODIFIED: This function now updates both `attachments` and `images` arrays.
     const handleRemoveAttachmentFromMessage = useCallback((messageId, attachmentId) => {
         // Update the main messages array
         setMessages(prevMessages =>
@@ -229,7 +229,8 @@ const AidaWidget = (props) => {
                             onRetryBotMessage={features.retryMessage ? handleRetry : undefined}
                             onViewAttachments={handleViewAttachments}
                         />
-                        <ChatInput {...{ currentMessage, setCurrentMessage, handleSendMessage: stableHandleSendMessage, handleKeyDown: (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); stableHandleSendMessage(); } }, handleRecordButtonClick, inputRef, isLoading, isTranscribing, isRecording, elapsedTime, siteLanguage, theme, autoSendCountdown, cancelAutoSendTimer, setIsSendTimerPaused, autoRecordCountdown, cancelAutoRecordTimer, setIsRecordTimerPaused, selectedModel, setSelectedModel, translations, isEditing: !!editingMessageId, cancelEdit: cancelEdit, attachmentCount: attachments.length, onOpenAttachments: openAttachmentModal, isWebSearchEnabled, setIsWebSearchEnabled, onStopStreaming: stopStreaming, features }}/>
+                        {/* ✨ MODIFIED: Pass down the new props for the time limit warning and transcription failure */}
+                        <ChatInput {...{ currentMessage, setCurrentMessage, handleSendMessage: stableHandleSendMessage, handleKeyDown: (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); stableHandleSendMessage(); } }, handleRecordButtonClick, inputRef, isLoading, isTranscribing, isRecording, elapsedTime, siteLanguage, theme, autoSendCountdown, cancelAutoSendTimer, setIsSendTimerPaused, autoRecordCountdown, cancelAutoRecordTimer, setIsRecordTimerPaused, selectedModel, setSelectedModel, translations, isEditing: !!editingMessageId, cancelEdit: cancelEdit, attachmentCount: attachments.length, onOpenAttachments: openAttachmentModal, isWebSearchEnabled, setIsWebSearchEnabled, onStopStreaming: stopStreaming, features, onCancelTranscription: cancelTranscription, transcriptionError, onRetryTranscription: retryTranscription, onClearFailedTranscription: clearFailedTranscription, isNearingTimeLimit }}/>
                     </div>
                 </div>
             )}
