@@ -95,12 +95,27 @@ const ChatInput = ({
                 </button>
             );
         }
+
+        // ✨ NEW: When recording, show a wider button with the timer.
+        if (isRecording) {
+            return (
+                <button
+                    onClick={handleRecordButtonClick}
+                    className="ml-2 flex items-center gap-2 rounded-full bg-red-600 px-3 py-2 text-white shadow-md transition-all duration-200 hover:bg-red-700"
+                    aria-label="Stop Recording"
+                >
+                    <HiStop className="h-5 w-5 flex-shrink-0" />
+                    <span className="font-mono text-sm font-medium tracking-wider">{formatTime(elapsedTime)}</span>
+                </button>
+            );
+        }
+
         return (
             <button
                 onClick={handleRecordButtonClick} disabled={isTranscribing || autoSendCountdown !== null}
-                className={`ml-2 p-2 rounded-full text-white transition-opacity disabled:opacity-50 ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-900 hover:bg-gray-700'}`} aria-label={isRecording ? "Stop Recording" : "Start Recording"}
+                className={`ml-2 p-2 rounded-full text-white transition-opacity disabled:opacity-50 ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-900 hover:bg-gray-700'}`} aria-label="Start Recording"
             >
-                {isTranscribing ? <HiArrowPath className="w-5 h-5 animate-spin" /> : isRecording ? <HiStop className="w-5 h-5 text-red-500" /> : <HiOutlineMicrophone className="w-5 h-5" />}
+                {isTranscribing ? <HiArrowPath className="w-5 h-5 animate-spin" /> : <HiOutlineMicrophone className="w-5 h-5" />}
             </button>
         );
     };
@@ -115,15 +130,9 @@ const ChatInput = ({
                     </button>
                 </div>
             )}
+            {/* ✨ MODIFIED: The textarea is now always visible, even during recording. */}
             <div className={`flex items-end rounded-lg px-3 py-1 mb-3 transition-colors ${theme === 'dark' ? 'border border-gray-700 bg-gray-800' : 'border border-gray-300 bg-gray-50'}`}>
-                {isRecording ? (
-                    <div className="flex-1 flex items-center justify-center text-red-500 font-mono text-lg space-x-3 h-[42px]">
-                        <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-                        <span>{formatTime(elapsedTime)}</span>
-                    </div>
-                ) : (
-                   <textarea ref={inputRef} value={currentMessage} onChange={(e) => setCurrentMessage(e.target.value)} onKeyDown={handleKeyDown} placeholder={isEditing ? "Edit your message..." : isTranscribing ? translations.transcribing : (translations.inputPlaceholder || "Type your message...")} disabled={isTranscribing} dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'} rows={1} className={`flex-1 bg-transparent px-0 py-2 resize-none focus:outline-none custom-scrollbar overflow-y-auto whitespace-pre-wrap leading-tight ${theme === 'dark' ? 'text-gray-100 placeholder-gray-400' : ''} min-h-[42px] max-h-[200px]`} style={{ overflowY: 'auto', overflowX: 'hidden' }}/>
-                )}
+               <textarea ref={inputRef} value={currentMessage} onChange={(e) => setCurrentMessage(e.target.value)} onKeyDown={handleKeyDown} placeholder={isEditing ? "Edit your message..." : isTranscribing ? translations.transcribing : (translations.inputPlaceholder || "Type your message...")} disabled={isTranscribing} dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'} rows={1} className={`flex-1 bg-transparent px-0 py-2 resize-none focus:outline-none custom-scrollbar overflow-y-auto whitespace-pre-wrap leading-tight ${theme === 'dark' ? 'text-gray-100 placeholder-gray-400' : ''} min-h-[42px] max-h-[200px]`} style={{ overflowY: 'auto', overflowX: 'hidden' }}/>
             </div>
             
             <div className="flex items-center justify-between">
