@@ -43,10 +43,11 @@ const ChatInput = ({
     onStopStreaming,
     onCancelTranscription,
     features,
-    // ✨ ADDED: New props for transcription failure
     transcriptionError,
     onRetryTranscription,
     onClearFailedTranscription,
+    // ✨ ADDED: New prop for time limit warning
+    isNearingTimeLimit,
 }) => {
     const [isHoveringSend, setIsHoveringSend] = useState(false);
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
@@ -102,7 +103,6 @@ const ChatInput = ({
             );
         }
 
-        // ✨ MODIFIED: New UI for transcription failure
         if (transcriptionError) {
             return (
                 <div 
@@ -148,8 +148,9 @@ const ChatInput = ({
             const isCurrentlyTranscribing = isTranscribing;
             const isCancelHover = isCurrentlyTranscribing && isHoveringCancel;
             
+            // ✨ MODIFIED: Add animate-pulse class when nearing time limit
             const pillBgColor = isCurrentlyRecording 
-                ? 'bg-red-600 hover:bg-red-700' 
+                ? `bg-red-600 hover:bg-red-700 ${isNearingTimeLimit ? 'animate-pulse' : ''}`
                 : isCancelHover
                     ? 'bg-red-600 hover:bg-red-700'
                     : (theme === 'dark' ? 'bg-gray-700' : 'bg-gray-900');

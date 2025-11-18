@@ -1,6 +1,10 @@
 /* src/AidaWidget/hooks/useVoiceInput.js */
 import { useState, useRef, useCallback, useEffect } from 'react';
 
+// ✨ ADDED: Constants for recording time limits
+const MAX_RECORDING_SECONDS = 600;
+const WARNING_THRESHOLD_SECONDS = 540;
+
 /**
  * Manages voice input, including recording state, timer, and transcription.
  * @param {object} config - Configuration object.
@@ -12,9 +16,10 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
     const [isRecording, setIsRecording] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
     const [elapsedTime, setElapsedTime] = useState(0);
-    // ✨ ADDED: State for transcription failure
     const [transcriptionError, setTranscriptionError] = useState(null);
     const [failedAudioBlob, setFailedAudioBlob] = useState(null);
+    // ✨ ADDED: State for time limit warning
+    const [isNearingTimeLimit, setIsNearingTimeLimit] = useState(false);
 
     const mediaRecorderRef = useRef(null);
     const streamRef = useRef(null);
@@ -22,6 +27,8 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
     const timerIntervalRef = useRef(null);
     const lastInputWasVoiceRef = useRef(false);
     const transcriptionAbortControllerRef = useRef(null);
+    // ✨ ADDED: Ref for the auto-stop timer
+    const autoStopTimerRef = useRef(null);
 
     const transcribeAudioBlob = useCallback(async (audioBlob) => {
         if (audioBlob.size === 0) {
@@ -30,7 +37,6 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
         }
 
         setIsTranscribing(true);
-        // ✨ ADDED: Reset error state on new attempt
         setTranscriptionError(null);
         setFailedAudioBlob(null);
         
@@ -62,18 +68,16 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
                 console.info("Transcription was cancelled by the user.");
             } else {
                 console.error('Transcription error:', error);
-                // ✨ MODIFIED: Set error state instead of alerting
                 setTranscriptionError(error.message || "Transcription failed.");
                 setFailedAudioBlob(audioBlob);
             }
         } finally {
-            // ✨ MODIFIED: Always stop the 'transcribing' state indicator
             setIsTranscribing(false);
             transcriptionAbortControllerRef.current = null;
         }
     }, [transcriptionUrl, onTranscriptionComplete]);
 
-
+    // ✨ MODIFIED: Moved stopRecording before startRecording because it's used in a timeout.
     const stopRecording = useCallback(() => {
         if (mediaRecorderRef.current?.state === "recording") {
             mediaRecorderRef.current.stop(); // This will trigger the 'onstop' event
@@ -83,11 +87,18 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
             streamRef.current = null;
         }
         if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+
+        // ✨ ADDED: Clear the auto-stop timer if recording is stopped manually
+        if (autoStopTimerRef.current) {
+            clearTimeout(autoStopTimerRef.current);
+            autoStopTimerRef.current = null;
+        }
+
         setIsRecording(false);
+        // The useEffect watching elapsedTime will handle resetting isNearingTimeLimit
     }, []);
 
     const startRecording = useCallback(async () => {
-        // ✨ ADDED: Clear any previous error when starting a new recording
         setTranscriptionError(null);
         setFailedAudioBlob(null);
         try {
@@ -105,7 +116,14 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
                 lastInputWasVoiceRef.current = true;
                 setIsRecording(true);
                 setElapsedTime(0);
+                setIsNearingTimeLimit(false); // Explicitly reset warning on start
                 timerIntervalRef.current = setInterval(() => setElapsedTime(p => p + 1), 1000);
+
+                // ✨ ADDED: Set a timeout to automatically stop the recording
+                autoStopTimerRef.current = setTimeout(() => {
+                    console.log("Recording time limit reached. Stopping automatically.");
+                    stopRecording();
+                }, MAX_RECORDING_SECONDS * 1000);
             };
             recorder.onstop = () => {
                 transcribeAudioBlob(new Blob(audioChunksRef.current, { type: 'audio/webm' }));
@@ -115,7 +133,7 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
             console.error("Microphone access error:", err);
             alert("Could not access the microphone. Please check your browser permissions.");
         }
-    }, [transcribeAudioBlob]);
+    }, [transcribeAudioBlob, stopRecording]); // ✨ ADDED: stopRecording dependency
 
     const cancelTranscription = useCallback(() => {
         if (transcriptionAbortControllerRef.current) {
@@ -123,22 +141,34 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
         }
     }, []);
 
-    // ✨ ADDED: Function to retry transcription
     const retryTranscription = useCallback(() => {
         if (failedAudioBlob) {
             transcribeAudioBlob(failedAudioBlob);
         }
     }, [failedAudioBlob, transcribeAudioBlob]);
 
-    // ✨ ADDED: Function to clear the failed state
     const clearFailedTranscription = useCallback(() => {
         setTranscriptionError(null);
         setFailedAudioBlob(null);
     }, []);
 
+    // ✨ ADDED: Effect to manage the time limit warning state
+    useEffect(() => {
+        if (isRecording && elapsedTime >= WARNING_THRESHOLD_SECONDS) {
+            if (!isNearingTimeLimit) {
+                setIsNearingTimeLimit(true);
+            }
+        } else if (isNearingTimeLimit) {
+            // Reset if recording stops or a new recording starts (elapsedTime goes to 0)
+            setIsNearingTimeLimit(false);
+        }
+    }, [elapsedTime, isRecording, isNearingTimeLimit]);
+
     // General cleanup effect for intervals and media streams
     useEffect(() => () => {
         if(timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+        // ✨ ADDED: Cleanup for auto-stop timer
+        if(autoStopTimerRef.current) clearTimeout(autoStopTimerRef.current);
         if (streamRef.current) {
             streamRef.current.getTracks().forEach(track => track.stop());
         }
@@ -152,9 +182,10 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
         stopRecording,
         cancelTranscription,
         lastInputWasVoiceRef,
-        // ✨ ADDED: Expose new state and handlers
         transcriptionError,
         retryTranscription,
         clearFailedTranscription,
+        // ✨ ADDED: Expose new state
+        isNearingTimeLimit,
     };
 };
