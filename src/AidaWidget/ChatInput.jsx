@@ -73,7 +73,8 @@ const ChatInput = ({
                 </button>
             );
         }
-        const isDisabled = isTranscribing || (!currentMessage.trim() && attachmentCount === 0);
+        // ✅ MODIFIED: Send button is now disabled during recording.
+        const isDisabled = isRecording || isTranscribing || (!currentMessage.trim() && attachmentCount === 0);
         return (
             <button
                 type="button" onClick={() => handleSendMessage()} disabled={isDisabled}
@@ -139,7 +140,7 @@ const ChatInput = ({
                 <div className="relative flex items-center">
                     {features.webSearch && (
                         <button
-                            type="button" onClick={() => setIsWebSearchEnabled(p => !p)} disabled={isRecording || isTranscribing}
+                            type="button" onClick={() => setIsWebSearchEnabled(p => !p)} disabled={isTranscribing} // ✅ MODIFIED: Enabled during recording
                             className={`p-2 rounded-full disabled:opacity-50 ml-2 transition-colors ${isWebSearchEnabled ? (theme === 'dark' ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-100 text-blue-600') : (theme === 'dark' ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100')}`}
                             aria-pressed={isWebSearchEnabled} aria-label="Toggle web search" title="Toggle web search"
                         >
@@ -149,7 +150,7 @@ const ChatInput = ({
                     {features.modelSelection && (
                         <div className="relative ml-2">
                              <button
-                                type="button" onClick={() => setIsModelMenuOpen((p) => !p)} disabled={isRecording || isTranscribing}
+                                type="button" onClick={() => setIsModelMenuOpen((p) => !p)} disabled={isTranscribing} // ✅ MODIFIED: Enabled during recording
                                 className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm disabled:opacity-50 transition-colors ${theme === 'dark' ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`}
                                 aria-haspopup="menu" aria-expanded={isModelMenuOpen} aria-label={`Select AI Model (current: ${selectedModelLabel})`} title="Select AI Model"
                             >
@@ -173,7 +174,8 @@ const ChatInput = ({
 
                 <div className="flex items-center chat-action-buttons">
                     {features.imageUpload && (
-                        <AttachmentButton count={attachmentCount} onClick={onOpenAttachments} disabled={isRecording || isTranscribing || isEditing} theme={theme}/>
+                        // ✅ MODIFIED: Enabled during recording
+                        <AttachmentButton count={attachmentCount} onClick={onOpenAttachments} disabled={isTranscribing || isEditing} theme={theme}/>
                     )}
                     {features.voiceInput && renderRecordButton()}
                     {renderSendButton()}
