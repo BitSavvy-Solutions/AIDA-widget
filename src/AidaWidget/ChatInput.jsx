@@ -97,26 +97,43 @@ const ChatInput = ({
             );
         }
 
-        // ✨ NEW: When recording, show a wider button with the timer.
-        if (isRecording) {
+        // ✨ MODIFIED: If we are recording OR transcribing, show the pill-style button.
+        if (isRecording || isTranscribing) {
+            const isCurrentlyRecording = isRecording;
+            
+            // Red while recording, neutral while transcribing.
+            const pillBgColor = isCurrentlyRecording 
+                ? 'bg-red-600 hover:bg-red-700' 
+                : (theme === 'dark' ? 'bg-gray-700' : 'bg-gray-900');
+            
+            const pillClassName = `ml-2 flex items-center gap-2 rounded-full px-3 py-2 text-white shadow-md transition-all duration-200 ${pillBgColor} ${!isCurrentlyRecording ? 'cursor-wait' : ''}`;
+
             return (
                 <button
-                    onClick={handleRecordButtonClick}
-                    className="ml-2 flex items-center gap-2 rounded-full bg-red-600 px-3 py-2 text-white shadow-md transition-all duration-200 hover:bg-red-700"
-                    aria-label="Stop Recording"
+                    // The button stops recording, but is disabled during transcription.
+                    onClick={isCurrentlyRecording ? handleRecordButtonClick : undefined}
+                    disabled={!isCurrentlyRecording}
+                    className={pillClassName}
+                    aria-label={isCurrentlyRecording ? "Stop Recording" : "Transcribing..."}
                 >
-                    <HiStop className="h-5 w-5 flex-shrink-0" />
+                    {isCurrentlyRecording ? (
+                        <HiStop className="h-5 w-5 flex-shrink-0" />
+                    ) : (
+                        <HiArrowPath className="h-5 w-5 flex-shrink-0 animate-spin" />
+                    )}
+                    
                     <span className="font-mono text-sm font-medium tracking-wider">{formatTime(elapsedTime)}</span>
                 </button>
             );
         }
 
+        // Default state: show the round microphone button.
         return (
             <button
-                onClick={handleRecordButtonClick} disabled={isTranscribing || autoSendCountdown !== null}
+                onClick={handleRecordButtonClick} disabled={autoSendCountdown !== null}
                 className={`ml-2 p-2 rounded-full text-white transition-opacity disabled:opacity-50 ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-900 hover:bg-gray-700'}`} aria-label="Start Recording"
             >
-                {isTranscribing ? <HiArrowPath className="w-5 h-5 animate-spin" /> : <HiOutlineMicrophone className="w-5 h-5" />}
+                <HiOutlineMicrophone className="w-5 h-5" />
             </button>
         );
     };
