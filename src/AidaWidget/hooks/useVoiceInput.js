@@ -1,3 +1,4 @@
+/* src/AidaWidget/hooks/useVoiceInput.js */
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 /**
@@ -11,12 +12,16 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
     const [isRecording, setIsRecording] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
     const [elapsedTime, setElapsedTime] = useState(0);
+    // ✨ ADDED: State for transcription failure
+    const [transcriptionError, setTranscriptionError] = useState(null);
+    const [failedAudioBlob, setFailedAudioBlob] = useState(null);
 
     const mediaRecorderRef = useRef(null);
     const streamRef = useRef(null);
     const audioChunksRef = useRef([]);
     const timerIntervalRef = useRef(null);
     const lastInputWasVoiceRef = useRef(false);
+    const transcriptionAbortControllerRef = useRef(null);
 
     const transcribeAudioBlob = useCallback(async (audioBlob) => {
         if (audioBlob.size === 0) {
@@ -25,11 +30,22 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
         }
 
         setIsTranscribing(true);
+        // ✨ ADDED: Reset error state on new attempt
+        setTranscriptionError(null);
+        setFailedAudioBlob(null);
+        
         const formData = new FormData();
         formData.append('audio_file', audioBlob, 'recording.webm');
 
+        const abortController = new AbortController();
+        transcriptionAbortControllerRef.current = abortController;
+
         try {
-            const response = await fetch(transcriptionUrl, { method: 'POST', body: formData });
+            const response = await fetch(transcriptionUrl, {
+                method: 'POST',
+                body: formData,
+                signal: abortController.signal
+            });
             if (!response.ok) throw new Error(`Transcription failed: ${response.statusText}`);
 
             const result = await response.json();
@@ -42,10 +58,18 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
                 onTranscriptionComplete(transcriptionText);
             }
         } catch (error) {
-            console.error('Transcription error:', error);
-            alert("Sorry, I couldn't understand that. Please try again.");
+            if (error.name === 'AbortError') {
+                console.info("Transcription was cancelled by the user.");
+            } else {
+                console.error('Transcription error:', error);
+                // ✨ MODIFIED: Set error state instead of alerting
+                setTranscriptionError(error.message || "Transcription failed.");
+                setFailedAudioBlob(audioBlob);
+            }
         } finally {
+            // ✨ MODIFIED: Always stop the 'transcribing' state indicator
             setIsTranscribing(false);
+            transcriptionAbortControllerRef.current = null;
         }
     }, [transcriptionUrl, onTranscriptionComplete]);
 
@@ -63,6 +87,9 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
     }, []);
 
     const startRecording = useCallback(async () => {
+        // ✨ ADDED: Clear any previous error when starting a new recording
+        setTranscriptionError(null);
+        setFailedAudioBlob(null);
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             streamRef.current = stream;
@@ -90,6 +117,25 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
         }
     }, [transcribeAudioBlob]);
 
+    const cancelTranscription = useCallback(() => {
+        if (transcriptionAbortControllerRef.current) {
+            transcriptionAbortControllerRef.current.abort();
+        }
+    }, []);
+
+    // ✨ ADDED: Function to retry transcription
+    const retryTranscription = useCallback(() => {
+        if (failedAudioBlob) {
+            transcribeAudioBlob(failedAudioBlob);
+        }
+    }, [failedAudioBlob, transcribeAudioBlob]);
+
+    // ✨ ADDED: Function to clear the failed state
+    const clearFailedTranscription = useCallback(() => {
+        setTranscriptionError(null);
+        setFailedAudioBlob(null);
+    }, []);
+
     // General cleanup effect for intervals and media streams
     useEffect(() => () => {
         if(timerIntervalRef.current) clearInterval(timerIntervalRef.current);
@@ -104,6 +150,11 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
         elapsedTime,
         startRecording,
         stopRecording,
+        cancelTranscription,
         lastInputWasVoiceRef,
+        // ✨ ADDED: Expose new state and handlers
+        transcriptionError,
+        retryTranscription,
+        clearFailedTranscription,
     };
 };

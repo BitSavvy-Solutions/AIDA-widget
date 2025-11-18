@@ -41,19 +41,25 @@ const ChatInput = ({
     isWebSearchEnabled,
     setIsWebSearchEnabled,
     onStopStreaming,
+    onCancelTranscription,
     features,
+    // ✨ ADDED: New props for transcription failure
+    transcriptionError,
+    onRetryTranscription,
+    onClearFailedTranscription,
 }) => {
     const [isHoveringSend, setIsHoveringSend] = useState(false);
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
     const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
-
-    const selectedModelLabel = AVAILABLE_MODELS.find(m => m.value === selectedModel)?.label || 'Model';
+    const [isHoveringCancel, setIsHoveringCancel] = useState(false);
 
     const formatTime = (seconds) => {
         const minutes = Math.floor(seconds / 60).toString().padStart(2, '0');
         const secs = (seconds % 60).toString().padStart(2, '0');
         return `${minutes}:${secs}`;
     };
+
+    const selectedModelLabel = AVAILABLE_MODELS.find(m => m.value === selectedModel)?.label || selectedModel;
 
     const renderSendButton = () => {
         if (isLoading) {
@@ -73,7 +79,6 @@ const ChatInput = ({
                 </button>
             );
         }
-        // ✅ MODIFIED: Send button is now disabled during recording.
         const isDisabled = isRecording || isTranscribing || (!currentMessage.trim() && attachmentCount === 0);
         return (
             <button
@@ -97,37 +102,91 @@ const ChatInput = ({
             );
         }
 
-        // ✨ MODIFIED: If we are recording OR transcribing, show the pill-style button.
+        // ✨ MODIFIED: New UI for transcription failure
+        if (transcriptionError) {
+            return (
+                <div 
+                    className={`ml-2 flex items-center gap-1 rounded-full px-1 h-9 w-auto shadow-md transition-all duration-200 ${
+                        theme === 'dark' 
+                            ? 'bg-red-800' 
+                            : 'bg-red-100 border border-red-200'
+                    }`} 
+                    title={`Error: ${transcriptionError}`}
+                >
+                    {/* Retry Button */}
+                    <button
+                        onClick={onRetryTranscription}
+                        className={`p-1.5 rounded-full transition-colors ${
+                            theme === 'dark' 
+                                ? 'bg-slate-800 hover:bg-slate-700 text-gray-100' 
+                                : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
+                        }`}
+                        aria-label="Retry transcription"
+                        title="Retry"
+                    >
+                        <HiArrowPath className="h-4 w-4" />
+                    </button>
+                    {/* Cancel Button */}
+                    <button
+                        onClick={onClearFailedTranscription}
+                        className={`p-1.5 rounded-full transition-colors ${
+                            theme === 'dark' 
+                                ? 'text-red-300 hover:bg-red-500/30' 
+                                : 'text-red-500 hover:bg-red-500/10'
+                        }`}
+                        aria-label="Cancel failed transcription"
+                        title="Cancel"
+                    >
+                        <HiXMark className="h-4 w-4" />
+                    </button>
+                </div>
+            );
+        }
+
         if (isRecording || isTranscribing) {
             const isCurrentlyRecording = isRecording;
+            const isCurrentlyTranscribing = isTranscribing;
+            const isCancelHover = isCurrentlyTranscribing && isHoveringCancel;
             
-            // Red while recording, neutral while transcribing.
             const pillBgColor = isCurrentlyRecording 
                 ? 'bg-red-600 hover:bg-red-700' 
-                : (theme === 'dark' ? 'bg-gray-700' : 'bg-gray-900');
+                : isCancelHover
+                    ? 'bg-red-600 hover:bg-red-700'
+                    : (theme === 'dark' ? 'bg-gray-700' : 'bg-gray-900');
             
-            const pillClassName = `ml-2 flex items-center gap-2 rounded-full px-3 py-2 text-white shadow-md transition-all duration-200 ${pillBgColor} ${!isCurrentlyRecording ? 'cursor-wait' : ''}`;
+            const pillClassName = `ml-2 flex items-center gap-2 rounded-full px-3 py-2 text-white shadow-md transition-all duration-200 ${pillBgColor} ${isCurrentlyTranscribing ? 'cursor-pointer' : ''}`;
 
             return (
                 <button
-                    // The button stops recording, but is disabled during transcription.
-                    onClick={isCurrentlyRecording ? handleRecordButtonClick : undefined}
-                    disabled={!isCurrentlyRecording}
+                    onClick={isCurrentlyRecording ? handleRecordButtonClick : onCancelTranscription}
+                    onMouseEnter={isCurrentlyTranscribing ? () => setIsHoveringCancel(true) : undefined}
+                    onMouseLeave={isCurrentlyTranscribing ? () => setIsHoveringCancel(false) : undefined}
                     className={pillClassName}
-                    aria-label={isCurrentlyRecording ? "Stop Recording" : "Transcribing..."}
+                    aria-label={
+                        isCurrentlyRecording ? "Stop Recording" 
+                        : isCancelHover ? "Cancel transcription"
+                        : "Transcribing..."
+                    }
                 >
                     {isCurrentlyRecording ? (
-                        <HiStop className="h-5 w-5 flex-shrink-0" />
-                    ) : (
-                        <HiArrowPath className="h-5 w-5 flex-shrink-0 animate-spin" />
+                        <>
+                            <HiStop className="h-5 w-5 flex-shrink-0" />
+                            <span className="font-mono text-sm font-medium tracking-wider">{formatTime(elapsedTime)}</span>
+                        </>
+                    ) : ( // This block now handles all `isTranscribing` cases
+                        <>
+                            <HiArrowPath className="h-5 w-5 flex-shrink-0 animate-spin" />
+                            {isCancelHover ? (
+                                <span className="font-sans text-sm font-medium">Cancel</span>
+                            ) : (
+                                <span className="font-mono text-sm font-medium tracking-wider">{formatTime(elapsedTime)}</span>
+                            )}
+                        </>
                     )}
-                    
-                    <span className="font-mono text-sm font-medium tracking-wider">{formatTime(elapsedTime)}</span>
                 </button>
             );
         }
 
-        // Default state: show the round microphone button.
         return (
             <button
                 onClick={handleRecordButtonClick} disabled={autoSendCountdown !== null}
@@ -148,7 +207,6 @@ const ChatInput = ({
                     </button>
                 </div>
             )}
-            {/* ✨ MODIFIED: The textarea is now always visible, even during recording. */}
             <div className={`flex items-end rounded-lg px-3 py-1 mb-3 transition-colors ${theme === 'dark' ? 'border border-gray-700 bg-gray-800' : 'border border-gray-300 bg-gray-50'}`}>
                <textarea ref={inputRef} value={currentMessage} onChange={(e) => setCurrentMessage(e.target.value)} onKeyDown={handleKeyDown} placeholder={isEditing ? "Edit your message..." : isTranscribing ? translations.transcribing : (translations.inputPlaceholder || "Type your message...")} disabled={isTranscribing} dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'} rows={1} className={`flex-1 bg-transparent px-0 py-2 resize-none focus:outline-none custom-scrollbar overflow-y-auto whitespace-pre-wrap leading-tight ${theme === 'dark' ? 'text-gray-100 placeholder-gray-400' : ''} min-h-[42px] max-h-[200px]`} style={{ overflowY: 'auto', overflowX: 'hidden' }}/>
             </div>
@@ -157,7 +215,7 @@ const ChatInput = ({
                 <div className="relative flex items-center">
                     {features.webSearch && (
                         <button
-                            type="button" onClick={() => setIsWebSearchEnabled(p => !p)} disabled={isTranscribing} // ✅ MODIFIED: Enabled during recording
+                            type="button" onClick={() => setIsWebSearchEnabled(p => !p)} disabled={isTranscribing}
                             className={`p-2 rounded-full disabled:opacity-50 ml-2 transition-colors ${isWebSearchEnabled ? (theme === 'dark' ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-100 text-blue-600') : (theme === 'dark' ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100')}`}
                             aria-pressed={isWebSearchEnabled} aria-label="Toggle web search" title="Toggle web search"
                         >
@@ -167,7 +225,7 @@ const ChatInput = ({
                     {features.modelSelection && (
                         <div className="relative ml-2">
                              <button
-                                type="button" onClick={() => setIsModelMenuOpen((p) => !p)} disabled={isTranscribing} // ✅ MODIFIED: Enabled during recording
+                                type="button" onClick={() => setIsModelMenuOpen((p) => !p)} disabled={isTranscribing}
                                 className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm disabled:opacity-50 transition-colors ${theme === 'dark' ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`}
                                 aria-haspopup="menu" aria-expanded={isModelMenuOpen} aria-label={`Select AI Model (current: ${selectedModelLabel})`} title="Select AI Model"
                             >
@@ -191,7 +249,6 @@ const ChatInput = ({
 
                 <div className="flex items-center chat-action-buttons">
                     {features.imageUpload && (
-                        // ✅ MODIFIED: Enabled during recording
                         <AttachmentButton count={attachmentCount} onClick={onOpenAttachments} disabled={isTranscribing || isEditing} theme={theme}/>
                     )}
                     {features.voiceInput && renderRecordButton()}
