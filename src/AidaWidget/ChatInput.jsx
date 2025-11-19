@@ -54,8 +54,6 @@ const ChatInput = ({
     const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
     const [isHoveringCancel, setIsHoveringCancel] = useState(false);
 
-    // ✨ NEW: Determine if we are in a state that displays a wide "Pill" (Recording/Transcribing/Error)
-    // This is used to switch layout modes to prevent shifting the attachment button.
     const isPillMode = autoRecordCountdown !== null || transcriptionError || isRecording || isTranscribing;
 
     const formatTime = (seconds) => {
@@ -67,9 +65,6 @@ const ChatInput = ({
     const selectedModelLabel = AVAILABLE_MODELS.find(m => m.value === selectedModel)?.label || selectedModel;
 
     const renderSendButton = () => {
-        // ✨ MODIFIED: If the recording pill is active, we keep the Send button in the DOM
-        // but make it invisible. This acts as an anchor to keep the container width stable
-        // so the Attachment button doesn't move, while the Pill overlaps this space.
         const visibilityClass = isPillMode ? 'invisible pointer-events-none opacity-0' : '';
 
         if (isLoading) {
@@ -101,8 +96,6 @@ const ChatInput = ({
     };
 
     const renderRecordButton = () => {
-        // ✨ MODIFIED: Common classes for the absolute positioned pill
-        // right-0 anchors it to the right edge, overlapping the invisible send button.
         const pillBaseClass = "absolute right-0 z-20 flex items-center";
 
         if (autoRecordCountdown !== null) {
@@ -165,7 +158,6 @@ const ChatInput = ({
                     ? 'bg-red-600 hover:bg-red-700'
                     : (theme === 'dark' ? 'bg-gray-700' : 'bg-gray-900');
             
-            // ✨ MODIFIED: Removed ml-2, added pillBaseClass
             const pillClassName = `${pillBaseClass} gap-2 rounded-full px-3 py-2 text-white shadow-md transition-all duration-200 ${pillBgColor} ${isCurrentlyTranscribing ? 'cursor-pointer' : ''}`;
 
             return (
@@ -199,7 +191,6 @@ const ChatInput = ({
             );
         }
 
-        // Idle state (Standard Mic Button) - Stays in normal flow
         return (
             <button
                 onClick={handleRecordButtonClick} disabled={autoSendCountdown !== null}
@@ -225,25 +216,28 @@ const ChatInput = ({
             </div>
             
             <div className="flex items-center justify-between">
-                <div className="relative flex items-center">
+                {/* ✨ MODIFIED: Added min-w-0 and flex-1 to allow this section to shrink */}
+                <div className="relative flex items-center min-w-0 flex-1 mr-2">
                     {features.webSearch && (
                         <button
                             type="button" onClick={() => setIsWebSearchEnabled(p => !p)} disabled={isTranscribing}
-                            className={`p-2 rounded-full disabled:opacity-50 ml-2 transition-colors ${isWebSearchEnabled ? (theme === 'dark' ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-100 text-blue-600') : (theme === 'dark' ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100')}`}
+                            className={`p-2 rounded-full disabled:opacity-50 transition-colors flex-shrink-0 ${isWebSearchEnabled ? (theme === 'dark' ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-100 text-blue-600') : (theme === 'dark' ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100')}`}
                             aria-pressed={isWebSearchEnabled} aria-label="Toggle web search" title="Toggle web search"
                         >
                             <HiOutlineGlobeAlt className="h-6 w-6" />
                         </button>
                     )}
                     {features.modelSelection && (
-                        <div className="relative ml-2">
+                        /* ✨ MODIFIED: Added min-w-0 to wrapper */
+                        <div className="relative ml-2 min-w-0">
                              <button
                                 type="button" onClick={() => setIsModelMenuOpen((p) => !p)} disabled={isTranscribing}
-                                className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm disabled:opacity-50 transition-colors ${theme === 'dark' ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`}
+                                className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm disabled:opacity-50 transition-colors max-w-full ${theme === 'dark' ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`}
                                 aria-haspopup="menu" aria-expanded={isModelMenuOpen} aria-label={`Select AI Model (current: ${selectedModelLabel})`} title="Select AI Model"
                             >
-                                <span className="truncate max-w-[96px]">{selectedModelLabel}</span>
-                                <HiChevronDown className="h-4 w-4" />
+                                {/* ✨ MODIFIED: Removed fixed max-w-[96px], added truncate to span */}
+                                <span className="truncate">{selectedModelLabel}</span>
+                                <HiChevronDown className="h-4 w-4 flex-shrink-0" />
                             </button>
                             {isModelMenuOpen && (
                                 <div className={`absolute z-50 left-0 bottom-full mb-2 w-48 rounded-md shadow-lg overflow-hidden ${theme === 'dark' ? 'bg-gray-800 border border-gray-700 text-gray-100' : 'bg-white border border-gray-200 text-gray-900'}`} role="menu">
@@ -260,8 +254,8 @@ const ChatInput = ({
                     )}
                 </div>
 
-                {/* ✨ MODIFIED: Added 'relative' to container to support absolute positioning of the pill */}
-                <div className="flex items-center chat-action-buttons relative">
+                {/* ✨ MODIFIED: Added flex-shrink-0 to prevent buttons from squishing */}
+                <div className="flex items-center chat-action-buttons relative flex-shrink-0">
                     {features.imageUpload && (
                         <AttachmentButton count={attachmentCount} onClick={onOpenAttachments} disabled={isTranscribing || isEditing} theme={theme}/>
                     )}
