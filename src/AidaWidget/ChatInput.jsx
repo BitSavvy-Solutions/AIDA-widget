@@ -78,7 +78,8 @@ const ChatInput = ({
             return (
                 <button
                     onClick={cancelAutoSendTimer} onMouseEnter={() => { setIsHoveringSend(true); setIsSendTimerPaused(true); }} onMouseLeave={() => { setIsHoveringSend(false); setIsSendTimerPaused(false); }}
-                    className={`ml-2 flex items-center justify-center timer-button ${visibilityClass}`} style={{ animationPlayState: isHoveringSend ? 'paused' : 'running' }} aria-label="Cancel auto-send"
+                    // ✨ ADDED: !w-9 !h-9 to override mobile CSS width:44px
+                    className={`ml-2 flex items-center justify-center timer-button !w-9 !h-9 ${visibilityClass}`} style={{ animationPlayState: isHoveringSend ? 'paused' : 'running' }} aria-label="Cancel auto-send"
                 >
                     {isHoveringSend ? <HiXMark className="h-5 w-5 text-white" /> : <span className={`${theme === 'dark' ? 'text-white' : 'text-gray-900'} font-bold text-base`}>{autoSendCountdown}</span>}
                 </button>
@@ -96,13 +97,14 @@ const ChatInput = ({
     };
 
     const renderRecordButton = () => {
-        const pillBaseClass = "absolute right-0 z-20 flex items-center";
+        const pillBaseClass = "absolute right-0 z-20 flex items-center whitespace-nowrap";
 
         if (autoRecordCountdown !== null) {
             return (
                 <button
                     onClick={cancelAutoRecordTimer} onMouseEnter={() => { setIsHoveringRecord(true); setIsRecordTimerPaused(true); }} onMouseLeave={() => { setIsHoveringRecord(false); setIsRecordTimerPaused(false); }}
-                    className={`${pillBaseClass} justify-center record-timer-button`} style={{ animationPlayState: isHoveringRecord ? 'paused' : 'running' }} aria-label="Cancel auto-record"
+                    // ✨ ADDED: !w-9 !h-9 to override mobile CSS
+                    className={`${pillBaseClass} justify-center record-timer-button !w-9 !h-9`} style={{ animationPlayState: isHoveringRecord ? 'paused' : 'running' }} aria-label="Cancel auto-record"
                 >
                     {isHoveringRecord ? <HiXMark className="h-5 w-5 text-white" /> : <span className="text-white font-bold text-base">{autoRecordCountdown}</span>}
                 </button>
@@ -121,7 +123,8 @@ const ChatInput = ({
                 >
                     <button
                         onClick={onRetryTranscription}
-                        className={`p-1.5 rounded-full transition-colors ${
+                        // ✨ ADDED: !w-auto !h-auto to prevent 44px sizing
+                        className={`p-1.5 rounded-full transition-colors !w-auto !h-auto ${
                             theme === 'dark' 
                                 ? 'bg-slate-800 hover:bg-slate-700 text-gray-100' 
                                 : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
@@ -133,7 +136,8 @@ const ChatInput = ({
                     </button>
                     <button
                         onClick={onClearFailedTranscription}
-                        className={`p-1.5 rounded-full transition-colors ${
+                        // ✨ ADDED: !w-auto !h-auto
+                        className={`p-1.5 rounded-full transition-colors !w-auto !h-auto ${
                             theme === 'dark' 
                                 ? 'text-red-300 hover:bg-red-500/30' 
                                 : 'text-red-500 hover:bg-red-500/10'
@@ -158,7 +162,8 @@ const ChatInput = ({
                     ? 'bg-red-600 hover:bg-red-700'
                     : (theme === 'dark' ? 'bg-gray-700' : 'bg-gray-900');
             
-            const pillClassName = `${pillBaseClass} gap-2 rounded-full px-3 py-2 text-white shadow-md transition-all duration-200 ${pillBgColor} ${isCurrentlyTranscribing ? 'cursor-pointer' : ''}`;
+            // ✨ MODIFIED: Added !w-auto !h-auto !rounded-full !px-3 !py-2 to override mobile CSS
+            const pillClassName = `${pillBaseClass} gap-2 !rounded-full !px-3 !py-2 !w-auto !h-auto text-white shadow-md transition-all duration-200 ${pillBgColor} ${isCurrentlyTranscribing ? 'cursor-pointer' : ''}`;
 
             return (
                 <button
@@ -216,7 +221,6 @@ const ChatInput = ({
             </div>
             
             <div className="flex items-center justify-between">
-                {/* ✨ MODIFIED: Added min-w-0 and flex-1 to allow this section to shrink */}
                 <div className="relative flex items-center min-w-0 flex-1 mr-2">
                     {features.webSearch && (
                         <button
@@ -228,14 +232,12 @@ const ChatInput = ({
                         </button>
                     )}
                     {features.modelSelection && (
-                        /* ✨ MODIFIED: Added min-w-0 to wrapper */
                         <div className="relative ml-2 min-w-0">
                              <button
                                 type="button" onClick={() => setIsModelMenuOpen((p) => !p)} disabled={isTranscribing}
                                 className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm disabled:opacity-50 transition-colors max-w-full ${theme === 'dark' ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`}
                                 aria-haspopup="menu" aria-expanded={isModelMenuOpen} aria-label={`Select AI Model (current: ${selectedModelLabel})`} title="Select AI Model"
                             >
-                                {/* ✨ MODIFIED: Removed fixed max-w-[96px], added truncate to span */}
                                 <span className="truncate">{selectedModelLabel}</span>
                                 <HiChevronDown className="h-4 w-4 flex-shrink-0" />
                             </button>
@@ -254,7 +256,6 @@ const ChatInput = ({
                     )}
                 </div>
 
-                {/* ✨ MODIFIED: Added flex-shrink-0 to prevent buttons from squishing */}
                 <div className="flex items-center chat-action-buttons relative flex-shrink-0">
                     {features.imageUpload && (
                         <AttachmentButton count={attachmentCount} onClick={onOpenAttachments} disabled={isTranscribing || isEditing} theme={theme}/>
