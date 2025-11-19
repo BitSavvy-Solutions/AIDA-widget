@@ -52,9 +52,10 @@ const ChatInput = ({
     const [isHoveringSend, setIsHoveringSend] = useState(false);
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
     const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
-    const [isHoveringCancel, setIsHoveringCancel] = useState(false);
 
-    const isPillMode = autoRecordCountdown !== null || transcriptionError || isRecording || isTranscribing;
+    // ✅ MODIFIED: Removed `isTranscribing` from pill mode. 
+    // This ensures the Send/Mic buttons remain visible while transcribing.
+    const isPillMode = autoRecordCountdown !== null || transcriptionError || isRecording;
 
     const formatTime = (seconds) => {
         const minutes = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -84,7 +85,10 @@ const ChatInput = ({
                 </button>
             );
         }
-        const isDisabled = isRecording || isTranscribing || (!currentMessage.trim() && attachmentCount === 0);
+        
+        // ✅ MODIFIED: Removed `isTranscribing` from disabled check.
+        const isDisabled = isRecording || (!currentMessage.trim() && attachmentCount === 0);
+        
         return (
             <button
                 type="button" onClick={() => handleSendMessage()} disabled={isDisabled}
@@ -144,63 +148,47 @@ const ChatInput = ({
                     </button>
                 </div>
             );
-        } else if (isRecording || isTranscribing) {
-            const isCurrentlyRecording = isRecording;
-            const isCurrentlyTranscribing = isTranscribing;
-            const isCancelHover = isCurrentlyTranscribing && isHoveringCancel;
-            
-            const pillBgColor = isCurrentlyRecording 
-                ? `bg-red-600 hover:bg-red-700 ${isNearingTimeLimit ? 'animate-pulse' : ''}`
-                : isCancelHover
-                    ? 'bg-red-600 hover:bg-red-700'
-                    : (theme === 'dark' ? 'bg-gray-700' : 'bg-gray-900');
-            
-            const pillClassName = `${pillBaseClass} gap-2 !rounded-full !px-3 !py-2 !w-auto !h-auto text-white shadow-md transition-all duration-200 ${pillBgColor} ${isCurrentlyTranscribing ? 'cursor-pointer' : ''}`;
+        } else if (isRecording) {
+            // ✅ MODIFIED: Only show the big pill when actively recording audio.
+            // When transcribing, we now use the small button below.
+            const pillBgColor = `bg-red-600 hover:bg-red-700 ${isNearingTimeLimit ? 'animate-pulse' : ''}`;
+            const pillClassName = `${pillBaseClass} gap-2 !rounded-full !px-3 !py-2 !w-auto !h-auto text-white shadow-md transition-all duration-200 ${pillBgColor}`;
 
             pillContent = (
                 <button
-                    onClick={isCurrentlyRecording ? handleRecordButtonClick : onCancelTranscription}
-                    onMouseEnter={isCurrentlyTranscribing ? () => setIsHoveringCancel(true) : undefined}
-                    onMouseLeave={isCurrentlyTranscribing ? () => setIsHoveringCancel(false) : undefined}
+                    onClick={handleRecordButtonClick}
                     className={pillClassName}
-                    aria-label={
-                        isCurrentlyRecording ? "Stop Recording" 
-                        : isCancelHover ? "Cancel transcription"
-                        : "Transcribing..."
-                    }
+                    aria-label="Stop Recording"
                 >
-                    {isCurrentlyRecording ? (
-                        <>
-                            <HiStop className="h-5 w-5 flex-shrink-0" />
-                            <span className="font-mono text-sm font-medium tracking-wider">{formatTime(elapsedTime)}</span>
-                        </>
-                    ) : (
-                        <>
-                            <HiArrowPath className="h-5 w-5 flex-shrink-0 animate-spin" />
-                            {isCancelHover ? (
-                                <span className="font-sans text-sm font-medium">Cancel</span>
-                            ) : (
-                                <span className="font-mono text-sm font-medium tracking-wider">{formatTime(elapsedTime)}</span>
-                            )}
-                        </>
-                    )}
+                    <HiStop className="h-5 w-5 flex-shrink-0" />
+                    <span className="font-mono text-sm font-medium tracking-wider">{formatTime(elapsedTime)}</span>
                 </button>
             );
         }
 
         const micVisibilityClass = isPillMode ? 'invisible pointer-events-none opacity-0' : '';
-        
-        // ✨ MODIFIED: Increase margin when in pill mode to push the pill away from the attachment button
         const marginClass = isPillMode ? '!ml-4' : 'ml-2';
+
+        // ✅ MODIFIED: Logic for the standard button.
+        // If transcribing, show a spinner and allow cancellation, but don't block the UI.
+        const handleMicClick = isTranscribing ? onCancelTranscription : handleRecordButtonClick;
+        const micIcon = isTranscribing ? <HiArrowPath className="w-5 h-5 animate-spin" /> : <HiOutlineMicrophone className="w-5 h-5" />;
+        const micTitle = isTranscribing ? "Transcribing... Click to cancel" : "Start Recording";
+        const micColorClass = isTranscribing 
+            ? (theme === 'dark' ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-100 hover:bg-blue-200 text-blue-600')
+            : (theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-900 hover:bg-gray-700 text-white');
 
         return (
             <>
                 {pillContent}
                 <button
-                    onClick={handleRecordButtonClick} disabled={autoSendCountdown !== null}
-                    className={`${marginClass} p-2 rounded-full text-white transition-all duration-200 disabled:opacity-50 ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-900 hover:bg-gray-700'} ${micVisibilityClass}`} aria-label="Start Recording"
+                    onClick={handleMicClick} 
+                    disabled={autoSendCountdown !== null}
+                    className={`${marginClass} p-2 rounded-full transition-all duration-200 disabled:opacity-50 ${micColorClass} ${micVisibilityClass}`} 
+                    aria-label={micTitle}
+                    title={micTitle}
                 >
-                    <HiOutlineMicrophone className="w-5 h-5" />
+                    {micIcon}
                 </button>
             </>
         );
@@ -217,14 +205,26 @@ const ChatInput = ({
                 </div>
             )}
             <div className={`flex items-end rounded-lg px-3 py-1 mb-3 transition-colors ${theme === 'dark' ? 'border border-gray-700 bg-gray-800' : 'border border-gray-300 bg-gray-50'}`}>
-               <textarea ref={inputRef} value={currentMessage} onChange={(e) => setCurrentMessage(e.target.value)} onKeyDown={handleKeyDown} placeholder={isEditing ? "Edit your message..." : isTranscribing ? translations.transcribing : (translations.inputPlaceholder || "Type your message...")} disabled={isTranscribing} dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'} rows={1} className={`flex-1 bg-transparent px-0 py-2 resize-none focus:outline-none custom-scrollbar overflow-y-auto whitespace-pre-wrap leading-tight ${theme === 'dark' ? 'text-gray-100 placeholder-gray-400' : ''} min-h-[42px] max-h-[200px]`} style={{ overflowY: 'auto', overflowX: 'hidden' }}/>
+               {/* ✅ MODIFIED: Removed `disabled={isTranscribing}` and updated placeholder logic */}
+               <textarea 
+                    ref={inputRef} 
+                    value={currentMessage} 
+                    onChange={(e) => setCurrentMessage(e.target.value)} 
+                    onKeyDown={handleKeyDown} 
+                    placeholder={isEditing ? "Edit your message..." : (translations.inputPlaceholder || "Type your message...")} 
+                    dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'} 
+                    rows={1} 
+                    className={`flex-1 bg-transparent px-0 py-2 resize-none focus:outline-none custom-scrollbar overflow-y-auto whitespace-pre-wrap leading-tight ${theme === 'dark' ? 'text-gray-100 placeholder-gray-400' : ''} min-h-[42px] max-h-[200px]`} 
+                    style={{ overflowY: 'auto', overflowX: 'hidden' }}
+                />
             </div>
             
             <div className="flex items-center justify-between">
                 <div className="relative flex items-center min-w-0 flex-1 mr-2">
                     {features.webSearch && (
                         <button
-                            type="button" onClick={() => setIsWebSearchEnabled(p => !p)} disabled={isTranscribing}
+                            // ✅ MODIFIED: Removed disabled={isTranscribing}
+                            type="button" onClick={() => setIsWebSearchEnabled(p => !p)}
                             className={`p-2 rounded-full disabled:opacity-50 transition-colors flex-shrink-0 ${isWebSearchEnabled ? (theme === 'dark' ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-100 text-blue-600') : (theme === 'dark' ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100')}`}
                             aria-pressed={isWebSearchEnabled} aria-label="Toggle web search" title="Toggle web search"
                         >
@@ -234,7 +234,8 @@ const ChatInput = ({
                     {features.modelSelection && (
                         <div className="relative ml-2 min-w-0">
                              <button
-                                type="button" onClick={() => setIsModelMenuOpen((p) => !p)} disabled={isTranscribing}
+                                // ✅ MODIFIED: Removed disabled={isTranscribing}
+                                type="button" onClick={() => setIsModelMenuOpen((p) => !p)}
                                 className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm disabled:opacity-50 transition-colors max-w-full ${theme === 'dark' ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`}
                                 aria-haspopup="menu" aria-expanded={isModelMenuOpen} aria-label={`Select AI Model (current: ${selectedModelLabel})`} title="Select AI Model"
                             >
@@ -258,7 +259,8 @@ const ChatInput = ({
 
                 <div className="flex items-center chat-action-buttons relative flex-shrink-0">
                     {features.imageUpload && (
-                        <AttachmentButton count={attachmentCount} onClick={onOpenAttachments} disabled={isTranscribing || isEditing} theme={theme}/>
+                        // ✅ MODIFIED: Removed isTranscribing from disabled check
+                        <AttachmentButton count={attachmentCount} onClick={onOpenAttachments} disabled={isEditing} theme={theme}/>
                     )}
                     {features.voiceInput && renderRecordButton()}
                     {renderSendButton()}
