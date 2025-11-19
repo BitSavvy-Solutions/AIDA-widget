@@ -78,7 +78,6 @@ const ChatInput = ({
             return (
                 <button
                     onClick={cancelAutoSendTimer} onMouseEnter={() => { setIsHoveringSend(true); setIsSendTimerPaused(true); }} onMouseLeave={() => { setIsHoveringSend(false); setIsSendTimerPaused(false); }}
-                    // ✨ ADDED: !w-9 !h-9 to override mobile CSS width:44px
                     className={`ml-2 flex items-center justify-center timer-button !w-9 !h-9 ${visibilityClass}`} style={{ animationPlayState: isHoveringSend ? 'paused' : 'running' }} aria-label="Cancel auto-send"
                 >
                     {isHoveringSend ? <HiXMark className="h-5 w-5 text-white" /> : <span className={`${theme === 'dark' ? 'text-white' : 'text-gray-900'} font-bold text-base`}>{autoSendCountdown}</span>}
@@ -98,21 +97,19 @@ const ChatInput = ({
 
     const renderRecordButton = () => {
         const pillBaseClass = "absolute right-0 z-20 flex items-center whitespace-nowrap";
+        let pillContent = null;
 
         if (autoRecordCountdown !== null) {
-            return (
+            pillContent = (
                 <button
                     onClick={cancelAutoRecordTimer} onMouseEnter={() => { setIsHoveringRecord(true); setIsRecordTimerPaused(true); }} onMouseLeave={() => { setIsHoveringRecord(false); setIsRecordTimerPaused(false); }}
-                    // ✨ ADDED: !w-9 !h-9 to override mobile CSS
                     className={`${pillBaseClass} justify-center record-timer-button !w-9 !h-9`} style={{ animationPlayState: isHoveringRecord ? 'paused' : 'running' }} aria-label="Cancel auto-record"
                 >
                     {isHoveringRecord ? <HiXMark className="h-5 w-5 text-white" /> : <span className="text-white font-bold text-base">{autoRecordCountdown}</span>}
                 </button>
             );
-        }
-
-        if (transcriptionError) {
-            return (
+        } else if (transcriptionError) {
+            pillContent = (
                 <div 
                     className={`${pillBaseClass} gap-1 rounded-full px-1 h-9 w-auto shadow-md transition-all duration-200 ${
                         theme === 'dark' 
@@ -123,7 +120,6 @@ const ChatInput = ({
                 >
                     <button
                         onClick={onRetryTranscription}
-                        // ✨ ADDED: !w-auto !h-auto to prevent 44px sizing
                         className={`p-1.5 rounded-full transition-colors !w-auto !h-auto ${
                             theme === 'dark' 
                                 ? 'bg-slate-800 hover:bg-slate-700 text-gray-100' 
@@ -136,7 +132,6 @@ const ChatInput = ({
                     </button>
                     <button
                         onClick={onClearFailedTranscription}
-                        // ✨ ADDED: !w-auto !h-auto
                         className={`p-1.5 rounded-full transition-colors !w-auto !h-auto ${
                             theme === 'dark' 
                                 ? 'text-red-300 hover:bg-red-500/30' 
@@ -149,9 +144,7 @@ const ChatInput = ({
                     </button>
                 </div>
             );
-        }
-
-        if (isRecording || isTranscribing) {
+        } else if (isRecording || isTranscribing) {
             const isCurrentlyRecording = isRecording;
             const isCurrentlyTranscribing = isTranscribing;
             const isCancelHover = isCurrentlyTranscribing && isHoveringCancel;
@@ -162,10 +155,9 @@ const ChatInput = ({
                     ? 'bg-red-600 hover:bg-red-700'
                     : (theme === 'dark' ? 'bg-gray-700' : 'bg-gray-900');
             
-            // ✨ MODIFIED: Added !w-auto !h-auto !rounded-full !px-3 !py-2 to override mobile CSS
             const pillClassName = `${pillBaseClass} gap-2 !rounded-full !px-3 !py-2 !w-auto !h-auto text-white shadow-md transition-all duration-200 ${pillBgColor} ${isCurrentlyTranscribing ? 'cursor-pointer' : ''}`;
 
-            return (
+            pillContent = (
                 <button
                     onClick={isCurrentlyRecording ? handleRecordButtonClick : onCancelTranscription}
                     onMouseEnter={isCurrentlyTranscribing ? () => setIsHoveringCancel(true) : undefined}
@@ -196,13 +188,21 @@ const ChatInput = ({
             );
         }
 
+        const micVisibilityClass = isPillMode ? 'invisible pointer-events-none opacity-0' : '';
+        
+        // ✨ MODIFIED: Increase margin when in pill mode to push the pill away from the attachment button
+        const marginClass = isPillMode ? '!ml-4' : 'ml-2';
+
         return (
-            <button
-                onClick={handleRecordButtonClick} disabled={autoSendCountdown !== null}
-                className={`ml-2 p-2 rounded-full text-white transition-opacity disabled:opacity-50 ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-900 hover:bg-gray-700'}`} aria-label="Start Recording"
-            >
-                <HiOutlineMicrophone className="w-5 h-5" />
-            </button>
+            <>
+                {pillContent}
+                <button
+                    onClick={handleRecordButtonClick} disabled={autoSendCountdown !== null}
+                    className={`${marginClass} p-2 rounded-full text-white transition-all duration-200 disabled:opacity-50 ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-900 hover:bg-gray-700'} ${micVisibilityClass}`} aria-label="Start Recording"
+                >
+                    <HiOutlineMicrophone className="w-5 h-5" />
+                </button>
+            </>
         );
     };
 
