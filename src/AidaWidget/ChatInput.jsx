@@ -47,13 +47,16 @@ const ChatInput = ({
     transcriptionError,
     onRetryTranscription,
     onClearFailedTranscription,
-    // ✨ ADDED: New prop for time limit warning
     isNearingTimeLimit,
 }) => {
     const [isHoveringSend, setIsHoveringSend] = useState(false);
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
     const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
     const [isHoveringCancel, setIsHoveringCancel] = useState(false);
+
+    // ✨ NEW: Determine if we are in a state that displays a wide "Pill" (Recording/Transcribing/Error)
+    // This is used to switch layout modes to prevent shifting the attachment button.
+    const isPillMode = autoRecordCountdown !== null || transcriptionError || isRecording || isTranscribing;
 
     const formatTime = (seconds) => {
         const minutes = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -64,9 +67,14 @@ const ChatInput = ({
     const selectedModelLabel = AVAILABLE_MODELS.find(m => m.value === selectedModel)?.label || selectedModel;
 
     const renderSendButton = () => {
+        // ✨ MODIFIED: If the recording pill is active, we keep the Send button in the DOM
+        // but make it invisible. This acts as an anchor to keep the container width stable
+        // so the Attachment button doesn't move, while the Pill overlaps this space.
+        const visibilityClass = isPillMode ? 'invisible pointer-events-none opacity-0' : '';
+
         if (isLoading) {
             return (
-                <button type="button" onClick={onStopStreaming} className={`ml-2 p-2 rounded-full bg-[#2f3645] hover:bg-[#3a4254]`} aria-label="Stop response generation">
+                <button type="button" onClick={onStopStreaming} className={`ml-2 p-2 rounded-full bg-[#2f3645] hover:bg-[#3a4254] ${visibilityClass}`} aria-label="Stop response generation">
                     <HiStop className="w-5 h-5 text-[#ff6bbd]" />
                 </button>
             );
@@ -75,7 +83,7 @@ const ChatInput = ({
             return (
                 <button
                     onClick={cancelAutoSendTimer} onMouseEnter={() => { setIsHoveringSend(true); setIsSendTimerPaused(true); }} onMouseLeave={() => { setIsHoveringSend(false); setIsSendTimerPaused(false); }}
-                    className="ml-2 flex items-center justify-center timer-button" style={{ animationPlayState: isHoveringSend ? 'paused' : 'running' }} aria-label="Cancel auto-send"
+                    className={`ml-2 flex items-center justify-center timer-button ${visibilityClass}`} style={{ animationPlayState: isHoveringSend ? 'paused' : 'running' }} aria-label="Cancel auto-send"
                 >
                     {isHoveringSend ? <HiXMark className="h-5 w-5 text-white" /> : <span className={`${theme === 'dark' ? 'text-white' : 'text-gray-900'} font-bold text-base`}>{autoSendCountdown}</span>}
                 </button>
@@ -85,7 +93,7 @@ const ChatInput = ({
         return (
             <button
                 type="button" onClick={() => handleSendMessage()} disabled={isDisabled}
-                className={`ml-2 p-2 rounded-full transition-opacity disabled:opacity-50 ${theme === 'dark' ? (isDisabled ? 'bg-gray-600' : 'bg-gray-700 hover:bg-gray-600') : (isDisabled ? 'bg-gray-300' : 'bg-gray-900 hover:bg-gray-700')}`} aria-label="Send Message"
+                className={`ml-2 p-2 rounded-full transition-opacity disabled:opacity-50 ${theme === 'dark' ? (isDisabled ? 'bg-gray-600' : 'bg-gray-700 hover:bg-gray-600') : (isDisabled ? 'bg-gray-300' : 'bg-gray-900 hover:bg-gray-700')} ${visibilityClass}`} aria-label="Send Message"
             >
                 <HiPaperAirplane className={`w-5 h-5 ${isDisabled ? (theme === 'dark' ? 'text-gray-300' : 'text-gray-500') : 'text-white'}`} />
             </button>
@@ -93,11 +101,15 @@ const ChatInput = ({
     };
 
     const renderRecordButton = () => {
+        // ✨ MODIFIED: Common classes for the absolute positioned pill
+        // right-0 anchors it to the right edge, overlapping the invisible send button.
+        const pillBaseClass = "absolute right-0 z-20 flex items-center";
+
         if (autoRecordCountdown !== null) {
             return (
                 <button
                     onClick={cancelAutoRecordTimer} onMouseEnter={() => { setIsHoveringRecord(true); setIsRecordTimerPaused(true); }} onMouseLeave={() => { setIsHoveringRecord(false); setIsRecordTimerPaused(false); }}
-                    className="ml-2 flex items-center justify-center record-timer-button" style={{ animationPlayState: isHoveringRecord ? 'paused' : 'running' }} aria-label="Cancel auto-record"
+                    className={`${pillBaseClass} justify-center record-timer-button`} style={{ animationPlayState: isHoveringRecord ? 'paused' : 'running' }} aria-label="Cancel auto-record"
                 >
                     {isHoveringRecord ? <HiXMark className="h-5 w-5 text-white" /> : <span className="text-white font-bold text-base">{autoRecordCountdown}</span>}
                 </button>
@@ -107,14 +119,13 @@ const ChatInput = ({
         if (transcriptionError) {
             return (
                 <div 
-                    className={`ml-2 flex items-center gap-1 rounded-full px-1 h-9 w-auto shadow-md transition-all duration-200 ${
+                    className={`${pillBaseClass} gap-1 rounded-full px-1 h-9 w-auto shadow-md transition-all duration-200 ${
                         theme === 'dark' 
                             ? 'bg-red-800' 
                             : 'bg-red-100 border border-red-200'
                     }`} 
                     title={`Error: ${transcriptionError}`}
                 >
-                    {/* Retry Button */}
                     <button
                         onClick={onRetryTranscription}
                         className={`p-1.5 rounded-full transition-colors ${
@@ -127,7 +138,6 @@ const ChatInput = ({
                     >
                         <HiArrowPath className="h-4 w-4" />
                     </button>
-                    {/* Cancel Button */}
                     <button
                         onClick={onClearFailedTranscription}
                         className={`p-1.5 rounded-full transition-colors ${
@@ -149,14 +159,14 @@ const ChatInput = ({
             const isCurrentlyTranscribing = isTranscribing;
             const isCancelHover = isCurrentlyTranscribing && isHoveringCancel;
             
-            // ✨ MODIFIED: Add animate-pulse class when nearing time limit
             const pillBgColor = isCurrentlyRecording 
                 ? `bg-red-600 hover:bg-red-700 ${isNearingTimeLimit ? 'animate-pulse' : ''}`
                 : isCancelHover
                     ? 'bg-red-600 hover:bg-red-700'
                     : (theme === 'dark' ? 'bg-gray-700' : 'bg-gray-900');
             
-            const pillClassName = `ml-2 flex items-center gap-2 rounded-full px-3 py-2 text-white shadow-md transition-all duration-200 ${pillBgColor} ${isCurrentlyTranscribing ? 'cursor-pointer' : ''}`;
+            // ✨ MODIFIED: Removed ml-2, added pillBaseClass
+            const pillClassName = `${pillBaseClass} gap-2 rounded-full px-3 py-2 text-white shadow-md transition-all duration-200 ${pillBgColor} ${isCurrentlyTranscribing ? 'cursor-pointer' : ''}`;
 
             return (
                 <button
@@ -175,7 +185,7 @@ const ChatInput = ({
                             <HiStop className="h-5 w-5 flex-shrink-0" />
                             <span className="font-mono text-sm font-medium tracking-wider">{formatTime(elapsedTime)}</span>
                         </>
-                    ) : ( // This block now handles all `isTranscribing` cases
+                    ) : (
                         <>
                             <HiArrowPath className="h-5 w-5 flex-shrink-0 animate-spin" />
                             {isCancelHover ? (
@@ -189,6 +199,7 @@ const ChatInput = ({
             );
         }
 
+        // Idle state (Standard Mic Button) - Stays in normal flow
         return (
             <button
                 onClick={handleRecordButtonClick} disabled={autoSendCountdown !== null}
@@ -249,7 +260,8 @@ const ChatInput = ({
                     )}
                 </div>
 
-                <div className="flex items-center chat-action-buttons">
+                {/* ✨ MODIFIED: Added 'relative' to container to support absolute positioning of the pill */}
+                <div className="flex items-center chat-action-buttons relative">
                     {features.imageUpload && (
                         <AttachmentButton count={attachmentCount} onClick={onOpenAttachments} disabled={isTranscribing || isEditing} theme={theme}/>
                     )}
