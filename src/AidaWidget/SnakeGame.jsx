@@ -4,10 +4,9 @@ import { HiOutlineTrophy, HiArrowPath } from 'react-icons/hi2';
 
 const GRID_SIZE = 15;
 const INITIAL_SNAKE = [{ x: 7, y: 10 }, { x: 7, y: 11 }, { x: 7, y: 12 }];
-const INITIAL_DIRECTION = { x: 0, y: -1 }; // Moving Up
+const INITIAL_DIRECTION = { x: 0, y: -1 };
 const BASE_SPEED = 150;
 
-// Helper to load state from local storage
 const loadState = (key, defaultVal) => {
     try {
         const saved = localStorage.getItem(key);
@@ -18,6 +17,7 @@ const loadState = (key, defaultVal) => {
 };
 
 const SnakeGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
+    // State
     const [snake, setSnake] = useState(() => loadState('aida-snake-body', INITIAL_SNAKE));
     const [food, setFood] = useState(() => loadState('aida-snake-food', { x: 5, y: 5 }));
     const [score, setScore] = useState(() => loadState('aida-snake-score', 0));
@@ -25,25 +25,27 @@ const SnakeGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
     const [hasStarted, setHasStarted] = useState(false);
     const [gameOver, setGameOver] = useState(false);
     const [highScore, setHighScore] = useState(() => loadState('aida-snake-highscore', 0));
-    
     const [isTurbo, setIsTurbo] = useState(false);
     
-    // Ref for the requested direction (what the user pressed)
+    // Refs for Game Loop (Mutable state)
     const directionRef = useRef(direction);
-    
-    // ✅ NEW: Ref for the direction actually executed in the last frame
-    // This prevents the "Rapid Input" bug where the snake turns 180 degrees and dies
     const lastProcessedDirRef = useRef(direction);
-    
     const gameLoopRef = useRef(null);
 
-    // Sync refs with state
+    // ✅ NEW: Refs for Event Listeners (Prevents stale closures without re-binding)
+    const gameStateRef = useRef({ gameOver, hasStarted, isPaused });
+
+    // Sync Refs
     useEffect(() => {
         directionRef.current = direction;
         lastProcessedDirRef.current = direction;
     }, [direction]);
 
-    // Save state
+    useEffect(() => {
+        gameStateRef.current = { gameOver, hasStarted, isPaused };
+    }, [gameOver, hasStarted, isPaused]);
+
+    // Save State
     useEffect(() => {
         if (!gameOver) {
             localStorage.setItem('aida-snake-body', JSON.stringify(snake));
@@ -70,7 +72,7 @@ const SnakeGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
         setSnake(INITIAL_SNAKE);
         setDirection(INITIAL_DIRECTION);
         directionRef.current = INITIAL_DIRECTION;
-        lastProcessedDirRef.current = INITIAL_DIRECTION; // Reset processed dir
+        lastProcessedDirRef.current = INITIAL_DIRECTION;
         setScore(0);
         setGameOver(false);
         setHasStarted(false);
@@ -83,42 +85,46 @@ const SnakeGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
         localStorage.removeItem('aida-snake-dir');
     };
 
-    // Centralized direction handler
     const handleDirectionChange = useCallback((newDir) => {
+        const { gameOver, isPaused } = gameStateRef.current;
         if (isPaused || gameOver) return;
 
-        if (!hasStarted) {
+        if (!gameStateRef.current.hasStarted) {
             setHasStarted(true);
         }
 
-        // ✅ FIX: Check against the LAST PROCESSED direction, not the current ref.
-        // This ensures we validate against where the snake is physically moving right now.
         const currentDir = lastProcessedDirRef.current;
-
-        // Prevent 180 degree turns
-        // If moving vertically, ignore vertical inputs
         if (currentDir.y !== 0 && newDir.y !== 0) return;
-        // If moving horizontally, ignore horizontal inputs
         if (currentDir.x !== 0 && newDir.x !== 0) return;
 
         directionRef.current = newDir;
-    }, [isPaused, gameOver, hasStarted]);
+    }, []);
 
-    // Expose methods to parent
     useImperativeHandle(ref, () => ({
-        handleInput: (newDir) => {
-            handleDirectionChange(newDir);
-        },
+        handleInput: (newDir) => handleDirectionChange(newDir),
         handleAction: (actionType, isPressed) => {
-            if (actionType === 'A' || actionType === 'B') {
-                setIsTurbo(isPressed);
-            }
+            if (actionType === 'A' || actionType === 'B') setIsTurbo(isPressed);
         }
     }));
 
-    // Handle Keyboard Input
+    // ✅ OPTIMIZED: Event Listener bound ONLY ONCE
     useEffect(() => {
         const handleKeyDown = (e) => {
+            const { gameOver, hasStarted, isPaused } = gameStateRef.current;
+            if (isPaused) return;
+
+            if (e.key === 'Enter') {
+                if (gameOver) {
+                    resetGame();
+                    return;
+                } else if (!hasStarted) {
+                    setHasStarted(true);
+                    return;
+                }
+            }
+
+            if (gameOver) return;
+
             if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
                 e.preventDefault();
             }
@@ -139,20 +145,19 @@ const SnakeGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
 
         window.addEventListener('keydown', handleKeyDown);
         window.addEventListener('keyup', handleKeyUp);
+        
+        // Cleanup on unmount (offloads memory)
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
             window.removeEventListener('keyup', handleKeyUp);
         };
-    }, [handleDirectionChange]);
+    }, [handleDirectionChange]); // Dependency array is minimal
 
     // Game Loop
     useEffect(() => {
         if (isPaused || gameOver || !hasStarted) return;
 
         const moveSnake = () => {
-            // ✅ UPDATE PROCESSED DIRECTION
-            // We lock in the direction we are about to use for this frame.
-            // This prevents multiple inputs within one tick from causing a self-collision.
             const moveDir = directionRef.current;
             lastProcessedDirRef.current = moveDir;
 
@@ -163,13 +168,11 @@ const SnakeGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
                     y: head.y + moveDir.y
                 };
 
-                // Wall Collision
                 if (newHead.x < 0 || newHead.x >= GRID_SIZE || newHead.y < 0 || newHead.y >= GRID_SIZE) {
                     setGameOver(true);
                     return prevSnake;
                 }
 
-                // Self Collision
                 if (prevSnake.some(segment => segment.x === newHead.x && segment.y === newHead.y)) {
                     setGameOver(true);
                     return prevSnake;
@@ -177,7 +180,6 @@ const SnakeGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
 
                 const newSnake = [newHead, ...prevSnake];
 
-                // Food Collision
                 if (newHead.x === food.x && newHead.y === food.y) {
                     setScore(s => {
                         const newScore = s + 1;
@@ -197,7 +199,6 @@ const SnakeGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
         };
 
         const currentSpeed = isTurbo ? BASE_SPEED / 2.5 : BASE_SPEED;
-
         gameLoopRef.current = setInterval(moveSnake, currentSpeed);
         return () => clearInterval(gameLoopRef.current);
     }, [isPaused, gameOver, food, highScore, generateFood, hasStarted, isTurbo]);
@@ -225,7 +226,6 @@ const SnakeGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
                     height: '280px'
                 }}
             >
-                {/* Game Over Overlay */}
                 {gameOver && (
                     <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm text-white">
                         <h3 className="text-xl font-bold mb-2 text-red-400">GAME OVER</h3>
@@ -238,7 +238,6 @@ const SnakeGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
                     </div>
                 )}
 
-                {/* Start Prompt Overlay */}
                 {!hasStarted && !gameOver && (
                     <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/20 text-white pointer-events-none">
                         <div className="bg-black/60 px-3 py-1 rounded text-xs font-bold animate-pulse">
@@ -247,21 +246,16 @@ const SnakeGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
                     </div>
                 )}
 
-                {/* Grid Rendering */}
                 {Array.from({ length: GRID_SIZE * GRID_SIZE }).map((_, i) => {
                     const x = i % GRID_SIZE;
                     const y = Math.floor(i / GRID_SIZE);
-                    
                     const isSnakeHead = snake[0].x === x && snake[0].y === y;
                     const isSnakeBody = snake.some((s, idx) => idx !== 0 && s.x === x && s.y === y);
                     const isFood = food.x === x && food.y === y;
-
                     let cellClass = isDark ? 'bg-gray-800/50' : 'bg-white/50';
-                    
                     if (isSnakeHead) cellClass = 'bg-green-400 rounded-sm z-10';
                     else if (isSnakeBody) cellClass = 'bg-green-600/80 rounded-sm';
                     else if (isFood) cellClass = 'bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.6)]';
-
                     return <div key={i} className={`w-full h-full ${cellClass}`} />;
                 })}
             </div>
