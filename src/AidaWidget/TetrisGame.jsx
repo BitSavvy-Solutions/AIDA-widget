@@ -35,7 +35,6 @@ const loadState = (key, defaultVal) => {
 };
 
 const TetrisGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
-    // State
     const [grid, setGrid] = useState(() => loadState('aida-tetris-grid', createGrid()));
     const [player, setPlayer] = useState(() => loadState('aida-tetris-player', { 
         pos: { x: COLS / 2 - 2, y: 0 }, 
@@ -48,15 +47,12 @@ const TetrisGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
     const [highScore, setHighScore] = useState(() => parseInt(localStorage.getItem('aida-tetris-highscore') || '0'));
     const [dropTime, setDropTime] = useState(null);
 
-    // ✅ Ref to hold latest state (Crucial for Event Listeners)
     const gameStateRef = useRef({ grid, player, gameOver, hasStarted, isPaused, score, highScore });
 
-    // Sync Ref
     useEffect(() => {
         gameStateRef.current = { grid, player, gameOver, hasStarted, isPaused, score, highScore };
     }, [grid, player, gameOver, hasStarted, isPaused, score, highScore]);
 
-    // Save State
     useEffect(() => {
         if (!gameOver) {
             localStorage.setItem('aida-tetris-grid', JSON.stringify(grid));
@@ -67,7 +63,6 @@ const TetrisGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
         }
     }, [grid, player, score, hasStarted, gameOver]);
 
-    // Resume loop
     useEffect(() => {
         if (hasStarted && !gameOver && !isPaused) {
             setDropTime(BASE_SPEED);
@@ -92,9 +87,6 @@ const TetrisGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
         }
         return false;
     };
-
-    // ✅ MODIFIED: All movement functions now read from gameStateRef
-    // This ensures they always use the latest state, even when called from the "bound-once" keyboard listener.
 
     const drop = () => {
         const { player, grid, gameOver, isPaused, score, highScore } = gameStateRef.current;
@@ -211,16 +203,14 @@ const TetrisGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
         });
     };
 
-    // Game Loop
     useEffect(() => {
         if (!hasStarted || gameOver || isPaused) return;
         const interval = setInterval(() => {
             drop();
         }, dropTime || BASE_SPEED);
         return () => clearInterval(interval);
-    }, [dropTime, hasStarted, gameOver, isPaused]); // Removed player/grid deps, drop() uses Ref
+    }, [dropTime, hasStarted, gameOver, isPaused]);
 
-    // Expose Interface
     useImperativeHandle(ref, () => ({
         handleInput: (dir) => {
             if (!gameStateRef.current.hasStarted && !gameStateRef.current.gameOver) startGame();
@@ -237,13 +227,14 @@ const TetrisGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
 
             if (type === 'A') playerRotate(1);
             if (type === 'B') playerRotate(-1);
-        }
+        },
+        // ✅ EXPOSE RESET
+        reset: startGame
     }));
 
-    // Keyboard Support
     useEffect(() => {
         const handleKeyDown = (e) => {
-            const { isPaused, gameOver, hasStarted } = gameStateRef.current;
+            const { isPaused, gameOver, hasStarted, grid } = gameStateRef.current;
             
             if (isPaused) return;
 
@@ -285,7 +276,6 @@ const TetrisGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
 
     return (
         <div className="flex flex-col items-center justify-center w-full h-full select-none outline-none pointer-events-auto">
-            {/* Score Header */}
             <div className="flex justify-between w-full max-w-[200px] mb-2 px-1">
                 <div className={`text-xs font-mono font-bold ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}>
                     SCORE: {score}
@@ -295,7 +285,6 @@ const TetrisGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
                 </div>
             </div>
 
-            {/* Game Grid */}
             <div 
                 className={`relative grid border-4 rounded-lg overflow-hidden shadow-2xl ${
                     isDark ? 'bg-gray-900 border-gray-700' : 'bg-gray-100 border-gray-300'

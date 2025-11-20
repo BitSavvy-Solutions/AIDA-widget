@@ -10,7 +10,8 @@ import {
     HiChevronLeft, 
     HiChevronRight,
     HiChevronDoubleLeft,
-    HiChevronDoubleRight
+    HiChevronDoubleRight,
+    HiArrowPath // ✅ Import Refresh Icon
 } from 'react-icons/hi2';
 
 const LoadingOverlay = ({ isLoading, theme = 'dark' }) => {
@@ -26,7 +27,7 @@ const LoadingOverlay = ({ isLoading, theme = 'dark' }) => {
     const [isDragging, setIsDragging] = useState(false);
 
     // Button State for snappy visual feedback
-    const [activeBtn, setActiveBtn] = useState(null); // 'A', 'B', or null
+    const [activeBtn, setActiveBtn] = useState(null); // 'A', 'B', 'NEW', or null
 
     useEffect(() => {
         if (isLoading) {
@@ -40,7 +41,6 @@ const LoadingOverlay = ({ isLoading, theme = 'dark' }) => {
         setIsVisible(false);
     };
 
-    // ✅ Updated Toggle Logic for 3 Games
     const toggleGame = (direction) => {
         const games = ['snake', 'tetris', 'chess'];
         setActiveGame(prev => {
@@ -53,23 +53,34 @@ const LoadingOverlay = ({ isLoading, theme = 'dark' }) => {
         });
     };
 
-    // Input Handlers
     const handleAction = (type, isPressed) => {
         if (gameRef.current) {
             gameRef.current.handleAction(type, isPressed);
         }
     };
 
-    // Robust Button Handlers
+    // ✅ Handle Reset
+    const handleReset = () => {
+        if (gameRef.current && gameRef.current.reset) {
+            gameRef.current.reset();
+        }
+    };
+
     const pressBtn = (btn) => {
         setActiveBtn(btn);
-        handleAction(btn, true);
+        if (btn === 'NEW') {
+            handleReset();
+        } else {
+            handleAction(btn, true);
+        }
     };
 
     const releaseBtn = (btn) => {
         if (activeBtn === btn) {
             setActiveBtn(null);
-            handleAction(btn, false);
+            if (btn !== 'NEW') {
+                handleAction(btn, false);
+            }
         }
     };
 
@@ -148,13 +159,12 @@ const LoadingOverlay = ({ isLoading, theme = 'dark' }) => {
 
     const isDark = theme === 'dark';
 
-    // Helper for button styles
     const getBtnStyle = (btnType, colorClass, borderClass) => {
         const isPressed = activeBtn === btnType;
         return `w-10 h-10 rounded-full bg-gradient-to-br ${colorClass} flex items-center justify-center text-white font-bold text-xs select-none touch-manipulation transition-all duration-75 ${
             isPressed 
-                ? 'border-b-0 translate-y-1 shadow-none brightness-90' // Pressed State
-                : `border-b-4 ${borderClass} shadow-lg translate-y-0`   // Normal State
+                ? 'border-b-0 translate-y-1 shadow-none brightness-90' 
+                : `border-b-4 ${borderClass} shadow-lg translate-y-0`
         }`;
     };
 
@@ -247,6 +257,19 @@ const LoadingOverlay = ({ isLoading, theme = 'dark' }) => {
                         >
                             <div className="w-4 h-4 rounded-full border-2 border-cyan-400 shadow-[0_0_8px_cyan] bg-cyan-900/50"></div>
                         </div>
+                    </div>
+
+                    {/* ✅ NEW BUTTON (Center) */}
+                    <div className="flex items-center justify-center transform translate-y-2">
+                        <button 
+                            className={`w-8 h-8 rounded-full bg-gradient-to-br from-yellow-500 to-yellow-700 flex items-center justify-center text-white shadow-lg border-b-4 border-yellow-900 active:border-b-0 active:translate-y-1 transition-all ${activeBtn === 'NEW' ? 'border-b-0 translate-y-1 shadow-none brightness-90' : ''}`}
+                            onPointerDown={(e) => { e.preventDefault(); pressBtn('NEW'); }}
+                            onPointerUp={(e) => { e.preventDefault(); releaseBtn('NEW'); }}
+                            onPointerLeave={(e) => { e.preventDefault(); releaseBtn('NEW'); }}
+                            title="New Game"
+                        >
+                            <HiArrowPath className="w-4 h-4 font-bold" />
+                        </button>
                     </div>
 
                     {/* Action Buttons */}

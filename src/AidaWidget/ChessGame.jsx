@@ -32,24 +32,23 @@ const ChessGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
     // State
     const [board, setBoard] = useState(() => loadState('aida-chess-board', INITIAL_BOARD));
     const [turn, setTurn] = useState(() => loadState('aida-chess-turn', 'w'));
-    const [captured, setCaptured] = useState(() => loadState('aida-chess-captured', { w: [], b: [] }));
     
-    // ✅ FIX: Load Game Over state so we don't resume a finished game
+    // ✅ NEW: Visual ViewPoint (Controls rotation). Defaults to current turn.
+    const [viewPoint, setViewPoint] = useState(turn);
+
+    const [captured, setCaptured] = useState(() => loadState('aida-chess-captured', { w: [], b: [] }));
     const [gameOver, setGameOver] = useState(() => loadState('aida-chess-gameover', false));
     const [winner, setWinner] = useState(() => loadState('aida-chess-winner', null));
-
     const [selected, setSelected] = useState(null);
     const [validMoves, setValidMoves] = useState([]);
     const [cursor, setCursor] = useState({ r: 6, c: 4 });
 
-    // Refs
     const gameStateRef = useRef({ board, turn, selected, validMoves, cursor, gameOver });
 
     useEffect(() => {
         gameStateRef.current = { board, turn, selected, validMoves, cursor, gameOver };
     }, [board, turn, selected, validMoves, cursor, gameOver]);
 
-    // ✅ FIX: Save Game Over state
     useEffect(() => {
         localStorage.setItem('aida-chess-board', JSON.stringify(board));
         localStorage.setItem('aida-chess-turn', JSON.stringify(turn));
@@ -58,9 +57,21 @@ const ChessGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
         localStorage.setItem('aida-chess-winner', JSON.stringify(winner));
     }, [board, turn, captured, gameOver, winner]);
 
+    // ✅ DELAYED ROTATION LOGIC
+    useEffect(() => {
+        // When the logical 'turn' changes, wait 1 second before updating the visual 'viewPoint'
+        if (turn !== viewPoint) {
+            const timer = setTimeout(() => {
+                setViewPoint(turn);
+            }, 1000); // 1 second delay
+            return () => clearTimeout(timer);
+        }
+    }, [turn, viewPoint]);
+
     const resetGame = () => {
         setBoard(INITIAL_BOARD);
         setTurn('w');
+        setViewPoint('w'); // Reset view immediately
         setCaptured({ w: [], b: [] });
         setSelected(null);
         setValidMoves([]);
@@ -68,15 +79,12 @@ const ChessGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
         setWinner(null);
         setCursor({ r: 6, c: 4 });
         
-        // Clear storage to ensure fresh start
         localStorage.removeItem('aida-chess-board');
         localStorage.removeItem('aida-chess-turn');
         localStorage.removeItem('aida-chess-captured');
         localStorage.removeItem('aida-chess-gameover');
         localStorage.removeItem('aida-chess-winner');
     };
-
-    // --- CHESS LOGIC ---
 
     const isValidPos = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
 
@@ -168,7 +176,6 @@ const ChessGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
                 const movingPiece = newBoard[selected.r][selected.c];
                 const targetPiece = newBoard[r][c];
 
-                // Capture Logic
                 if (targetPiece) {
                     setCaptured(prev => ({
                         ...prev,
@@ -189,7 +196,7 @@ const ChessGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
                 }
 
                 setBoard(newBoard);
-                setTurn(prev => prev === 'w' ? 'b' : 'w');
+                setTurn(prev => prev === 'w' ? 'b' : 'w'); // Logic updates immediately
                 setSelected(null);
                 setValidMoves([]);
             } else {
@@ -199,12 +206,12 @@ const ChessGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
         }
     };
 
-    // --- JOYSTICK ---
     const moveCursor = (dr, dc) => {
         setCursor(prev => {
             let effectiveDr = dr;
             let effectiveDc = dc;
-            if (turn === 'b') {
+            // Use viewPoint for controls so they match what the user sees
+            if (viewPoint === 'b') {
                 effectiveDr = -dr;
                 effectiveDc = -dc;
             }
@@ -233,7 +240,8 @@ const ChessGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
             const { cursor } = gameStateRef.current;
             if (type === 'A') handleSquareClick(cursor.r, cursor.c);
             if (type === 'B') { setSelected(null); setValidMoves([]); }
-        }
+        },
+        reset: resetGame
     }));
 
     const isDark = theme === 'dark';
@@ -255,8 +263,9 @@ const ChessGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
         </div>
     );
 
-    const topStash = turn === 'w' ? captured['b'] : captured['w'];
-    const bottomStash = turn === 'w' ? captured['w'] : captured['b'];
+    // ✅ Use viewPoint to determine UI layout (so it flips with the board)
+    const topStash = viewPoint === 'w' ? captured['b'] : captured['w'];
+    const bottomStash = viewPoint === 'w' ? captured['w'] : captured['b'];
 
     return (
         <div className="flex flex-col items-center justify-center w-full h-full select-none outline-none pointer-events-auto">
@@ -264,7 +273,7 @@ const ChessGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
             {/* TOP CAPTURED ROW */}
             <div className="w-full max-w-[240px] mb-1 px-1 flex justify-between items-end">
                 <div className={`text-[10px] font-bold opacity-70 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                    {turn === 'w' ? 'BLACK CAPTURES' : 'WHITE CAPTURES'}
+                    {viewPoint === 'w' ? 'BLACK CAPTURES' : 'WHITE CAPTURES'}
                 </div>
                 <CapturedRow pieces={topStash} />
             </div>
@@ -277,14 +286,15 @@ const ChessGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
                 style={{
                     width: '240px',
                     height: '240px',
-                    transform: turn === 'b' ? 'rotate(180deg)' : 'rotate(0deg)'
+                    // ✅ Use viewPoint for rotation
+                    transform: viewPoint === 'b' ? 'rotate(180deg)' : 'rotate(0deg)'
                 }}
             >
                 {/* Game Over Overlay */}
                 {gameOver && (
                     <div 
                         className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm text-white"
-                        style={{ transform: turn === 'b' ? 'rotate(-180deg)' : 'rotate(0deg)' }}
+                        style={{ transform: viewPoint === 'b' ? 'rotate(-180deg)' : 'rotate(0deg)' }}
                     >
                         <h3 className="text-xl font-bold mb-2 text-yellow-400">CHECKMATE</h3>
                         <button 
@@ -329,10 +339,11 @@ const ChessGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
                                             className={`select-none relative z-10 transition-transform duration-700 ease-in-out ${
                                                 piece[0] === 'w' 
                                                     ? 'text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]' 
-                                                    : 'text-black drop-shadow-[0_1px_0px_rgba(255,255,255,0.5)]'
+                                                    : 'text-black drop-shadow-[0_0_2px_rgba(255,255,255,0.9)]'
                                             }`}
+                                            // ✅ Use viewPoint for counter-rotation
                                             style={{
-                                                transform: turn === 'b' ? 'rotate(180deg)' : 'rotate(0deg)'
+                                                transform: viewPoint === 'b' ? 'rotate(180deg)' : 'rotate(0deg)'
                                             }}
                                         >
                                             {PIECES[piece[0]][piece[1]]}
@@ -348,7 +359,7 @@ const ChessGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
             {/* BOTTOM CAPTURED ROW */}
             <div className="w-full max-w-[240px] mt-1 px-1 flex justify-between items-start">
                 <div className={`text-[10px] font-bold ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`}>
-                    {turn === 'w' ? 'WHITE CAPTURES' : 'BLACK CAPTURES'}
+                    {viewPoint === 'w' ? 'WHITE CAPTURES' : 'BLACK CAPTURES'}
                 </div>
                 <CapturedRow pieces={bottomStash} />
             </div>

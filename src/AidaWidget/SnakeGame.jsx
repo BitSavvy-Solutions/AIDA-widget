@@ -17,7 +17,6 @@ const loadState = (key, defaultVal) => {
 };
 
 const SnakeGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
-    // State
     const [snake, setSnake] = useState(() => loadState('aida-snake-body', INITIAL_SNAKE));
     const [food, setFood] = useState(() => loadState('aida-snake-food', { x: 5, y: 5 }));
     const [score, setScore] = useState(() => loadState('aida-snake-score', 0));
@@ -27,15 +26,11 @@ const SnakeGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
     const [highScore, setHighScore] = useState(() => loadState('aida-snake-highscore', 0));
     const [isTurbo, setIsTurbo] = useState(false);
     
-    // Refs for Game Loop (Mutable state)
     const directionRef = useRef(direction);
     const lastProcessedDirRef = useRef(direction);
     const gameLoopRef = useRef(null);
-
-    // ✅ NEW: Refs for Event Listeners (Prevents stale closures without re-binding)
     const gameStateRef = useRef({ gameOver, hasStarted, isPaused });
 
-    // Sync Refs
     useEffect(() => {
         directionRef.current = direction;
         lastProcessedDirRef.current = direction;
@@ -45,7 +40,6 @@ const SnakeGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
         gameStateRef.current = { gameOver, hasStarted, isPaused };
     }, [gameOver, hasStarted, isPaused]);
 
-    // Save State
     useEffect(() => {
         if (!gameOver) {
             localStorage.setItem('aida-snake-body', JSON.stringify(snake));
@@ -104,10 +98,11 @@ const SnakeGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
         handleInput: (newDir) => handleDirectionChange(newDir),
         handleAction: (actionType, isPressed) => {
             if (actionType === 'A' || actionType === 'B') setIsTurbo(isPressed);
-        }
+        },
+        // ✅ EXPOSE RESET
+        reset: resetGame
     }));
 
-    // ✅ OPTIMIZED: Event Listener bound ONLY ONCE
     useEffect(() => {
         const handleKeyDown = (e) => {
             const { gameOver, hasStarted, isPaused } = gameStateRef.current;
@@ -146,14 +141,12 @@ const SnakeGame = forwardRef(({ isPaused, theme = 'dark' }, ref) => {
         window.addEventListener('keydown', handleKeyDown);
         window.addEventListener('keyup', handleKeyUp);
         
-        // Cleanup on unmount (offloads memory)
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
             window.removeEventListener('keyup', handleKeyUp);
         };
-    }, [handleDirectionChange]); // Dependency array is minimal
+    }, [handleDirectionChange]);
 
-    // Game Loop
     useEffect(() => {
         if (isPaused || gameOver || !hasStarted) return;
 
