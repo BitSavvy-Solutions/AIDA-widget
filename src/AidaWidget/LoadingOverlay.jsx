@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import SnakeGame from './SnakeGame';
 import TetrisGame from './TetrisGame';
+import ChessGame from './ChessGame';
 import { 
     HiXMark, 
     HiChevronUp, 
@@ -16,7 +17,7 @@ const LoadingOverlay = ({ isLoading, theme = 'dark' }) => {
     const [isVisible, setIsVisible] = useState(false);
     
     // Game Switching State
-    const [activeGame, setActiveGame] = useState('snake'); // 'snake' | 'tetris'
+    const [activeGame, setActiveGame] = useState('snake'); // 'snake' | 'tetris' | 'chess'
     const gameRef = useRef(null);
     
     // Joystick State
@@ -24,7 +25,7 @@ const LoadingOverlay = ({ isLoading, theme = 'dark' }) => {
     const [knobPos, setKnobPos] = useState({ x: 0, y: 0 });
     const [isDragging, setIsDragging] = useState(false);
 
-    // ✅ NEW: Button State for snappy visual feedback
+    // Button State for snappy visual feedback
     const [activeBtn, setActiveBtn] = useState(null); // 'A', 'B', or null
 
     useEffect(() => {
@@ -39,8 +40,17 @@ const LoadingOverlay = ({ isLoading, theme = 'dark' }) => {
         setIsVisible(false);
     };
 
+    // ✅ Updated Toggle Logic for 3 Games
     const toggleGame = (direction) => {
-        setActiveGame(prev => prev === 'snake' ? 'tetris' : 'snake');
+        const games = ['snake', 'tetris', 'chess'];
+        setActiveGame(prev => {
+            const currentIndex = games.indexOf(prev);
+            if (direction === 'next') {
+                return games[(currentIndex + 1) % games.length];
+            } else {
+                return games[(currentIndex - 1 + games.length) % games.length];
+            }
+        });
     };
 
     // Input Handlers
@@ -50,14 +60,13 @@ const LoadingOverlay = ({ isLoading, theme = 'dark' }) => {
         }
     };
 
-    // ✅ ROBUST BUTTON HANDLERS
+    // Robust Button Handlers
     const pressBtn = (btn) => {
         setActiveBtn(btn);
         handleAction(btn, true);
     };
 
     const releaseBtn = (btn) => {
-        // Only release if this button is currently active
         if (activeBtn === btn) {
             setActiveBtn(null);
             handleAction(btn, false);
@@ -192,7 +201,7 @@ const LoadingOverlay = ({ isLoading, theme = 'dark' }) => {
                     </button>
                     
                     <span className={`font-black tracking-widest uppercase text-sm ${isDark ? 'text-white' : 'text-gray-800'}`}>
-                        {activeGame === 'snake' ? 'SNAKE' : 'TETRIS'}
+                        {activeGame.toUpperCase()}
                     </span>
 
                     <button 
@@ -207,8 +216,10 @@ const LoadingOverlay = ({ isLoading, theme = 'dark' }) => {
                 <div className="relative min-h-[280px] flex items-center justify-center">
                     {activeGame === 'snake' ? (
                         <SnakeGame ref={gameRef} isPaused={!isVisible} theme={theme} />
-                    ) : (
+                    ) : activeGame === 'tetris' ? (
                         <TetrisGame ref={gameRef} isPaused={!isVisible} theme={theme} />
+                    ) : (
+                        <ChessGame ref={gameRef} isPaused={!isVisible} theme={theme} />
                     )}
                 </div>
 
