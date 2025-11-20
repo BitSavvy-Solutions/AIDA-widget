@@ -1,8 +1,5 @@
-/* src/AidaWidget/LoadingOverlay.jsx */
 import React, { useState, useEffect, useRef } from 'react';
 import SnakeGame from './SnakeGame';
-import TetrisGame from './TetrisGame';
-import ChessGame from './ChessGame';
 import { 
     HiXMark, 
     HiChevronUp, 
@@ -18,7 +15,7 @@ const LoadingOverlay = ({ isLoading, theme = 'dark' }) => {
     const [isVisible, setIsVisible] = useState(false);
     
     // Game Switching State
-    const [activeGame, setActiveGame] = useState('snake'); // 'snake' | 'tetris' | 'chess'
+    const [activeGame, setActiveGame] = useState('snake'); // Only snake game now
     const gameRef = useRef(null);
     
     // Joystick State
@@ -42,15 +39,9 @@ const LoadingOverlay = ({ isLoading, theme = 'dark' }) => {
     };
 
     const toggleGame = (direction) => {
-        const games = ['snake', 'tetris', 'chess'];
-        setActiveGame(prev => {
-            const currentIndex = games.indexOf(prev);
-            if (direction === 'next') {
-                return games[(currentIndex + 1) % games.length];
-            } else {
-                return games[(currentIndex - 1 + games.length) % games.length];
-            }
-        });
+        // Only snake game available, so no switching needed
+        // Keeping the function for potential future games
+        setActiveGame('snake');
     };
 
     const handleAction = (type, isPressed) => {
@@ -201,36 +192,16 @@ const LoadingOverlay = ({ isLoading, theme = 'dark' }) => {
                     </span>
                 </div>
 
-                {/* Game Switcher */}
-                <div className="flex items-center justify-between w-full max-w-[200px] mb-3">
-                    <button 
-                        onClick={() => toggleGame('prev')}
-                        className={`p-1 rounded hover:bg-white/10 ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}
-                    >
-                        <HiChevronDoubleLeft className="w-5 h-5" />
-                    </button>
-                    
+                {/* Game Switcher - Removed since only one game */}
+                <div className="flex items-center justify-center w-full max-w-[200px] mb-3">
                     <span className={`font-black tracking-widest uppercase text-sm ${isDark ? 'text-white' : 'text-gray-800'}`}>
-                        {activeGame.toUpperCase()}
+                        SNAKE
                     </span>
-
-                    <button 
-                        onClick={() => toggleGame('next')}
-                        className={`p-1 rounded hover:bg-white/10 ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}
-                    >
-                        <HiChevronDoubleRight className="w-5 h-5" />
-                    </button>
                 </div>
 
                 {/* Game Area */}
                 <div className="relative min-h-[280px] flex items-center justify-center">
-                    {activeGame === 'snake' ? (
-                        <SnakeGame ref={gameRef} isPaused={!isVisible} theme={theme} />
-                    ) : activeGame === 'tetris' ? (
-                        <TetrisGame ref={gameRef} isPaused={!isVisible} theme={theme} />
-                    ) : (
-                        <ChessGame ref={gameRef} isPaused={!isVisible} theme={theme} />
-                    )}
+                    <SnakeGame ref={gameRef} isPaused={!isVisible} theme={theme} />
                 </div>
 
                 {/* Controls Row */}
