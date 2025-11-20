@@ -1,4 +1,3 @@
-/* src/AidaWidget/ChatDisplay.jsx */
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -6,6 +5,19 @@ import { HiSpeakerWave, HiPlay, HiPause, HiPaperClip } from 'react-icons/hi2';
 import ReasoningDisplay from './ReasoningDisplay';
 
 import ShikiHighlighter, { isInlineCode } from 'react-shiki';
+
+// ✅ ADDED: Whitelist of languages Shiki is guaranteed to support.
+// This prevents the app from crashing if the AI invents a language ID (e.g. ```students)
+const SUPPORTED_LANGUAGES = new Set([
+    'javascript', 'js', 'jsx', 'typescript', 'ts', 'tsx',
+    'json', 'jsonc', 'html', 'css', 'scss', 'less',
+    'python', 'py', 'bash', 'sh', 'shell', 'zsh',
+    'markdown', 'md', 'yaml', 'yml', 'xml', 'svg',
+    'sql', 'java', 'c', 'cpp', 'c++', 'c#', 'cs', 'csharp',
+    'go', 'rust', 'php', 'ruby', 'rb', 'lua',
+    'docker', 'dockerfile', 'makefile', 'ini', 'toml',
+    'diff', 'text', 'txt'
+]);
 
 const CodeBlock = ({ className, children, node, ...props }) => {
     const isInline = node ? isInlineCode(node) : !String(children).includes('\n');
@@ -27,7 +39,6 @@ const CodeBlock = ({ className, children, node, ...props }) => {
         }
     };
     
-    // ✅ FIXED: Correctly parse language from file paths (e.g., "language-src/main.css")
     const getLangFromClassName = (cn) => {
         if (!cn || !cn.startsWith('language-')) {
             return 'text';
@@ -35,7 +46,6 @@ const CodeBlock = ({ className, children, node, ...props }) => {
         const specifier = cn.substring('language-'.length);
         const parts = specifier.split('.');
         const lang = parts[parts.length - 1];
-        // In case of something like `language-weird.`, return 'text'
         return lang ? lang.toLowerCase() : 'text';
     };
 
@@ -48,7 +58,18 @@ const CodeBlock = ({ className, children, node, ...props }) => {
       typescript: 'tsx',
     };
 
-    const language = languageMap[rawLang] || rawLang;
+    let language = languageMap[rawLang] || rawLang;
+
+    // ✅ FIXED: Validate language against supported list.
+    // If 'students' or any unknown language is passed, fallback to 'text' to prevent Shiki crash.
+    if (!SUPPORTED_LANGUAGES.has(language)) {
+        // Optional heuristic: if it looks like JSON but has a weird tag, try JSON
+        if (code.trim().startsWith('{') || code.trim().startsWith('[')) {
+            language = 'json';
+        } else {
+            language = 'text';
+        }
+    }
 
     return (
         <div className="relative group">
@@ -97,7 +118,7 @@ const ChatDisplay = ({
     onRetryBotMessage,
     isLoading = false,
     liveReasoning,
-    onViewAttachments, // ✅ ADDED: Prop for viewing past attachments
+    onViewAttachments,
 }) => {
     const [copiedId, setCopiedId] = useState(null);
     const containerRef = useRef(null);
@@ -112,9 +133,7 @@ const ChatDisplay = ({
 
     const speechApiSupported = useMemo(() => typeof window !== 'undefined' && 'speechSynthesis' in window, []);
 
-    // ✨ MODIFIED: Timer logic now stops when `contentHasStarted` is true.
     useEffect(() => {
-        // Condition for the timer to be running: Reasoning has started, but main content has not.
         const isTimerTicking = isLoading &&
                               liveReasoning?.botId &&
                               liveReasoning.text.trim().length > 0 &&
@@ -123,25 +142,19 @@ const ChatDisplay = ({
         const currentLiveBotId = liveReasoning?.botId;
 
         if (isTimerTicking) {
-            // Timer should be running.
             if (currentLiveBotId && currentLiveBotId !== liveReasoningInfo.botId) {
-                // It's a new session, record the start time.
                 setLiveReasoningInfo({ botId: currentLiveBotId, startTime: Date.now() });
             }
         } else {
-            // Timer should stop.
             if (liveReasoningInfo.startTime) {
-                // A timer was running, and now we need to finalize it.
                 const finalDuration = (Date.now() - liveReasoningInfo.startTime) / 1000;
                 setFinalReasoningDurations(prev => ({
                     ...prev,
                     [liveReasoningInfo.botId]: finalDuration,
                 }));
-                // Reset the live info.
                 setLiveReasoningInfo({ botId: null, startTime: null });
             }
         }
-    // Dependency array is updated to react to the new signal.
     }, [isLoading, liveReasoning, liveReasoningInfo.botId, liveReasoningInfo.startTime]);
     
     useEffect(() => {
@@ -265,7 +278,6 @@ const ChatDisplay = ({
                 const messageText = typeof message.text === 'string' ? message.text : '';
                 const trimmedText = messageText.trim();
                 const hasImages = Array.isArray(message.images) && message.images.length > 0;
-                // ✅ MODIFIED: Check for any attachments, not just images, for the new button.
                 const hasAttachments = Array.isArray(message.attachments) && message.attachments.length > 0;
                 const isBot = message.sender === 'bot';
 
@@ -275,7 +287,6 @@ const ChatDisplay = ({
                 const hasBakedInReasoning = message.reasoning && message.reasoning.trim().length > 0;
                 
                 const isLiveReasoningActive = isBotLoading && liveReasoning?.botId === message.id && liveReasoning.text.trim().length > 0;
-                // ✨ MODIFIED: The "isLive" flag for the display is now more specific.
                 const isTimerDisplayLive = isLiveReasoningActive && !liveReasoning.contentHasStarted;
 
                 const showReasoning = hasBakedInReasoning || isLiveReasoningActive;
@@ -300,7 +311,6 @@ const ChatDisplay = ({
                 return (
                     <div key={message.id} className={`flex ${message.sender === 'user' ? 'justify-end pl-10' : 'justify-start'}`}>
                         <div className={`flex flex-col w-full ${message.sender === 'user' ? 'items-end' : 'items-start'}`}>
-                            {/* ✨ MODIFIED: Pass the new `isLive` flag. */}
                             {showReasoning && (
                                 <ReasoningDisplay
                                     text={reasoningTextToShow}
@@ -364,7 +374,6 @@ const ChatDisplay = ({
                                 )}
                             </div>
                            
-                            {/* ✅ ADDED: Attachment button for user messages */}
                             {message.sender === 'user' && hasAttachments && onViewAttachments && (
                                 <div className="mt-2">
                                     <button
