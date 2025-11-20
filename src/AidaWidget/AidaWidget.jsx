@@ -6,6 +6,7 @@ import ChatHistoryPanel from './ChatHistoryPanel';
 import ChatDisplay from './ChatDisplay';
 import ChatInput from './ChatInput';
 import AttachmentModal from './AttachmentModal';
+import LoadingOverlay from './LoadingOverlay'; // ✅ ADDED IMPORT
 import './AidaWidget.css';
 
 import {
@@ -80,7 +81,6 @@ const AidaWidget = (props) => {
     const requestFullscreen = useCallback(() => setIsFullscreen(true), [setIsFullscreen]);
     const { sidebarRef, sidebarInlineStyle, resizeHandleProps, isResizing } = useResizableSidebar({ isOpen, isFullscreen, isMobileViewport, isEnabled: features.resizable, onRequestFullscreen: requestFullscreen });
     const { isLoading, lastCost, liveReasoning, streamResponse, stopStreaming } = useChatAPI({ apiConfig, messages, setMessages, currentSessionId, updateCurrentSession, user, pageContext, customPrompt });
-    // ✨ MODIFIED: Destructure isNearingTimeLimit from useVoiceInput
     const { isRecording, isTranscribing, elapsedTime, startRecording, stopRecording, cancelTranscription, lastInputWasVoiceRef, transcriptionError, retryTranscription, clearFailedTranscription, isNearingTimeLimit } = useVoiceInput({ transcriptionUrl: apiConfig.transcriptionUrl, onTranscriptionComplete: (text) => { setCurrentMessage(p => p.trim() ? `${p} ${text}` : text); if (text) startAutoSendTimer(); } });
     const { countdown: autoSendCountdown, start: startAutoSendTimer, cancel: cancelAutoSendTimer, setIsPaused: setIsSendTimerPaused } = useCountdown(() => stableHandleSendMessage(), 3);
     const { countdown: autoRecordCountdown, start: startAutoRecordTimer, cancel: cancelAutoRecordTimer, setIsPaused: setIsRecordTimerPaused } = useCountdown(startRecording, 3);
@@ -104,23 +104,17 @@ const AidaWidget = (props) => {
     }, []);
 
     const handleRemoveAttachmentFromMessage = useCallback((messageId, attachmentId) => {
-        // Update the main messages array
         setMessages(prevMessages =>
             prevMessages.map(msg => {
                 if (msg.id === messageId) {
-                    // Filter the general attachments list
                     const updatedAttachments = (msg.attachments || []).filter(att => att.id !== attachmentId);
-                    
-                    // ALSO filter the specific 'images' list to remove the data URL
                     const updatedImages = (msg.images || []).filter(img => img.id !== attachmentId);
-
                     return { ...msg, attachments: updatedAttachments, images: updatedImages };
                 }
                 return msg;
             })
         );
 
-        // Also update the state that controls the modal, so it re-renders immediately
         setViewingMessageAttachments(prevViewingMsg => {
             if (prevViewingMsg && prevViewingMsg.id === messageId) {
                 const updatedAttachments = (prevViewingMsg.attachments || []).filter(att => att.id !== attachmentId);
@@ -204,6 +198,10 @@ const AidaWidget = (props) => {
             {isOpen && (
                 <div className={`aida-widget-viewport z-50 ${isFullscreen ? 'aida-widget-viewport--fullscreen' : 'aida-widget-viewport--docked'}`}>
                     <div ref={sidebarRef} data-theme={theme} style={sidebarInlineStyle} className={containerClasses} {...dropZoneProps}>
+                        
+                        {/* ✅ ADDED: Loading Overlay with Snake Game */}
+                        <LoadingOverlay isLoading={isLoading} theme={theme} />
+
                         {features.resizable && !isFullscreen && !isMobileViewport && <div {...resizeHandleProps} />}
                         {attachmentsEnabled && isDragOverWidget && <div className="absolute inset-0 z-[55] pointer-events-none flex items-center justify-center px-4"><div className={`pointer-events-none flex max-w-sm flex-col items-center gap-2 rounded-2xl border-2 border-dashed px-6 py-5 text-sm font-medium ${theme === 'dark' ? 'border-pink-400/80 bg-gray-900/80 text-pink-100' : 'border-pink-500/60 bg-white/80 text-pink-600'}`}>
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" strokeWidth="1.5" className="h-10 w-10" fill="none" stroke="currentColor">
@@ -229,7 +227,6 @@ const AidaWidget = (props) => {
                             onRetryBotMessage={features.retryMessage ? handleRetry : undefined}
                             onViewAttachments={handleViewAttachments}
                         />
-                        {/* ✨ MODIFIED: Pass down the new props for the time limit warning and transcription failure */}
                         <ChatInput {...{ currentMessage, setCurrentMessage, handleSendMessage: stableHandleSendMessage, handleKeyDown: (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); stableHandleSendMessage(); } }, handleRecordButtonClick, inputRef, isLoading, isTranscribing, isRecording, elapsedTime, siteLanguage, theme, autoSendCountdown, cancelAutoSendTimer, setIsSendTimerPaused, autoRecordCountdown, cancelAutoRecordTimer, setIsRecordTimerPaused, selectedModel, setSelectedModel, translations, isEditing: !!editingMessageId, cancelEdit: cancelEdit, attachmentCount: attachments.length, onOpenAttachments: openAttachmentModal, isWebSearchEnabled, setIsWebSearchEnabled, onStopStreaming: stopStreaming, features, onCancelTranscription: cancelTranscription, transcriptionError, onRetryTranscription: retryTranscription, onClearFailedTranscription: clearFailedTranscription, isNearingTimeLimit }}/>
                     </div>
                 </div>
