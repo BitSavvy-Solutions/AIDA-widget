@@ -173,6 +173,7 @@ const AidaWidget = (props) => {
         
         let nextMessages = [];
         let userMessage = null;
+        let activeSessionId = currentSessionId; // Track the ID locally
 
         // 3. Construct the new state (Optimistic UI)
         if (editingMessageId) {
@@ -197,7 +198,7 @@ const AidaWidget = (props) => {
             setMessages(nextMessages);
             
             // ✅ SAVE IMMEDIATELY: Update history with the edited version
-            if (currentSessionId) {
+            if (activeSessionId) {
                 updateCurrentSession(nextMessages);
             }
 
@@ -219,13 +220,11 @@ const AidaWidget = (props) => {
             // Update State
             setMessages(nextMessages);
 
-            // ✅ FIX "UNTITLED CHAT": 
-            // If this is a new session, create it NOW with the messages included.
-            // This allows the title generator to see your text and name it correctly.
-            if (!currentSessionId) {
-                createNewSession(nextMessages); 
+            // ✅ FIX "UNTITLED CHAT" & RACE CONDITION: 
+            if (!activeSessionId) {
+                // createNewSession now returns the new ID. Capture it.
+                activeSessionId = createNewSession(nextMessages); 
             } else {
-                // ✅ SAVE IMMEDIATELY: Save the user's prompt before the bot even replies.
                 updateCurrentSession(nextMessages);
             }
         }
@@ -239,12 +238,16 @@ const AidaWidget = (props) => {
         // 5. Start Streaming
         // We pass nextMessages (minus the empty bot one) as history context
         const historyForPayload = nextMessages.slice(0, -1); 
-        await streamResponse({ userMessage, botMessageId, historyForPayload });
+        
+        // ✅ FIX: Pass the activeSessionId to streamResponse.
+        // This ensures the API hook knows where to save the bot message, 
+        // even if the state update hasn't propagated yet.
+        await streamResponse({ userMessage, botMessageId, historyForPayload, sessionId: activeSessionId });
 
     }, [currentMessage, attachments, isLoading, editingMessageId, selectedModel, isWebSearchEnabled, messages, currentSessionId, streamResponse, setMessages, createNewSession, updateCurrentSession, cancelAutoSendTimer, cancelAutoRecordTimer, clearAttachments]);
 
 
-    const handleRetry = useCallback(async (botMessageId) => { if (isLoading) return; const botIndex = messages.findIndex(m => m.id === botMessageId); if (botIndex === -1) return; let userIndex = -1; for (let i = botIndex - 1; i >= 0; i--) { if (messages[i].sender === 'user' && (messages[i].text || messages[i].attachments?.length > 0)) { userIndex = i; break; } } if (userIndex === -1) return; const userMessageToRetry = messages[userIndex]; const historyForPayload = messages.slice(0, userIndex); const newBotMessageId = `bot-${Date.now()}`; setMessages([...historyForPayload, userMessageToRetry, { id: newBotMessageId, sender: 'bot', text: '' }]); await streamResponse({ userMessage: userMessageToRetry, botMessageId: newBotMessageId, historyForPayload }); }, [isLoading, messages, streamResponse, setMessages]);
+    const handleRetry = useCallback(async (botMessageId) => { if (isLoading) return; const botIndex = messages.findIndex(m => m.id === botMessageId); if (botIndex === -1) return; let userIndex = -1; for (let i = botIndex - 1; i >= 0; i--) { if (messages[i].sender === 'user' && (messages[i].text || messages[i].attachments?.length > 0)) { userIndex = i; break; } } if (userIndex === -1) return; const userMessageToRetry = messages[userIndex]; const historyForPayload = messages.slice(0, userIndex); const newBotMessageId = `bot-${Date.now()}`; setMessages([...historyForPayload, userMessageToRetry, { id: newBotMessageId, sender: 'bot', text: '' }]); await streamResponse({ userMessage: userMessageToRetry, botMessageId: newBotMessageId, historyForPayload, sessionId: currentSessionId }); }, [isLoading, messages, streamResponse, setMessages, currentSessionId]);
     
     const handleHistorySelect = useCallback((session) => {
         setMessages(session.messages || []);

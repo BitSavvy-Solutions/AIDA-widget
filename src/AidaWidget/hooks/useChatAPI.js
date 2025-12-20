@@ -79,7 +79,8 @@ export const useChatAPI = ({
         return messageHistory;
     }, [customPrompt, pageContext, formatMessageContent]);
 
-    const streamResponse = async ({ userMessage, botMessageId, historyForPayload }) => {
+    // ✅ FIX: Added sessionId to the arguments
+    const streamResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId }) => {
         setIsLoading(true);
         setLastCost(0);
         // ✨ MODIFIED: Reset the full liveReasoning state object.
@@ -168,8 +169,12 @@ export const useChatAPI = ({
                 ));
             }
             
-            if (currentSessionId && finalMessages) {
-                updateCurrentSession(finalMessages);
+            // ✅ FIX: Use the explicit sessionId passed from the widget.
+            // This ensures that even if currentSessionId (state) is null in this closure,
+            // we still save to the correct history entry.
+            const targetSessionId = sessionId || currentSessionId;
+            if (targetSessionId && finalMessages) {
+                updateCurrentSession(finalMessages, targetSessionId);
             }
 
         } catch (error) {

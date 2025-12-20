@@ -57,33 +57,59 @@ export const useChatHistory = (getSanitizedMessages) => {
         const id = `chat-${Date.now()}`;
         const title = buildTitleFromMessages(currentMsgs);
         const newSession = { id, title, createdAt: Date.now(), messages: currentMsgs };
-        persistHistory([newSession, ...historyItems].slice(0, 200));
+        
+        // Use functional update to ensure we don't overwrite concurrent updates
+        setHistoryItems(prev => {
+            const updated = [newSession, ...prev].slice(0, 200);
+            try { localStorage.setItem(HISTORY_KEY, JSON.stringify(updated)); } catch { }
+            return updated;
+        });
+        
         setCurrentSessionId(id);
         try { sessionStorage.setItem(CURRENT_SESSION_KEY, id); } catch { }
-    }, [historyItems, buildTitleFromMessages]);
+        
+        return id;
+    }, [buildTitleFromMessages]);
     
-    const updateCurrentSession = useCallback((currentMsgs) => {
-        if (!currentSessionId) return;
+    // ✅ FIX: Use functional state update to access the LATEST historyItems.
+    // This prevents the "Stale Closure" bug where the function uses an old version 
+    // of the array and accidentally deletes the newly created session.
+    const updateCurrentSession = useCallback((currentMsgs, explicitId = null) => {
+        const targetId = explicitId || currentSessionId;
+        
+        if (!targetId) return;
+        
         const title = buildTitleFromMessages(currentMsgs);
-        const updatedItems = historyItems.map(h =>
-            h.id === currentSessionId ? { ...h, title, messages: currentMsgs } : h
-        );
-        persistHistory(updatedItems);
-    }, [currentSessionId, historyItems, buildTitleFromMessages]);
+
+        setHistoryItems(prevItems => {
+            // We map over 'prevItems', which React guarantees is the latest state.
+            const updatedItems = prevItems.map(h =>
+                h.id === targetId ? { ...h, title, messages: currentMsgs } : h
+            );
+            
+            // Persist to localStorage immediately within the callback
+            try { localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedItems)); } catch { }
+            
+            return updatedItems;
+        });
+    }, [currentSessionId, buildTitleFromMessages]);
 
     const saveCurrentChatToHistory = useCallback(() => {
         const msgs = getSanitizedMessages();
         if (!msgs || msgs.length === 0) return;
 
-        // If there's an active session, update it. Otherwise, create a new one.
         if (currentSessionId && historyItems.some(h => h.id === currentSessionId)) {
             updateCurrentSession(msgs);
         } else {
             const id = `chat-${Date.now()}`;
             const title = buildTitleFromMessages(msgs);
             const newSession = { id, title, createdAt: Date.now(), messages: msgs };
-            persistHistory([newSession, ...historyItems].slice(0, 200));
-            // Don't set this as the current session, it's a "save as new" action.
+            
+            setHistoryItems(prev => {
+                const updated = [newSession, ...prev].slice(0, 200);
+                try { localStorage.setItem(HISTORY_KEY, JSON.stringify(updated)); } catch { }
+                return updated;
+            });
         }
     }, [getSanitizedMessages, currentSessionId, historyItems, buildTitleFromMessages, updateCurrentSession]);
 
@@ -183,14 +209,17 @@ export const useChatHistory = (getSanitizedMessages) => {
     // --- Handlers for ChatHistoryPanel ---
     const handlers = useMemo(() => ({
         onDelete: (chatId) => {
-            persistHistory(historyItems.filter(h => h.id !== chatId));
+            // We can use persistHistory here because this is a direct user action, not async
+            const newItems = historyItems.filter(h => h.id !== chatId);
+            persistHistory(newItems);
             persistProjects(projects.map(p => ({
                 ...p,
                 chatIds: (p.chatIds || []).filter(id => id !== chatId),
             })));
         },
         onRename: (id, newTitle) => {
-            persistHistory(historyItems.map(item => item.id === id ? { ...item, title: newTitle.trim() || 'Untitled Chat' } : item));
+            const newItems = historyItems.map(item => item.id === id ? { ...item, title: newTitle.trim() || 'Untitled Chat' } : item);
+            persistHistory(newItems);
         },
         onCreateProject: (projectName) => {
             const trimmed = projectName.trim();
@@ -230,7 +259,6 @@ export const useChatHistory = (getSanitizedMessages) => {
         }
     }), [historyItems, projects, copyTextToClipboard, formatChatForShare]);
 
-    // ✅ MODIFIED: Memoize panel handlers with useCallback.
     const openPanel = useCallback(() => setIsPanelOpen(true), []);
     const closePanel = useCallback(() => setIsPanelOpen(false), []);
 
