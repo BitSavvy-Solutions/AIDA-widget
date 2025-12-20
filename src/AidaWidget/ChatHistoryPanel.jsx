@@ -1,5 +1,6 @@
+/* src/AidaWidget/ChatHistoryPanel.jsx */
 import React, {
-  memo, // ✅ Import memo
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -12,123 +13,16 @@ import {
   HiPencilSquare,
   HiCheck,
   HiXMark,
-  HiOutlineFolder,
-  HiOutlineBanknotes,
-  HiOutlineAcademicCap,
-  HiOutlinePencilSquare,
-  HiOutlineCodeBracketSquare,
-  HiOutlinePhoto,
-  HiOutlineMusicalNote,
-  HiOutlineTrash,
-  HiOutlineSparkles,
-  HiOutlineLightBulb,
-  HiOutlineBeaker,
-  HiOutlineHeart,
-  HiOutlineBriefcase,
-  HiOutlineGlobeAlt,
-  HiOutlineShieldCheck,
-  HiOutlineChatBubbleOvalLeft,
-  HiOutlineBolt,
-  HiOutlineChartBar,
-  HiOutlineRocketLaunch,
-  HiOutlineWrenchScrewdriver,
-  HiOutlineEnvelope,
-  HiOutlineCircleStack,
-  HiOutlineBuildingOffice,
-  HiOutlineCog6Tooth,
   HiOutlineShare,
 } from 'react-icons/hi2';
-import { LuDumbbell, LuStethoscope, LuPawPrint } from 'react-icons/lu';
-
-
-const NotebookIcon = ({ className = '' }) => (
-  <svg
-    className={className}
-    xmlns="http://www.w3.org/2000/svg"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <rect x="4" y="3" width="15" height="18" rx="2" ry="2" />
-    <path d="M8 3v18" />
-    <path d="M11 7h4" />
-    <path d="M11 11h4" />
-  </svg>
-);
-
-const createLucideIcon = (IconComponent) => ({ className = '' }) => (
-  <IconComponent className={className} strokeWidth={1.6} />
-);
-
-const DumbbellIcon = createLucideIcon(LuDumbbell);
-const StethoscopeIcon = createLucideIcon(LuStethoscope);
-const PawPrintIcon = createLucideIcon(LuPawPrint);
-
-const DEFAULT_PROJECT_ICON_COLOR = '#9CA3AF';
-const BRAND_COLOR = '#FF5F90';
-
-const PROJECT_COLOR_OPTIONS = [
-  { value: DEFAULT_PROJECT_ICON_COLOR, label: 'Neutral' },
-  { value: '#F87171', label: 'Red' },
-  { value: '#FB923C', label: 'Orange' },
-  { value: '#FACC15', label: 'Yellow' },
-  { value: '#34D399', label: 'Green' },
-  { value: '#38BDF8', label: 'Sky' },
-  { value: '#818CF8', label: 'Indigo' },
-  { value: '#F472B6', label: 'Pink' }
-];
-
-const PROJECT_ICON_OPTIONS = [
-  { key: 'notebook', label: 'Notebook', Icon: NotebookIcon },
-  { key: 'folder', label: 'Folder', Icon: HiOutlineFolder },
-  { key: 'bank', label: 'Budget', Icon: HiOutlineBanknotes },
-  { key: 'cap', label: 'Academics', Icon: HiOutlineAcademicCap },
-  { key: 'pencil', label: 'Writing', Icon: HiOutlinePencilSquare },
-  { key: 'code', label: 'Code', Icon: HiOutlineCodeBracketSquare },
-  { key: 'photo', label: 'Media', Icon: HiOutlinePhoto },
-  { key: 'music', label: 'Music', Icon: HiOutlineMusicalNote },
-  { key: 'trash', label: 'Cleanup', Icon: HiOutlineTrash },
-  { key: 'spark', label: 'Ideas', Icon: HiOutlineSparkles },
-  { key: 'bulb', label: 'Insights', Icon: HiOutlineLightBulb },
-  { key: 'beaker', label: 'Lab', Icon: HiOutlineBeaker },
-  { key: 'heart', label: 'Wellness', Icon: HiOutlineHeart },
-  { key: 'fitness', label: 'Fitness', Icon: DumbbellIcon },
-  { key: 'healthcare', label: 'Healthcare', Icon: StethoscopeIcon },
-  { key: 'pets', label: 'Pets', Icon: PawPrintIcon },
-  { key: 'briefcase', label: 'Work', Icon: HiOutlineBriefcase },
-  { key: 'globe', label: 'Global', Icon: HiOutlineGlobeAlt },
-  { key: 'shield', label: 'Security', Icon: HiOutlineShieldCheck },
-  { key: 'chat', label: 'Comm', Icon: HiOutlineChatBubbleOvalLeft },
-  { key: 'bolt', label: 'Energy', Icon: HiOutlineBolt },
-  { key: 'chart', label: 'Analytics', Icon: HiOutlineChartBar },
-  { key: 'rocket', label: 'Launch', Icon: HiOutlineRocketLaunch },
-  { key: 'wrench', label: 'Tools', Icon: HiOutlineWrenchScrewdriver },
-  { key: 'envelope', label: 'Inbox', Icon: HiOutlineEnvelope },
-  { key: 'stack', label: 'Data', Icon: HiOutlineCircleStack },
-  { key: 'building', label: 'Office', Icon: HiOutlineBuildingOffice },
-  { key: 'cog', label: 'Settings', Icon: HiOutlineCog6Tooth },
-];
-
-const hexToRgba = (hex, alpha = 1) => {
-  if (!hex) return `rgba(255, 255, 255, ${alpha})`;
-  const normalized = hex.replace('#', '');
-  const length = normalized.length;
-
-  const parse = (start) => {
-    const chunk = normalized.slice(start, start + (length === 3 ? 1 : 2));
-    const value = parseInt(chunk, 16);
-    return length === 3 ? value * 17 : value;
-  };
-
-  const r = parse(0);
-  const g = parse(length === 3 ? 1 : 2);
-  const b = parse(length === 3 ? 2 : 4);
-
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-};
+import { 
+    ProjectIconPicker, 
+    PROJECT_ICON_OPTIONS, 
+    DEFAULT_PROJECT_ICON_COLOR, 
+    NotebookIcon, 
+    hexToRgba,
+    BRAND_COLOR
+} from './ProjectAppearance';
 
 const ICON_MENU_PALETTE = {
   dark: {
@@ -136,48 +30,12 @@ const ICON_MENU_PALETTE = {
     border: '#1d2a45',
     shadow: '0 28px 52px rgba(8, 12, 24, 0.75)',
     text: '#f0f5ff',
-    mutedText: '#7e8dad',
-    headerBorder: '#1d2a45',
-    headerBackground: '#101a2d',
-    chipRing: BRAND_COLOR,
-    chipRingSoft: hexToRgba(BRAND_COLOR, 0.35),
-    chipShadow: '0 10px 20px rgba(8, 12, 24, 0.55)',
-    iconButtonBg: '#16223a',
-    iconButtonBorder: '#21304d',
-    iconButtonHover: '#253655',
-    iconButtonText: '#cad5f0',
-    iconButtonSelectedBg: hexToRgba(BRAND_COLOR, 0.28),
-    iconButtonSelectedBorder: BRAND_COLOR,
-    iconButtonSelectedText: '#ffffff',
-    doneBg: BRAND_COLOR,
-    doneHover: BRAND_COLOR,
-    doneText: '#ffffff',
-    divider: '#202d49',
-    footerBackground: '#10112a',
   },
   light: {
     background: '#ffffff',
     border: '#d5ddf1',
     shadow: '0 24px 48px rgba(15, 23, 42, 0.15)',
     text: '#151b2f',
-    mutedText: '#657091',
-    headerBorder: '#d5ddf1',
-    headerBackground: '#ffffff',
-    chipRing: BRAND_COLOR,
-    chipRingSoft: hexToRgba(BRAND_COLOR, 0.24),
-    chipShadow: '0 10px 18px rgba(15, 23, 42, 0.12)',
-    iconButtonBg: '#f3f5fb',
-    iconButtonBorder: '#d5ddf1',
-    iconButtonHover: '#e6eaf5',
-    iconButtonText: '#3b4662',
-    iconButtonSelectedBg: hexToRgba(BRAND_COLOR, 0.16),
-    iconButtonSelectedBorder: BRAND_COLOR,
-    iconButtonSelectedText: BRAND_COLOR,
-    doneBg: BRAND_COLOR,
-    doneHover: BRAND_COLOR,
-    doneText: '#ffffff',
-    divider: '#d5ddf1',
-    footerBackground: '#f7f8fd',
   },
 };
 
@@ -377,7 +235,6 @@ const ChatHistoryPanel = ({
       const scrollRect = scrollContainerRef.current?.getBoundingClientRect();
       const gutter = 14;
 
-      // Position menu directly under the project card
       const containerTop = projectRect.bottom + 4;
       const containerBottom = scrollRect ? scrollRect.bottom - 12 : viewportHeight - gutter;
       const containerLeft = scrollRect ? scrollRect.left + 2 : gutter;
@@ -400,15 +257,12 @@ const ChatHistoryPanel = ({
       }
 
       const menuRect = menuEl.getBoundingClientRect();
-      const referenceRect = projectRect || anchorRect;
 
-      // Position the menu directly below the project card
-      let top = projectRect.bottom + 4; // 4px gap between card and menu
+      let top = projectRect.bottom + 4; 
       const maxTop = Math.max(containerTop, containerBottom - menuRect.height);
       if (top > maxTop) top = maxTop;
       if (top < containerTop) top = containerTop;
 
-      // Align the menu with the left edge of the project card
       let left = projectRect.left;
       const minLeft = containerLeft;
       const maxLeft = Math.max(minLeft, containerRight - menuRect.width);
@@ -726,7 +580,6 @@ const ChatHistoryPanel = ({
                           }
                         : {};
                       
-                      // Get project card and scroll container positions for mobile
                       const projectCardEl = projectCardRefs.current.get(iconMenuProjectId);
                       const projectCardRect = projectCardEl?.getBoundingClientRect();
                       const scrollContainerRect = scrollContainerRef.current?.getBoundingClientRect();
@@ -768,6 +621,7 @@ const ChatHistoryPanel = ({
                       ]
                         .filter(Boolean)
                         .join(' ');
+                      
                       iconMenuContent = (
                         <div
                           ref={iconMenuRef}
@@ -784,141 +638,12 @@ const ChatHistoryPanel = ({
                           role="dialog"
                           aria-label="Choose project icon"
                         >
-                          <div
-                            className="px-3 py-2 border-b text-sm font-semibold tracking-tight"
-                            style={{
-                              borderColor: iconMenuPalette.headerBorder,
-                              backgroundColor: iconMenuPalette.headerBackground,
-                            }}
-                          >
-                            Choose icon
-                          </div>
-                          <div className="px-3 py-2 space-y-2.5">
-                            <div className="space-y-1">
-                              <span
-                                className="text-[10px] uppercase tracking-[0.28em] font-semibold"
-                                style={{ color: iconMenuPalette.mutedText }}
-                              >
-                                Colour
-                              </span>
-                              <div className="flex gap-1 overflow-x-auto sm:flex-wrap sm:overflow-visible">
-                                {PROJECT_COLOR_OPTIONS.map((option) => {
-                                  const isSelectedColour =
-                                    (project.iconColor || DEFAULT_PROJECT_ICON_COLOR) ===
-                                    option.value;
-                                  const buttonStyle = {
-                                    backgroundColor: option.value,
-                                    borderColor: isSelectedColour
-                                      ? iconMenuPalette.chipRing
-                                      : 'transparent',
-                                    boxShadow: isSelectedColour
-                                      ? `0 0 0 2px ${iconMenuPalette.chipRingSoft}`
-                                      : iconMenuPalette.chipShadow,
-                                    transition: 'transform 150ms ease, box-shadow 150ms ease',
-                                    ...(option.previewStyle || {}),
-                                  };
-                                  return (
-                                    <button
-                                      key={option.value}
-                                      type="button"
-                                      onClick={() =>
-                                        onUpdateProjectAppearance?.(project.id, {
-                                          iconColor: option.value,
-                                        })
-                                      }
-                                      className={`relative inline-flex h-6 w-6 items-center justify-center rounded-full border-2 transition-transform duration-150 hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0 ${
-                                        isDark
-                                          ? 'focus-visible:ring-purple-400'
-                                          : 'focus-visible:ring-purple-500'
-                                      }`}
-                                      style={buttonStyle}
-                                      aria-pressed={isSelectedColour}
-                                      aria-label={`Choose ${option.label.toLowerCase()} colour`}
-                                    >
-                                      <span className="sr-only">{option.label}</span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                            <div className="space-y-1.5">
-                              <span
-                                className="text-[10px] uppercase tracking-[0.28em] font-semibold"
-                                style={{ color: iconMenuPalette.mutedText }}
-                              >
-                                Icon
-                              </span>
-                              <div className="grid grid-cols-6 gap-1">
-                                {PROJECT_ICON_OPTIONS.map((option) => {
-                                  const OptionIcon = option.Icon || NotebookIcon;
-                                  const isSelectedIcon =
-                                    (project.iconKey || 'notebook') === option.key;
-                                  const buttonStyle = isSelectedIcon
-                                    ? {
-                                        backgroundColor: iconMenuPalette.iconButtonSelectedBg,
-                                        borderColor: iconMenuPalette.iconButtonSelectedBorder,
-                                        color: iconMenuPalette.iconButtonSelectedText,
-                                        boxShadow: `0 0 0 1px ${iconMenuPalette.iconButtonSelectedBorder}`,
-                                        transition: 'transform 150ms ease, box-shadow 150ms ease',
-                                      }
-                                    : {
-                                        backgroundColor: iconMenuPalette.iconButtonBg,
-                                        borderColor: iconMenuPalette.iconButtonBorder,
-                                        color: iconMenuPalette.iconButtonText,
-                                        boxShadow: 'none',
-                                        transition: 'transform 150ms ease, box-shadow 150ms ease',
-                                      };
-                                  return (
-                                    <button
-                                      key={option.key}
-                                      type="button"
-                                      onClick={() =>
-                                        onUpdateProjectAppearance?.(project.id, {
-                                          iconKey: option.key,
-                                        })
-                                      }
-                                      className={`h-7 w-7 rounded-lg border flex items-center justify-center text-base transition-transform duration-150 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0 ${
-                                        isDark
-                                          ? 'hover:brightness-110 focus-visible:ring-purple-400'
-                                          : 'hover:brightness-105 focus-visible:ring-purple-500'
-                                      }`}
-                                      style={buttonStyle}
-                                      aria-pressed={isSelectedIcon}
-                                      aria-label={`Use ${option.label} icon`}
-                                    >
-                                      <OptionIcon className="w-4 h-4" />
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          </div>
-                          <div
-                            className="px-3 py-2 border-t"
-                            style={{
-                              borderColor: iconMenuPalette.divider,
-                              backgroundColor: iconMenuPalette.footerBackground,
-                            }}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => setIconMenuProjectId(null)}
-                              className={`w-full rounded-md px-3 py-1.5 text-xs font-semibold tracking-tight transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0 ${
-                                isDark
-                                  ? 'focus-visible:ring-purple-400 hover:translate-y-[0.5px]'
-                                  : 'focus-visible:ring-purple-500 hover:translate-y-[0.5px]'
-                              }`}
-                              style={{
-                                backgroundColor: iconMenuPalette.doneBg,
-                                color: iconMenuPalette.doneText,
-                                boxShadow: '0 8px 20px rgba(18, 20, 35, 0.25)',
-                                transition:
-                                  'background-color 160ms ease, transform 160ms ease, box-shadow 160ms ease',
-                              }}
-                            >
-                              Done
-                            </button>
-                          </div>
+                            <ProjectIconPicker 
+                                project={project}
+                                onUpdate={onUpdateProjectAppearance}
+                                onClose={() => setIconMenuProjectId(null)}
+                                theme={theme}
+                            />
                         </div>
                       );
                     }

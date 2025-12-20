@@ -80,7 +80,6 @@ const AidaWidget = (props) => {
     const requestFullscreen = useCallback(() => setIsFullscreen(true), [setIsFullscreen]);
     const { sidebarRef, sidebarInlineStyle, resizeHandleProps, isResizing } = useResizableSidebar({ isOpen, isFullscreen, isMobileViewport, isEnabled: features.resizable, onRequestFullscreen: requestFullscreen });
     const { isLoading, lastCost, liveReasoning, streamResponse, stopStreaming } = useChatAPI({ apiConfig, messages, setMessages, currentSessionId, updateCurrentSession, user, pageContext, customPrompt });
-    // ✨ MODIFIED: Destructure isNearingTimeLimit from useVoiceInput
     const { isRecording, isTranscribing, elapsedTime, startRecording, stopRecording, cancelTranscription, lastInputWasVoiceRef, transcriptionError, retryTranscription, clearFailedTranscription, isNearingTimeLimit } = useVoiceInput({ transcriptionUrl: apiConfig.transcriptionUrl, onTranscriptionComplete: (text) => { setCurrentMessage(p => p.trim() ? `${p} ${text}` : text); if (text) startAutoSendTimer(); } });
     const { countdown: autoSendCountdown, start: startAutoSendTimer, cancel: cancelAutoSendTimer, setIsPaused: setIsSendTimerPaused } = useCountdown(() => stableHandleSendMessage(), 3);
     const { countdown: autoRecordCountdown, start: startAutoRecordTimer, cancel: cancelAutoRecordTimer, setIsPaused: setIsRecordTimerPaused } = useCountdown(startRecording, 3);
@@ -104,23 +103,16 @@ const AidaWidget = (props) => {
     }, []);
 
     const handleRemoveAttachmentFromMessage = useCallback((messageId, attachmentId) => {
-        // Update the main messages array
         setMessages(prevMessages =>
             prevMessages.map(msg => {
                 if (msg.id === messageId) {
-                    // Filter the general attachments list
                     const updatedAttachments = (msg.attachments || []).filter(att => att.id !== attachmentId);
-                    
-                    // ALSO filter the specific 'images' list to remove the data URL
                     const updatedImages = (msg.images || []).filter(img => img.id !== attachmentId);
-
                     return { ...msg, attachments: updatedAttachments, images: updatedImages };
                 }
                 return msg;
             })
         );
-
-        // Also update the state that controls the modal, so it re-renders immediately
         setViewingMessageAttachments(prevViewingMsg => {
             if (prevViewingMsg && prevViewingMsg.id === messageId) {
                 const updatedAttachments = (prevViewingMsg.attachments || []).filter(att => att.id !== attachmentId);
@@ -133,7 +125,6 @@ const AidaWidget = (props) => {
     const handleStartEdit = useCallback((messageId) => {
         const messageToEdit = messages.find(m => m.id === messageId);
         if (!messageToEdit) return;
-
         setCurrentMessage(messageToEdit.text || '');
         setAttachments(messageToEdit.attachments || []);
         setEditingMessageId(messageId);
@@ -159,28 +150,19 @@ const AidaWidget = (props) => {
 
        const stableHandleSendMessage = useCallback(async (messageTextOverride = null) => {
         const text = messageTextOverride ?? currentMessage;
-        
-        // 1. Validation
         if ((!text.trim() && attachments.length === 0) || isLoading) return;
-        
         cancelAutoSendTimer(); 
         cancelAutoRecordTimer();
-        
-        // 2. Prepare Data
         const botMessageId = `bot-${Date.now()}`;
         const finalModelName = isWebSearchEnabled ? `${selectedModel}:online` : selectedModel;
         const imageAttachments = attachments.filter(a => a.type === 'image');
-        
         let nextMessages = [];
         let userMessage = null;
-        let activeSessionId = currentSessionId; // Track the ID locally
+        let activeSessionId = currentSessionId; 
 
-        // 3. Construct the new state (Optimistic UI)
         if (editingMessageId) {
-            // --- EDIT MODE ---
             const idx = messages.findIndex(m => m.id === editingMessageId);
             if (idx === -1) return;
-            
             userMessage = { 
                 ...messages[idx], 
                 text: text.trim(), 
@@ -189,21 +171,13 @@ const AidaWidget = (props) => {
                 attachments, 
                 images: imageAttachments 
             };
-            
-            // Keep history before the edit, add edited message, add new empty bot message
             const historyBefore = messages.slice(0, idx);
             nextMessages = [...historyBefore, userMessage, { id: botMessageId, text: '', sender: 'bot' }];
-            
-            // Update State
             setMessages(nextMessages);
-            
-            // ✅ SAVE IMMEDIATELY: Update history with the edited version
             if (activeSessionId) {
                 updateCurrentSession(nextMessages);
             }
-
         } else {
-            // --- NEW MESSAGE MODE ---
             userMessage = { 
                 id: `user-${Date.now()}`, 
                 sender: 'user', 
@@ -213,39 +187,21 @@ const AidaWidget = (props) => {
                 attachments, 
                 images: imageAttachments 
             };
-
-            // Create the new array including the user message and empty bot placeholder
             nextMessages = [...messages, userMessage, { id: botMessageId, sender: 'bot', text: '' }];
-            
-            // Update State
             setMessages(nextMessages);
-
-            // ✅ FIX "UNTITLED CHAT" & RACE CONDITION: 
             if (!activeSessionId) {
-                // createNewSession now returns the new ID. Capture it.
                 activeSessionId = createNewSession(nextMessages); 
             } else {
                 updateCurrentSession(nextMessages);
             }
         }
-        
-        // 4. Cleanup UI
         setCurrentMessage(''); 
         clearAttachments(); 
         setEditingMessageId(null); 
         if (isWebSearchEnabled) setIsWebSearchEnabled(false);
-        
-        // 5. Start Streaming
-        // We pass nextMessages (minus the empty bot one) as history context
         const historyForPayload = nextMessages.slice(0, -1); 
-        
-        // ✅ FIX: Pass the activeSessionId to streamResponse.
-        // This ensures the API hook knows where to save the bot message, 
-        // even if the state update hasn't propagated yet.
         await streamResponse({ userMessage, botMessageId, historyForPayload, sessionId: activeSessionId });
-
     }, [currentMessage, attachments, isLoading, editingMessageId, selectedModel, isWebSearchEnabled, messages, currentSessionId, streamResponse, setMessages, createNewSession, updateCurrentSession, cancelAutoSendTimer, cancelAutoRecordTimer, clearAttachments]);
-
 
     const handleRetry = useCallback(async (botMessageId) => { if (isLoading) return; const botIndex = messages.findIndex(m => m.id === botMessageId); if (botIndex === -1) return; let userIndex = -1; for (let i = botIndex - 1; i >= 0; i--) { if (messages[i].sender === 'user' && (messages[i].text || messages[i].attachments?.length > 0)) { userIndex = i; break; } } if (userIndex === -1) return; const userMessageToRetry = messages[userIndex]; const historyForPayload = messages.slice(0, userIndex); const newBotMessageId = `bot-${Date.now()}`; setMessages([...historyForPayload, userMessageToRetry, { id: newBotMessageId, sender: 'bot', text: '' }]); await streamResponse({ userMessage: userMessageToRetry, botMessageId: newBotMessageId, historyForPayload, sessionId: currentSessionId }); }, [isLoading, messages, streamResponse, setMessages, currentSessionId]);
     
@@ -255,7 +211,6 @@ const AidaWidget = (props) => {
         closePanel();
     }, [setMessages, setCurrentSessionId, closePanel]);
 
-    // ✨ NEW: Calculate current session title and handle renaming
     const currentSession = historyItems.find(h => h.id === currentSessionId);
     const currentSessionTitle = currentSession?.title || "New Chat";
     
@@ -284,7 +239,6 @@ const AidaWidget = (props) => {
                             </svg>
                             <span>Drop files or folders to attach</span>
                         </div></div>}
-                        {/* ✨ MODIFIED: Pass projects and tag handlers to ChatHeader */}
                         <ChatHeader 
                             displayText={displayText} 
                             lastCost={lastCost} 
@@ -307,6 +261,7 @@ const AidaWidget = (props) => {
                             onCreateProject={historyHandlers.onCreateProject}
                             onAssignChatToProject={historyHandlers.onAssignChatToProject}
                             onRemoveChatFromProject={historyHandlers.onRemoveChatFromProject}
+                            onUpdateProjectAppearance={historyHandlers.onUpdateProjectAppearance}
                         />
                         {features.historyProjects && <ChatHistoryPanel theme={theme} open={isPanelOpen} onClose={closePanel} sessions={historyItems} projects={projects} onSelect={handleHistorySelect} {...historyHandlers} />}
                         <ChatDisplay
@@ -325,7 +280,6 @@ const AidaWidget = (props) => {
                             onRetryBotMessage={features.retryMessage ? handleRetry : undefined}
                             onViewAttachments={handleViewAttachments}
                         />
-                        {/* ✨ MODIFIED: Pass down the new props for the time limit warning and transcription failure */}
                         <ChatInput {...{ currentMessage, setCurrentMessage, handleSendMessage: stableHandleSendMessage, handleKeyDown: (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); stableHandleSendMessage(); } }, handleRecordButtonClick, inputRef, isLoading, isTranscribing, isRecording, elapsedTime, siteLanguage, theme, autoSendCountdown, cancelAutoSendTimer, setIsSendTimerPaused, autoRecordCountdown, cancelAutoRecordTimer, setIsRecordTimerPaused, selectedModel, setSelectedModel, translations, isEditing: !!editingMessageId, cancelEdit: cancelEdit, attachmentCount: attachments.length, onOpenAttachments: openAttachmentModal, isWebSearchEnabled, setIsWebSearchEnabled, onStopStreaming: stopStreaming, features, onCancelTranscription: cancelTranscription, transcriptionError, onRetryTranscription: retryTranscription, onClearFailedTranscription: clearFailedTranscription, isNearingTimeLimit }}/>
                     </div>
                 </div>
