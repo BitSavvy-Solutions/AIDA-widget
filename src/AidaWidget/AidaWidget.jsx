@@ -255,6 +255,16 @@ const AidaWidget = (props) => {
         closePanel();
     }, [setMessages, setCurrentSessionId, closePanel]);
 
+    // ✨ NEW: Calculate current session title and handle renaming
+    const currentSession = historyItems.find(h => h.id === currentSessionId);
+    const currentSessionTitle = currentSession?.title || "New Chat";
+    
+    const handleRenameCurrentSession = useCallback((newTitle) => {
+        if (currentSessionId) {
+            historyHandlers.onRename(currentSessionId, newTitle);
+        }
+    }, [currentSessionId, historyHandlers]);
+
     useEffect(() => { if (isOpen && !isLoading && !isTranscribing) inputRef.current?.focus(); }, [isOpen, isLoading, isTranscribing]);
     useEffect(() => { if (inputRef.current) { inputRef.current.style.height = 'auto'; inputRef.current.style.height = `${inputRef.current.scrollHeight}px`; } }, [currentMessage]);
     useEffect(() => { const handleResize = () => setIsMobileViewport(window.innerWidth <= 768); window.addEventListener('resize', handleResize); return () => window.removeEventListener('resize', handleResize); }, []);
@@ -274,7 +284,25 @@ const AidaWidget = (props) => {
                             </svg>
                             <span>Drop files or folders to attach</span>
                         </div></div>}
-                        <ChatHeader displayText={displayText} lastCost={lastCost} userId={user?.id} paymentLinkConfig={features.paymentLink} resetChat={resetChat} toggleFullscreen={() => setIsFullscreen(p => !p)} showFullscreenToggle={!isMobileViewport} isMobileViewport={isMobileViewport} toggleChat={toggleChat} theme={theme} onToggleTheme={() => setTheme(p => p === 'dark' ? 'light' : 'dark')} onToggleHistory={openPanel} onDisplayClick={features.customInstructions ? openPromptModal : undefined} />
+                        {/* ✨ MODIFIED: Pass sessionTitle and onRenameSession to ChatHeader */}
+                        <ChatHeader 
+                            displayText={displayText} 
+                            lastCost={lastCost} 
+                            userId={user?.id} 
+                            paymentLinkConfig={features.paymentLink} 
+                            resetChat={resetChat} 
+                            toggleFullscreen={() => setIsFullscreen(p => !p)} 
+                            showFullscreenToggle={!isMobileViewport} 
+                            isMobileViewport={isMobileViewport} 
+                            toggleChat={toggleChat} 
+                            theme={theme} 
+                            onToggleTheme={() => setTheme(p => p === 'dark' ? 'light' : 'dark')} 
+                            onToggleHistory={openPanel} 
+                            onDisplayClick={features.customInstructions ? openPromptModal : undefined}
+                            sessionTitle={currentSessionTitle}
+                            onRenameSession={handleRenameCurrentSession}
+                            isSessionActive={!!currentSessionId}
+                        />
                         {features.historyProjects && <ChatHistoryPanel theme={theme} open={isPanelOpen} onClose={closePanel} sessions={historyItems} projects={projects} onSelect={handleHistorySelect} {...historyHandlers} />}
                         <ChatDisplay
                             messages={messages}

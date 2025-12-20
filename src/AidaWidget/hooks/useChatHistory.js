@@ -1,3 +1,4 @@
+/* src/AidaWidget/hooks/useChatHistory.js */
 import { useState, useCallback, useMemo } from 'react';
 
 const HISTORY_KEY = 'aida-chat-history';
@@ -48,7 +49,7 @@ export const useChatHistory = (getSanitizedMessages) => {
     // --- Utility ---
     const buildTitleFromMessages = useCallback((msgs) => {
         const firstUser = (msgs || []).find(m => m.sender === 'user' && (m.text || '').trim());
-        const base = firstUser ? firstUser.text.trim() : 'Untitled Chat';
+        const base = firstUser ? firstUser.text.trim() : 'New Chat';
         return base.length > 60 ? `${base.slice(0, 57)}…` : base;
     }, []);
 
@@ -56,9 +57,15 @@ export const useChatHistory = (getSanitizedMessages) => {
     const createNewSession = useCallback((currentMsgs) => {
         const id = `chat-${Date.now()}`;
         const title = buildTitleFromMessages(currentMsgs);
-        const newSession = { id, title, createdAt: Date.now(), messages: currentMsgs };
+        // ✅ FIX: Initialize customTitle as false
+        const newSession = { 
+            id, 
+            title, 
+            createdAt: Date.now(), 
+            messages: currentMsgs,
+            customTitle: false 
+        };
         
-        // Use functional update to ensure we don't overwrite concurrent updates
         setHistoryItems(prev => {
             const updated = [newSession, ...prev].slice(0, 200);
             try { localStorage.setItem(HISTORY_KEY, JSON.stringify(updated)); } catch { }
@@ -71,23 +78,30 @@ export const useChatHistory = (getSanitizedMessages) => {
         return id;
     }, [buildTitleFromMessages]);
     
-    // ✅ FIX: Use functional state update to access the LATEST historyItems.
-    // This prevents the "Stale Closure" bug where the function uses an old version 
-    // of the array and accidentally deletes the newly created session.
     const updateCurrentSession = useCallback((currentMsgs, explicitId = null) => {
         const targetId = explicitId || currentSessionId;
         
         if (!targetId) return;
         
-        const title = buildTitleFromMessages(currentMsgs);
+        // Calculate what the auto-title *would* be
+        const autoTitle = buildTitleFromMessages(currentMsgs);
 
         setHistoryItems(prevItems => {
-            // We map over 'prevItems', which React guarantees is the latest state.
-            const updatedItems = prevItems.map(h =>
-                h.id === targetId ? { ...h, title, messages: currentMsgs } : h
-            );
+            const updatedItems = prevItems.map(h => {
+                if (h.id === targetId) {
+                    // ✅ FIX: If the user manually renamed it (customTitle is true), keep the existing title.
+                    // Otherwise, update the title based on the new messages.
+                    const finalTitle = h.customTitle ? h.title : autoTitle;
+                    
+                    return { 
+                        ...h, 
+                        title: finalTitle, 
+                        messages: currentMsgs 
+                    };
+                }
+                return h;
+            });
             
-            // Persist to localStorage immediately within the callback
             try { localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedItems)); } catch { }
             
             return updatedItems;
@@ -103,7 +117,7 @@ export const useChatHistory = (getSanitizedMessages) => {
         } else {
             const id = `chat-${Date.now()}`;
             const title = buildTitleFromMessages(msgs);
-            const newSession = { id, title, createdAt: Date.now(), messages: msgs };
+            const newSession = { id, title, createdAt: Date.now(), messages: msgs, customTitle: false };
             
             setHistoryItems(prev => {
                 const updated = [newSession, ...prev].slice(0, 200);
@@ -209,7 +223,6 @@ export const useChatHistory = (getSanitizedMessages) => {
     // --- Handlers for ChatHistoryPanel ---
     const handlers = useMemo(() => ({
         onDelete: (chatId) => {
-            // We can use persistHistory here because this is a direct user action, not async
             const newItems = historyItems.filter(h => h.id !== chatId);
             persistHistory(newItems);
             persistProjects(projects.map(p => ({
@@ -218,7 +231,12 @@ export const useChatHistory = (getSanitizedMessages) => {
             })));
         },
         onRename: (id, newTitle) => {
-            const newItems = historyItems.map(item => item.id === id ? { ...item, title: newTitle.trim() || 'Untitled Chat' } : item);
+            // ✅ FIX: When renaming, set customTitle to true so updateCurrentSession doesn't overwrite it
+            const newItems = historyItems.map(item => 
+                item.id === id 
+                    ? { ...item, title: newTitle.trim() || 'Untitled Chat', customTitle: true } 
+                    : item
+            );
             persistHistory(newItems);
         },
         onCreateProject: (projectName) => {
