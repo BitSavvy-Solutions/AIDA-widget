@@ -1,6 +1,6 @@
 // src/AidaWidget/ChatHeader.jsx
 import React, { useState, useRef, useEffect } from 'react';
-import { HiPlus, HiOutlineSun, HiOutlineMoon, HiClock, HiEllipsisVertical, HiMinusSmall, HiOutlineArrowsPointingOut, HiPencilSquare, HiCheck, HiXMark } from 'react-icons/hi2';
+import { HiPlus, HiOutlineSun, HiOutlineMoon, HiClock, HiEllipsisVertical, HiMinusSmall, HiOutlineArrowsPointingOut, HiPencilSquare, HiCheck, HiXMark, HiOutlineTag } from 'react-icons/hi2';
 import { LuHandHeart } from 'react-icons/lu'; // ✨ ADDED: Import the heart-in-hand icon
 import SevenSegmentDisplay from './SevenSegmentDisplay';
 import CreditsDisplay from './CreditsDisplay';
@@ -22,6 +22,11 @@ const ChatHeader = ({
     sessionTitle = "New Chat",
     onRenameSession,
     isSessionActive = false,
+    currentSessionId,
+    projects = [],
+    onCreateProject,
+    onAssignChatToProject,
+    onRemoveChatFromProject
 }) => {
     // Use a solid dark shade so it looks identical in both themes
     const headerColors = 'bg-[#0f172a] text-white backdrop-blur-md border-b border-white/10';
@@ -39,6 +44,11 @@ const ChatHeader = ({
     const [titleDraft, setTitleDraft] = useState(sessionTitle);
     const titleInputRef = useRef(null);
 
+    // ✨ NEW: State for Tag Menu
+    const [isTagMenuOpen, setIsTagMenuOpen] = useState(false);
+    const tagMenuRef = useRef(null);
+    const [newTagDraft, setNewTagDraft] = useState('');
+
     useEffect(() => {
         if (!isMenuOpen) return;
         const handleClick = (event) => {
@@ -49,6 +59,18 @@ const ChatHeader = ({
         document.addEventListener('mousedown', handleClick);
         return () => document.removeEventListener('mousedown', handleClick);
     }, [isMenuOpen]);
+
+    // ✨ NEW: Close tag menu on outside click
+    useEffect(() => {
+        if (!isTagMenuOpen) return;
+        const handleClick = (event) => {
+            if (!tagMenuRef.current?.contains(event.target)) {
+                setIsTagMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClick);
+        return () => document.removeEventListener('mousedown', handleClick);
+    }, [isTagMenuOpen]);
 
     // ✨ NEW: Observe header width to toggle layout mode
     useEffect(() => {
@@ -104,6 +126,29 @@ const ChatHeader = ({
         } else if (e.key === 'Escape') {
             e.preventDefault();
             handleCancelEdit();
+        }
+    };
+
+    // ✨ NEW: Tag Management Handlers
+    const handleToggleTag = (projectId) => {
+        if (!currentSessionId) return;
+        const project = projects.find(p => p.id === projectId);
+        if (!project) return;
+
+        const isAssigned = project.chatIds.includes(currentSessionId);
+        if (isAssigned) {
+            onRemoveChatFromProject(projectId, currentSessionId);
+        } else {
+            onAssignChatToProject(projectId, currentSessionId);
+        }
+    };
+
+    const handleCreateTag = () => {
+        if (!newTagDraft.trim() || !onCreateProject || !currentSessionId) return;
+        const newProjectId = onCreateProject(newTagDraft.trim());
+        if (newProjectId) {
+            onAssignChatToProject(newProjectId, currentSessionId);
+            setNewTagDraft('');
         }
     };
 
@@ -171,6 +216,67 @@ const ChatHeader = ({
                 )}
             </div>
             <div className="flex items-center space-x-2 pr-1 shrink-0">
+                {/* ✨ NEW: Tag Button & Menu */}
+                {isSessionActive && (
+                    <div className="relative" ref={tagMenuRef}>
+                        <button
+                            onClick={() => setIsTagMenuOpen(!isTagMenuOpen)}
+                            className={`p-1 rounded-full ${hoverColor} transition-colors ${isTagMenuOpen ? 'bg-white/10' : ''}`}
+                            aria-label="Manage Tags"
+                            title="Manage Tags"
+                        >
+                            <HiOutlineTag className="w-5 h-5" style={{ color: accentColor }} />
+                        </button>
+                        {isTagMenuOpen && (
+                            <div className="absolute right-0 mt-2 w-56 rounded-lg bg-slate-800/95 text-sm shadow-lg border border-white/10 py-2 z-50 flex flex-col">
+                                <div className="px-3 pb-2 border-b border-white/10 mb-1">
+                                    <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Tags</span>
+                                </div>
+                                <div className="max-h-48 overflow-y-auto custom-scrollbar px-1">
+                                    {projects.length === 0 && (
+                                        <div className="px-3 py-2 text-xs text-gray-500 italic text-center">No tags yet</div>
+                                    )}
+                                    {projects.map(project => {
+                                        const isSelected = project.chatIds.includes(currentSessionId);
+                                        return (
+                                            <button
+                                                key={project.id}
+                                                onClick={() => handleToggleTag(project.id)}
+                                                className="w-full px-2 py-1.5 text-left hover:bg-white/10 rounded flex items-center gap-2 group"
+                                            >
+                                                <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-brand-coral border-brand-coral' : 'border-gray-500 group-hover:border-gray-300'}`}>
+                                                    {isSelected && <HiCheck className="w-3 h-3 text-white" />}
+                                                </div>
+                                                <span className={`truncate ${isSelected ? 'text-white' : 'text-gray-300'}`}>{project.name}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                <div className="px-2 pt-2 mt-1 border-t border-white/10">
+                                    <div className="flex items-center gap-1">
+                                        <input
+                                            type="text"
+                                            value={newTagDraft}
+                                            onChange={(e) => setNewTagDraft(e.target.value)}
+                                            onKeyDown={(e) => e.key === 'Enter' && handleCreateTag()}
+                                            placeholder="New tag..."
+                                            className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-brand-coral/50 placeholder-gray-500"
+                                        />
+                                        <button
+                                            onClick={handleCreateTag}
+                                            disabled={!newTagDraft.trim()}
+                                            className="p-1 rounded bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors"
+                                            title="Create Tag"
+                                        >
+                                            <HiPlus className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {showFullscreenToggle && typeof toggleFullscreen === 'function' && (
                     <button
                         onClick={toggleFullscreen}

@@ -284,7 +284,7 @@ const AidaWidget = (props) => {
                             </svg>
                             <span>Drop files or folders to attach</span>
                         </div></div>}
-                        {/* ✨ MODIFIED: Pass sessionTitle and onRenameSession to ChatHeader */}
+                        {/* ✨ MODIFIED: Pass projects and tag handlers to ChatHeader */}
                         <ChatHeader 
                             displayText={displayText} 
                             lastCost={lastCost} 
@@ -302,6 +302,11 @@ const AidaWidget = (props) => {
                             sessionTitle={currentSessionTitle}
                             onRenameSession={handleRenameCurrentSession}
                             isSessionActive={!!currentSessionId}
+                            currentSessionId={currentSessionId}
+                            projects={projects}
+                            onCreateProject={historyHandlers.onCreateProject}
+                            onAssignChatToProject={historyHandlers.onAssignChatToProject}
+                            onRemoveChatFromProject={historyHandlers.onRemoveChatFromProject}
                         />
                         {features.historyProjects && <ChatHistoryPanel theme={theme} open={isPanelOpen} onClose={closePanel} sessions={historyItems} projects={projects} onSelect={handleHistorySelect} {...historyHandlers} />}
                         <ChatDisplay

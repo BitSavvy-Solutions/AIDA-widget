@@ -57,7 +57,6 @@ export const useChatHistory = (getSanitizedMessages) => {
     const createNewSession = useCallback((currentMsgs) => {
         const id = `chat-${Date.now()}`;
         const title = buildTitleFromMessages(currentMsgs);
-        // ✅ FIX: Initialize customTitle as false
         const newSession = { 
             id, 
             title, 
@@ -83,14 +82,11 @@ export const useChatHistory = (getSanitizedMessages) => {
         
         if (!targetId) return;
         
-        // Calculate what the auto-title *would* be
         const autoTitle = buildTitleFromMessages(currentMsgs);
 
         setHistoryItems(prevItems => {
             const updatedItems = prevItems.map(h => {
                 if (h.id === targetId) {
-                    // ✅ FIX: If the user manually renamed it (customTitle is true), keep the existing title.
-                    // Otherwise, update the title based on the new messages.
                     const finalTitle = h.customTitle ? h.title : autoTitle;
                     
                     return { 
@@ -231,7 +227,6 @@ export const useChatHistory = (getSanitizedMessages) => {
             })));
         },
         onRename: (id, newTitle) => {
-            // ✅ FIX: When renaming, set customTitle to true so updateCurrentSession doesn't overwrite it
             const newItems = historyItems.map(item => 
                 item.id === id 
                     ? { ...item, title: newTitle.trim() || 'Untitled Chat', customTitle: true } 
@@ -241,10 +236,11 @@ export const useChatHistory = (getSanitizedMessages) => {
         },
         onCreateProject: (projectName) => {
             const trimmed = projectName.trim();
-            if (!trimmed || projects.some(p => p.name.toLowerCase() === trimmed.toLowerCase())) return false;
-            const newProject = ensureProjectDefaults({ id: `project-${Date.now()}`, name: trimmed, chatIds: [] });
+            if (!trimmed || projects.some(p => p.name.toLowerCase() === trimmed.toLowerCase())) return null;
+            const newId = `project-${Date.now()}`;
+            const newProject = ensureProjectDefaults({ id: newId, name: trimmed, chatIds: [] });
             persistProjects([newProject, ...projects]);
-            return true;
+            return newId; // ✅ MODIFIED: Return the ID instead of boolean
         },
         onDeleteProject: (projectId) => {
             persistProjects(projects.filter(p => p.id !== projectId));
