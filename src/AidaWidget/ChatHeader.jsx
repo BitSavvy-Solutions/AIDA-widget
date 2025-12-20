@@ -1,5 +1,5 @@
 /* src/AidaWidget/ChatHeader.jsx */
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
 import { 
     HiPlus, HiOutlineSun, HiOutlineMoon, HiClock, HiEllipsisVertical, 
     HiMinusSmall, HiOutlineArrowsPointingOut, HiPencilSquare, HiCheck, 
@@ -60,6 +60,11 @@ const ChatHeader = ({
     const [newTagDraft, setNewTagDraft] = useState('');
     const [editingProjectId, setEditingProjectId] = useState(null);
 
+    // Dynamic Tag Sizing
+    const [visibleTagCount, setVisibleTagCount] = useState(0);
+    const tagsContainerRef = useRef(null);
+    const hiddenMeasureRef = useRef(null);
+
     // Check if the title is the default one
     const isDefaultTitle = sessionTitle === 'New Chat' || !sessionTitle || sessionTitle.trim() === '';
 
@@ -97,18 +102,71 @@ const ChatHeader = ({
     useEffect(() => {
         if (isEditingTitle && titleInputRef.current) {
             titleInputRef.current.focus();
-            // Only select text if it's NOT the default "New Chat"
             if (!isDefaultTitle) {
                 titleInputRef.current.select();
             }
         }
     }, [isEditingTitle, isDefaultTitle]);
 
+    const assignedProjects = useMemo(() => {
+        if (!currentSessionId) return [];
+        return projects.filter(p => p.chatIds.includes(currentSessionId));
+    }, [projects, currentSessionId]);
+
+    // ✅ NEW: Dynamic calculation logic
+    useLayoutEffect(() => {
+        if (!tagsContainerRef.current || !hiddenMeasureRef.current || assignedProjects.length === 0) {
+            setVisibleTagCount(assignedProjects.length);
+            return;
+        }
+
+        const calculateVisibleTags = () => {
+            const containerWidth = tagsContainerRef.current.offsetWidth;
+            const tagNodes = hiddenMeasureRef.current.children;
+            const gap = 4; // gap-1 is 0.25rem = 4px
+            const badgeWidthApprox = 28; // Approximate width of the "+N" badge including gap
+            
+            let currentWidth = 0;
+            let count = 0;
+
+            for (let i = 0; i < tagNodes.length; i++) {
+                const tagWidth = tagNodes[i].offsetWidth;
+                
+                // Calculate width if we add this tag
+                // If it's not the first tag, add the gap
+                const nextWidth = currentWidth + tagWidth + (i > 0 ? gap : 0);
+
+                // Check if this is the last item
+                if (i === tagNodes.length - 1) {
+                    if (nextWidth <= containerWidth) {
+                        count++;
+                    }
+                } else {
+                    // If not the last item, we must reserve space for the badge
+                    if (nextWidth + gap + badgeWidthApprox <= containerWidth) {
+                        currentWidth = nextWidth;
+                        count++;
+                    } else {
+                        break;
+                    }
+                }
+            }
+            setVisibleTagCount(count);
+        };
+
+        const observer = new ResizeObserver(calculateVisibleTags);
+        observer.observe(tagsContainerRef.current);
+        
+        // Initial calculation
+        calculateVisibleTags();
+
+        return () => observer.disconnect();
+    }, [assignedProjects, isNarrow]); // Recalculate when projects change or header width changes
+
     const closeMenu = () => setIsMenuOpen(false);
 
     const handleStartEdit = () => {
         if (!isSessionActive) return;
-        // If it's the default title, clear the draft so the placeholder shows
         if (isDefaultTitle) {
             setTitleDraft('');
         } else {
@@ -121,8 +179,6 @@ const ChatHeader = ({
         if (titleDraft.trim() && onRenameSession) {
             onRenameSession(titleDraft.trim());
         } else {
-            // If empty, revert to props (which usually defaults to New Chat in parent)
-            // or explicitly set it here if parent doesn't handle empty string
             if (onRenameSession) onRenameSession("New Chat");
         }
         setIsEditingTitle(false);
@@ -155,14 +211,32 @@ const ChatHeader = ({
         }
     };
 
-    const assignedProjects = useMemo(() => {
-        if (!currentSessionId) return [];
-        return projects.filter(p => p.chatIds.includes(currentSessionId));
-    }, [projects, currentSessionId]);
+    const visibleTags = assignedProjects.slice(0, visibleTagCount);
+    const hiddenTagCount = assignedProjects.length - visibleTagCount;
+
+    // Helper to render a tag (used for both visible and hidden measurement)
+    const renderTag = (p, isHidden = false) => {
+        const Icon = PROJECT_ICON_OPTIONS.find(opt => opt.key === p.iconKey)?.Icon || NotebookIcon;
+        const color = p.iconColor || DEFAULT_PROJECT_ICON_COLOR;
+        const bg = hexToRgba(color, 0.15);
+        
+        return (
+            <div 
+                key={p.id} 
+                className="flex items-center gap-0.5 px-1 py-0.5 rounded-md border border-white/5 shrink-0"
+                style={{ backgroundColor: bg, borderColor: hexToRgba(color, 0.3) }}
+            >
+                <Icon className="w-3 h-3 shrink-0" style={{ color: color }} />
+                <span className="text-[10px] font-medium leading-none whitespace-nowrap" style={{ color: color }}>
+                    {p.name}
+                </span>
+            </div>
+        );
+    };
 
     return (
-        <div ref={headerRef} className={`${headerColors} glass-header pl-2 pr-1 py-2 flex justify-between items-center rounded-none relative`}>
-            <div className="flex items-center gap-3 flex-1 min-w-0 mr-2">
+        <div ref={headerRef} className={`${headerColors} glass-header pl-0.5 pr-1 py-0.5 flex justify-between items-center rounded-none relative`}>
+            <div className="flex items-center gap-1 flex-1 min-w-0 mr-2">
                 {/* LCD Display */}
                 {onDisplayClick ? (
                     <button type="button" onClick={onDisplayClick} className="p-0 bg-transparent border-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 rounded-md shrink-0">
@@ -215,32 +289,33 @@ const ChatHeader = ({
 
                     {/* Tags Row (Below Title) */}
                     {isSessionActive && (
-                        <div className="relative flex items-center mt-1 ml-0.5" ref={tagMenuRef}>
+                        <div className="relative flex items-center mt-1 ml-0.5 w-full" ref={tagMenuRef}>
                             <button
                                 onClick={() => setIsTagMenuOpen(!isTagMenuOpen)}
-                                className={`flex items-center text-left rounded transition-colors ${isTagMenuOpen ? 'bg-white/5' : 'hover:bg-white/5'}`}
+                                className={`flex items-center text-left rounded transition-colors w-full ${isTagMenuOpen ? 'bg-white/5' : 'hover:bg-white/5'}`}
                                 title="Manage Tags"
                             >
                                 {assignedProjects.length > 0 ? (
-                                    <div className="flex flex-wrap gap-1">
-                                        {assignedProjects.map(p => {
-                                            const Icon = PROJECT_ICON_OPTIONS.find(opt => opt.key === p.iconKey)?.Icon || NotebookIcon;
-                                            const color = p.iconColor || DEFAULT_PROJECT_ICON_COLOR;
-                                            const bg = hexToRgba(color, 0.15);
+                                    <div className="w-full relative">
+                                        {/* 1. Visible Container: Shows calculated tags */}
+                                        <div ref={tagsContainerRef} className="flex items-center gap-1 w-full overflow-hidden">
+                                            {visibleTags.map(p => renderTag(p))}
                                             
-                                            return (
-                                                <div 
-                                                    key={p.id} 
-                                                    className="flex items-center gap-0.5 px-1 py-0.5 rounded-md border border-white/5"
-                                                    style={{ backgroundColor: bg, borderColor: hexToRgba(color, 0.3) }}
-                                                >
-                                                    <Icon className="w-3 h-3" style={{ color: color }} />
-                                                    <span className="text-[10px] font-medium leading-none" style={{ color: color }}>
-                                                        {p.name}
-                                                    </span>
+                                            {hiddenTagCount > 0 && (
+                                                <div className="flex items-center justify-center px-1.5 py-0.5 rounded-md border border-white/10 bg-white/5 text-[10px] font-medium text-gray-400 shrink-0">
+                                                    +{hiddenTagCount}
                                                 </div>
-                                            );
-                                        })}
+                                            )}
+                                        </div>
+
+                                        {/* 2. Hidden Measurement Container: Renders ALL tags to calculate widths */}
+                                        <div 
+                                            ref={hiddenMeasureRef} 
+                                            className="flex items-center gap-1 absolute top-0 left-0 opacity-0 pointer-events-none invisible"
+                                            aria-hidden="true"
+                                        >
+                                            {assignedProjects.map(p => renderTag(p))}
+                                        </div>
                                     </div>
                                 ) : (
                                     <div className="flex items-center gap-1 text-gray-500 hover:text-gray-400 transition-colors px-1">
