@@ -29,6 +29,10 @@ const ChatHeader = ({
     const accentColor = '#ffffff';
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const menuRef = useRef(null);
+    
+    // ✨ NEW: Ref for measuring header width
+    const headerRef = useRef(null);
+    const [isNarrow, setIsNarrow] = useState(false);
 
     // ✨ NEW: State for title editing
     const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -45,6 +49,21 @@ const ChatHeader = ({
         document.addEventListener('mousedown', handleClick);
         return () => document.removeEventListener('mousedown', handleClick);
     }, [isMenuOpen]);
+
+    // ✨ NEW: Observe header width to toggle layout mode
+    useEffect(() => {
+        if (!headerRef.current) return;
+
+        const observer = new ResizeObserver((entries) => {
+            for (const entry of entries) {
+                // If width is less than 480px, hide extras to show title
+                setIsNarrow(entry.contentRect.width < 480);
+            }
+        });
+
+        observer.observe(headerRef.current);
+        return () => observer.disconnect();
+    }, []);
 
     // ✨ NEW: Sync draft with prop when not editing
     useEffect(() => {
@@ -89,7 +108,7 @@ const ChatHeader = ({
     };
 
     return (
-        <div className={`${headerColors} glass-header pl-2 pr-1 py-2 flex justify-between items-center rounded-none relative`}>
+        <div ref={headerRef} className={`${headerColors} glass-header pl-2 pr-1 py-2 flex justify-between items-center rounded-none relative`}>
             <div className="flex items-center gap-3 flex-1 min-w-0 mr-2">
                 {onDisplayClick ? (
                     <button
@@ -130,23 +149,26 @@ const ChatHeader = ({
                     )}
                 </div>
 
-                <div className="shrink-0 flex items-center gap-2">
-                    <CreditsDisplay userId={userId} lastCost={lastCost} theme={theme} />
+                {/* ✨ MODIFIED: Hide Balance and Support on narrow screens to prioritize Title */}
+                {!isNarrow && (
+                    <div className="shrink-0 flex items-center gap-2">
+                        <CreditsDisplay userId={userId} lastCost={lastCost} theme={theme} />
 
-                    {/* ✨ NEW: Support/Payment Button */}
-                    {paymentLinkConfig?.show && paymentLinkConfig?.url && (
-                        <a
-                            href={paymentLinkConfig.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-2 py-1.5 rounded-md transition-colors bg-white/10 hover:bg-white/20 text-white shadow-sm"
-                            title={paymentLinkConfig.text || 'Support Us'}
-                        >
-                            <LuHandHeart className="w-4 h-4 text-brand-coral" />
-                            {paymentLinkConfig.text}
-                        </a>
-                    )}
-                </div>
+                        {/* ✨ NEW: Support/Payment Button */}
+                        {paymentLinkConfig?.show && paymentLinkConfig?.url && (
+                            <a
+                                href={paymentLinkConfig.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-2 py-1.5 rounded-md transition-colors bg-white/10 hover:bg-white/20 text-white shadow-sm"
+                                title={paymentLinkConfig.text || 'Support Us'}
+                            >
+                                <LuHandHeart className="w-4 h-4 text-brand-coral" />
+                                {paymentLinkConfig.text}
+                            </a>
+                        )}
+                    </div>
+                )}
             </div>
             <div className="flex items-center space-x-2 pr-1 shrink-0">
                 {showFullscreenToggle && typeof toggleFullscreen === 'function' && (
