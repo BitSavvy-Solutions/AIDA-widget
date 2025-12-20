@@ -157,32 +157,92 @@ const AidaWidget = (props) => {
     const resetChat = () => { saveCurrentChatToHistory(); setMessages([]); setCurrentSessionId(null); clearAttachments(); };
     const handleRecordButtonClick = useCallback(() => { if (isLoading || isTranscribing) return; cancelAutoRecordTimer(); isRecording ? stopRecording() : startRecording(); }, [isRecording, isLoading, isTranscribing, stopRecording, startRecording, cancelAutoRecordTimer]);
 
-    const stableHandleSendMessage = useCallback(async (messageTextOverride = null) => {
+       const stableHandleSendMessage = useCallback(async (messageTextOverride = null) => {
         const text = messageTextOverride ?? currentMessage;
-        if ((!text.trim() && attachments.length === 0) || isLoading) return;
-        cancelAutoSendTimer(); cancelAutoRecordTimer();
         
-        let userMessage, historyForPayload;
+        // 1. Validation
+        if ((!text.trim() && attachments.length === 0) || isLoading) return;
+        
+        cancelAutoSendTimer(); 
+        cancelAutoRecordTimer();
+        
+        // 2. Prepare Data
         const botMessageId = `bot-${Date.now()}`;
         const finalModelName = isWebSearchEnabled ? `${selectedModel}:online` : selectedModel;
         const imageAttachments = attachments.filter(a => a.type === 'image');
+        
+        let nextMessages = [];
+        let userMessage = null;
 
+        // 3. Construct the new state (Optimistic UI)
         if (editingMessageId) {
+            // --- EDIT MODE ---
             const idx = messages.findIndex(m => m.id === editingMessageId);
             if (idx === -1) return;
-            userMessage = { ...messages[idx], text: text.trim(), edited: true, model: finalModelName, attachments, images: imageAttachments };
-            historyForPayload = messages.slice(0, idx);
-            setMessages([...historyForPayload, userMessage, { id: botMessageId, text: '', sender: 'bot' }]);
+            
+            userMessage = { 
+                ...messages[idx], 
+                text: text.trim(), 
+                edited: true, 
+                model: finalModelName, 
+                attachments, 
+                images: imageAttachments 
+            };
+            
+            // Keep history before the edit, add edited message, add new empty bot message
+            const historyBefore = messages.slice(0, idx);
+            nextMessages = [...historyBefore, userMessage, { id: botMessageId, text: '', sender: 'bot' }];
+            
+            // Update State
+            setMessages(nextMessages);
+            
+            // ✅ SAVE IMMEDIATELY: Update history with the edited version
+            if (currentSessionId) {
+                updateCurrentSession(nextMessages);
+            }
+
         } else {
-            if (!currentSessionId) createNewSession([]);
-            userMessage = { id: `user-${Date.now()}`, sender: 'user', text: text.trim(), model: finalModelName, webSearchEnabled: isWebSearchEnabled, attachments, images: imageAttachments };
-            historyForPayload = messages;
-            setMessages(prev => [...prev, userMessage, { id: botMessageId, sender: 'bot', text: '' }]);
+            // --- NEW MESSAGE MODE ---
+            userMessage = { 
+                id: `user-${Date.now()}`, 
+                sender: 'user', 
+                text: text.trim(), 
+                model: finalModelName, 
+                webSearchEnabled: isWebSearchEnabled, 
+                attachments, 
+                images: imageAttachments 
+            };
+
+            // Create the new array including the user message and empty bot placeholder
+            nextMessages = [...messages, userMessage, { id: botMessageId, sender: 'bot', text: '' }];
+            
+            // Update State
+            setMessages(nextMessages);
+
+            // ✅ FIX "UNTITLED CHAT": 
+            // If this is a new session, create it NOW with the messages included.
+            // This allows the title generator to see your text and name it correctly.
+            if (!currentSessionId) {
+                createNewSession(nextMessages); 
+            } else {
+                // ✅ SAVE IMMEDIATELY: Save the user's prompt before the bot even replies.
+                updateCurrentSession(nextMessages);
+            }
         }
         
-        setCurrentMessage(''); clearAttachments(); setEditingMessageId(null); if (isWebSearchEnabled) setIsWebSearchEnabled(false);
+        // 4. Cleanup UI
+        setCurrentMessage(''); 
+        clearAttachments(); 
+        setEditingMessageId(null); 
+        if (isWebSearchEnabled) setIsWebSearchEnabled(false);
+        
+        // 5. Start Streaming
+        // We pass nextMessages (minus the empty bot one) as history context
+        const historyForPayload = nextMessages.slice(0, -1); 
         await streamResponse({ userMessage, botMessageId, historyForPayload });
-    }, [currentMessage, attachments, isLoading, editingMessageId, selectedModel, isWebSearchEnabled, messages, currentSessionId, streamResponse, setMessages, createNewSession, cancelAutoSendTimer, cancelAutoRecordTimer, clearAttachments]);
+
+    }, [currentMessage, attachments, isLoading, editingMessageId, selectedModel, isWebSearchEnabled, messages, currentSessionId, streamResponse, setMessages, createNewSession, updateCurrentSession, cancelAutoSendTimer, cancelAutoRecordTimer, clearAttachments]);
+
 
     const handleRetry = useCallback(async (botMessageId) => { if (isLoading) return; const botIndex = messages.findIndex(m => m.id === botMessageId); if (botIndex === -1) return; let userIndex = -1; for (let i = botIndex - 1; i >= 0; i--) { if (messages[i].sender === 'user' && (messages[i].text || messages[i].attachments?.length > 0)) { userIndex = i; break; } } if (userIndex === -1) return; const userMessageToRetry = messages[userIndex]; const historyForPayload = messages.slice(0, userIndex); const newBotMessageId = `bot-${Date.now()}`; setMessages([...historyForPayload, userMessageToRetry, { id: newBotMessageId, sender: 'bot', text: '' }]); await streamResponse({ userMessage: userMessageToRetry, botMessageId: newBotMessageId, historyForPayload }); }, [isLoading, messages, streamResponse, setMessages]);
     
