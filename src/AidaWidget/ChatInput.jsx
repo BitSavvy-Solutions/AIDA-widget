@@ -48,6 +48,8 @@ const ChatInput = ({
     onRetryTranscription,
     onClearFailedTranscription,
     isNearingTimeLimit,
+    // ✅ ADDED: Receive the image handler
+    onAddImages,
 }) => {
     const [isHoveringSend, setIsHoveringSend] = useState(false);
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
@@ -64,6 +66,25 @@ const ChatInput = ({
     };
 
     const selectedModelLabel = AVAILABLE_MODELS.find(m => m.value === selectedModel)?.label || selectedModel;
+
+    // ✅ ADDED: Handle paste events to capture images from clipboard
+    const handlePaste = (e) => {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+
+        const imageFiles = [];
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image') !== -1) {
+                const file = items[i].getAsFile();
+                if (file) imageFiles.push(file);
+            }
+        }
+
+        if (imageFiles.length > 0 && features.imageUpload && onAddImages) {
+            e.preventDefault(); // Prevent pasting binary data into text area
+            onAddImages(imageFiles);
+        }
+    };
 
     const renderSendButton = () => {
         const visibilityClass = isPillMode ? 'invisible pointer-events-none opacity-0' : '';
@@ -225,7 +246,9 @@ const ChatInput = ({
                     ref={inputRef} 
                     value={currentMessage} 
                     onChange={(e) => setCurrentMessage(e.target.value)} 
-                    onKeyDown={handleKeyDown} 
+                    onKeyDown={handleKeyDown}
+                    // ✅ ADDED: Attach the paste handler
+                    onPaste={handlePaste}
                     placeholder={isEditing ? "Edit your message..." : (translations.inputPlaceholder || "Type your message...")} 
                     dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'} 
                     rows={1} 

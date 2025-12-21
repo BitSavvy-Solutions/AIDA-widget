@@ -280,7 +280,44 @@ const AidaWidget = (props) => {
                             onRetryBotMessage={features.retryMessage ? handleRetry : undefined}
                             onViewAttachments={handleViewAttachments}
                         />
-                        <ChatInput {...{ currentMessage, setCurrentMessage, handleSendMessage: stableHandleSendMessage, handleKeyDown: (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); stableHandleSendMessage(); } }, handleRecordButtonClick, inputRef, isLoading, isTranscribing, isRecording, elapsedTime, siteLanguage, theme, autoSendCountdown, cancelAutoSendTimer, setIsSendTimerPaused, autoRecordCountdown, cancelAutoRecordTimer, setIsRecordTimerPaused, selectedModel, setSelectedModel, translations, isEditing: !!editingMessageId, cancelEdit: cancelEdit, attachmentCount: attachments.length, onOpenAttachments: openAttachmentModal, isWebSearchEnabled, setIsWebSearchEnabled, onStopStreaming: stopStreaming, features, onCancelTranscription: cancelTranscription, transcriptionError, onRetryTranscription: retryTranscription, onClearFailedTranscription: clearFailedTranscription, isNearingTimeLimit }}/>
+                        <ChatInput 
+                            currentMessage={currentMessage}
+                            setCurrentMessage={setCurrentMessage}
+                            handleSendMessage={stableHandleSendMessage}
+                            handleKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); stableHandleSendMessage(); } }}
+                            handleRecordButtonClick={handleRecordButtonClick}
+                            inputRef={inputRef}
+                            isLoading={isLoading}
+                            isTranscribing={isTranscribing}
+                            isRecording={isRecording}
+                            elapsedTime={elapsedTime}
+                            siteLanguage={siteLanguage}
+                            theme={theme}
+                            autoSendCountdown={autoSendCountdown}
+                            cancelAutoSendTimer={cancelAutoSendTimer}
+                            setIsSendTimerPaused={setIsSendTimerPaused}
+                            autoRecordCountdown={autoRecordCountdown}
+                            cancelAutoRecordTimer={cancelAutoRecordTimer}
+                            setIsRecordTimerPaused={setIsRecordTimerPaused}
+                            selectedModel={selectedModel}
+                            setSelectedModel={setSelectedModel}
+                            translations={translations}
+                            isEditing={!!editingMessageId}
+                            cancelEdit={cancelEdit}
+                            attachmentCount={attachments.length}
+                            onOpenAttachments={openAttachmentModal}
+                            isWebSearchEnabled={isWebSearchEnabled}
+                            setIsWebSearchEnabled={setIsWebSearchEnabled}
+                            onStopStreaming={stopStreaming}
+                            features={features}
+                            onCancelTranscription={cancelTranscription}
+                            transcriptionError={transcriptionError}
+                            onRetryTranscription={retryTranscription}
+                            onClearFailedTranscription={clearFailedTranscription}
+                            isNearingTimeLimit={isNearingTimeLimit}
+                            // ✅ ADDED: Pass the image handler to ChatInput
+                            onAddImages={addImageAttachments}
+                        />
                     </div>
                 </div>
             )}
