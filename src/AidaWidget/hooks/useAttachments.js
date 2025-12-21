@@ -103,8 +103,8 @@ export const useAttachments = (setSelectedModel) => {
 
             if (results.length > 0) {
                 setAttachments(prev => [...prev, ...results]);
-                const visionlessModels = new Set(['deepseek/deepseek-r1', 'deepseek/deepseek-chat-v3.1']);
-                setSelectedModel(prevModel => visionlessModels.has(prevModel) ? 'google/gemini-2.5-flash' : prevModel);
+                const visionlessModels = new Set(['deepseek/deepseek-r1', 'deepseek/deepseek-v3.2']);
+                setSelectedModel(prevModel => visionlessModels.has(prevModel) ? 'google/gemini-3-flash-preview' : prevModel);
             }
         } catch (e) {
             console.error('Failed to process image(s)', e);

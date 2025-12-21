@@ -4,11 +4,10 @@ import { HiPaperAirplane, HiOutlineMicrophone, HiStop, HiArrowPath, HiXMark, HiC
 import AttachmentButton from './AttachmentButton';
 
 const AVAILABLE_MODELS = [
-    { value: 'deepseek/deepseek-chat-v3.1', label: 'Deepseek Chat 3.1' },
+    { value: 'deepseek/deepseek-v3.2', label: 'Deepseek 3.2' },
     { value: 'deepseek/deepseek-r1', label: 'Deepseek Reasoner R1'},
     { value: 'openai/gpt-5.1', label: 'GPT-5.1' },
-    { value: 'google/gemini-2.5-flash', label: 'Gemini Flash 2.5' },
-    { value: 'google/gemini-2.5-pro', label: 'Gemini Pro 2.5 (reasoner)' },
+    { value: 'google/gemini-3-flash-preview', label: 'Gemini Flash 3 Pre' },
     { value: 'google/gemini-3-pro-preview', label: 'Gemini Pro 3 (reasoner)' },
     { value: 'perplexity/sonar', label: 'Perplexity Sonar'}
 ];
