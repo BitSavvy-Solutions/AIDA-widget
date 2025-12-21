@@ -1,13 +1,12 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { HiSpeakerWave, HiPlay, HiPause, HiPaperClip } from 'react-icons/hi2';
+import { HiSpeakerWave, HiPlay, HiPause, HiPaperClip, HiChevronDown, HiChevronUp } from 'react-icons/hi2';
 import ReasoningDisplay from './ReasoningDisplay';
 
 import ShikiHighlighter, { isInlineCode } from 'react-shiki';
 
 // ✅ ADDED: Whitelist of languages Shiki is guaranteed to support.
-// This prevents the app from crashing if the AI invents a language ID (e.g. ```students)
 const SUPPORTED_LANGUAGES = new Set([
     'javascript', 'js', 'jsx', 'typescript', 'ts', 'tsx',
     'json', 'jsonc', 'html', 'css', 'scss', 'less',
@@ -28,6 +27,21 @@ const CodeBlock = ({ className, children, node, ...props }) => {
 
     const [copied, setCopied] = useState(false);
     const code = String(children).replace(/\n$/, '');
+    
+    // ✅ NEW: Logic for collapsing long code blocks
+    const lineCount = code.split('\n').length;
+    const COLLAPSE_THRESHOLD = 15;
+    const isLongCode = lineCount > COLLAPSE_THRESHOLD;
+    const [isCollapsed, setIsCollapsed] = useState(isLongCode); // Initialize based on current length
+
+    // ✅ MODIFIED: Use useEffect to automatically collapse if it becomes long
+    useEffect(() => {
+        if (isLongCode) {
+            setIsCollapsed(true);
+        } else {
+            setIsCollapsed(false); // Ensure it's not collapsed if it's short
+        }
+    }, [isLongCode]); // Re-evaluate when the code content (and thus lineCount) changes
 
     const onCopy = async () => {
         try {
@@ -60,10 +74,7 @@ const CodeBlock = ({ className, children, node, ...props }) => {
 
     let language = languageMap[rawLang] || rawLang;
 
-    // ✅ FIXED: Validate language against supported list.
-    // If 'students' or any unknown language is passed, fallback to 'text' to prevent Shiki crash.
     if (!SUPPORTED_LANGUAGES.has(language)) {
-        // Optional heuristic: if it looks like JSON but has a weird tag, try JSON
         if (code.trim().startsWith('{') || code.trim().startsWith('[')) {
             language = 'json';
         } else {
@@ -72,27 +83,69 @@ const CodeBlock = ({ className, children, node, ...props }) => {
     }
 
     return (
-        <div className="relative group">
+        <div className="relative group my-3 rounded-lg border border-white/10 bg-[#1e1e1e] overflow-hidden">
+            {/* Copy Button - Positioned absolutely */}
             <button
                 type="button"
                 onClick={onCopy}
                 aria-label="Copy code"
                 title={copied ? 'Copied' : 'Copy code'}
-                className="absolute top-2 right-2 z-10 inline-flex items-center gap-1 rounded-md bg-gray-800/80 text-gray-200 px-2 py-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-700"
+                className="absolute top-2 right-2 z-20 inline-flex items-center gap-1 rounded-md bg-gray-800/80 text-gray-200 px-2 py-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-700 border border-white/10"
             >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                    <path d="M16 1H4c-1.1 0-2 .9-2 2v12h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
-                </svg>
-                {copied ? 'Copied' : 'Copy'}
+                {copied ? (
+                    <>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 text-green-400">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                        <span className="text-green-400">Copied</span>
+                    </>
+                ) : (
+                    <>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
+                            <path d="M16 1H4c-1.1 0-2 .9-2 2v12h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                        </svg>
+                        <span>Copy</span>
+                    </>
+                )}
             </button>
-            <ShikiHighlighter
-                language={language}
-                theme="github-dark"
-                addDefaultStyles={false}
-                {...props}
-            >
-                {code}
-            </ShikiHighlighter>
+
+            {/* Code Content Container */}
+            <div className={`relative transition-all duration-300 ease-in-out ${isCollapsed ? 'max-h-[320px] overflow-hidden' : ''}`}>
+                <ShikiHighlighter
+                    language={language}
+                    theme="github-dark"
+                    addDefaultStyles={false}
+                    {...props}
+                >
+                    {code}
+                </ShikiHighlighter>
+
+                {/* Gradient Overlay for collapsed state */}
+                {isCollapsed && (
+                    <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#1e1e1e] to-transparent pointer-events-none z-10" />
+                )}
+            </div>
+
+            {/* Expand/Collapse Footer */}
+            {isLongCode && (
+                <button
+                    type="button"
+                    onClick={() => setIsCollapsed(!isCollapsed)}
+                    className="w-full flex items-center justify-center gap-2 py-2 text-xs font-medium text-gray-400 hover:text-gray-200 hover:bg-white/5 transition-colors border-t border-white/5 bg-[#1e1e1e] relative z-20"
+                >
+                    {isCollapsed ? (
+                        <>
+                            <HiChevronDown className="w-4 h-4" />
+                            <span>Show {lineCount - COLLAPSE_THRESHOLD} more lines</span>
+                        </>
+                    ) : (
+                        <>
+                            <HiChevronUp className="w-4 h-4" />
+                            <span>Collapse code</span>
+                        </>
+                    )}
+                </button>
+            )}
         </div>
     );
 };
