@@ -32,7 +32,16 @@ const CodeBlock = ({ className, children, node, ...props }) => {
     const lineCount = code.split('\n').length;
     const COLLAPSE_THRESHOLD = 15;
     const isLongCode = lineCount > COLLAPSE_THRESHOLD;
-    const [isCollapsed, setIsCollapsed] = useState(isLongCode);
+    const [isCollapsed, setIsCollapsed] = useState(isLongCode); // Initialize based on current length
+
+    // ✅ MODIFIED: Use useEffect to automatically collapse if it becomes long
+    useEffect(() => {
+        if (isLongCode) {
+            setIsCollapsed(true);
+        } else {
+            setIsCollapsed(false); // Ensure it's not collapsed if it's short
+        }
+    }, [isLongCode]); // Re-evaluate when the code content (and thus lineCount) changes
 
     const onCopy = async () => {
         try {
