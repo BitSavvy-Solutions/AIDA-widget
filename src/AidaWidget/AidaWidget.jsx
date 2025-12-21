@@ -284,7 +284,14 @@ const AidaWidget = (props) => {
                             currentMessage={currentMessage}
                             setCurrentMessage={setCurrentMessage}
                             handleSendMessage={stableHandleSendMessage}
-                            handleKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); stableHandleSendMessage(); } }}
+                            // ✅ MODIFIED: Only trigger send on Enter if NOT on mobile.
+                            // On mobile, Enter will perform default behavior (new line).
+                            handleKeyDown={(e) => { 
+                                if (e.key === 'Enter' && !e.shiftKey && !isMobileViewport) { 
+                                    e.preventDefault(); 
+                                    stableHandleSendMessage(); 
+                                } 
+                            }}
                             handleRecordButtonClick={handleRecordButtonClick}
                             inputRef={inputRef}
                             isLoading={isLoading}
@@ -315,7 +322,6 @@ const AidaWidget = (props) => {
                             onRetryTranscription={retryTranscription}
                             onClearFailedTranscription={clearFailedTranscription}
                             isNearingTimeLimit={isNearingTimeLimit}
-                            // ✅ ADDED: Pass the image handler to ChatInput
                             onAddImages={addImageAttachments}
                         />
                     </div>
