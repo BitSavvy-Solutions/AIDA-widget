@@ -77,26 +77,6 @@ const AidaWidget = (props) => {
         addFolderAttachments
     });
 
-    // ✅ NEW: Hydration Effect
-    // If the window was closed and reopened, sessionStorage is empty, but we want to restore the last chat.
-    useEffect(() => {
-        // Only run if we have no messages and no active session in session storage
-        if (messages.length === 0 && !currentSessionId) {
-            try {
-                const lastActiveId = localStorage.getItem('aida-last-active-session-id');
-                if (lastActiveId) {
-                    const previousSession = historyItems.find(h => h.id === lastActiveId);
-                    if (previousSession && previousSession.messages && previousSession.messages.length > 0) {
-                        setMessages(previousSession.messages);
-                        setCurrentSessionId(lastActiveId);
-                    }
-                }
-            } catch (e) {
-                console.warn("Failed to restore previous session", e);
-            }
-        }
-    }, []); // Run once on mount
-
     const requestFullscreen = useCallback(() => setIsFullscreen(true), [setIsFullscreen]);
     const { sidebarRef, sidebarInlineStyle, resizeHandleProps, isResizing } = useResizableSidebar({ isOpen, isFullscreen, isMobileViewport, isEnabled: features.resizable, onRequestFullscreen: requestFullscreen });
     const { isLoading, lastCost, liveReasoning, streamResponse, stopStreaming } = useChatAPI({ apiConfig, messages, setMessages, currentSessionId, updateCurrentSession, user, pageContext, customPrompt });
@@ -283,7 +263,6 @@ const AidaWidget = (props) => {
                             onRemoveChatFromProject={historyHandlers.onRemoveChatFromProject}
                             onUpdateProjectAppearance={historyHandlers.onUpdateProjectAppearance}
                         />
-                        {/* ✅ PASSED currentSessionId for highlighting */}
                         {features.historyProjects && <ChatHistoryPanel theme={theme} open={isPanelOpen} onClose={closePanel} sessions={historyItems} projects={projects} onSelect={handleHistorySelect} currentSessionId={currentSessionId} {...historyHandlers} />}
                         <ChatDisplay
                             messages={messages}
