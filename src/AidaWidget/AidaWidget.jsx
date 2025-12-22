@@ -4,9 +4,9 @@ import SevenSegmentDisplay from './SevenSegmentDisplay';
 import ChatHeader from './ChatHeader';
 import ChatHistoryPanel from './ChatHistoryPanel';
 import ChatDisplay from './ChatDisplay';
-import ChatInput from './ChatInput';
 import AttachmentModal from './AttachmentModal';
 import './AidaWidget.css';
+import ChatInput, { AVAILABLE_MODELS } from './ChatInput'; 
 
 import {
     useWidgetState,
@@ -48,7 +48,7 @@ const AidaWidget = (props) => {
     const attachmentsEnabled = Boolean(features?.imageUpload);
 
     const [currentMessage, setCurrentMessage] = useState('');
-    const [selectedModel, setSelectedModel] = useState('deepseek/deepseek-chat-v3.1');
+    const [selectedModel, setSelectedModel] = useState(AVAILABLE_MODELS[0].value);
     const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false);
     const [editingMessageId, setEditingMessageId] = useState(null);
     const [customPrompt, setCustomPrompt] = useState(() => localStorage.getItem('aida-widget-prompt') || '');

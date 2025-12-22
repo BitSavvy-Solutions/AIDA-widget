@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { HiPaperAirplane, HiOutlineMicrophone, HiStop, HiArrowPath, HiXMark, HiChevronDown, HiOutlineGlobeAlt } from 'react-icons/hi2';
 import AttachmentButton from './AttachmentButton';
 
-const AVAILABLE_MODELS = [
+export const AVAILABLE_MODELS = [
     { value: 'deepseek/deepseek-v3.2', label: 'Deepseek 3.2' },
     { value: 'deepseek/deepseek-r1', label: 'Deepseek Reasoner R1'},
     { value: 'openai/gpt-5.1', label: 'GPT-5.1' },
