@@ -223,6 +223,25 @@ const AidaWidget = (props) => {
     const currentSession = historyItems.find(h => h.id === currentSessionId);
     const currentSessionTitle = currentSession?.title || "New Chat";
     
+    useEffect(() => {
+        if (isOpen) {
+            // When the chat is open, show "AIDA - Title"
+            // If it's a default title, you might just want "AIDA" or "AIDA - New Chat"
+            const titlePrefix = "AIDA";
+            document.title = currentSessionTitle && currentSessionTitle !== "New Chat" 
+                ? `${titlePrefix} - ${currentSessionTitle}`
+                : titlePrefix;
+        } else {
+            // Optional: Reset to a default title when the widget is closed
+            // document.title = "AIDA"; 
+        }
+
+        // Cleanup function: Reset title when component unmounts
+        return () => {
+            document.title = "AIDA"; 
+        };
+    }, [currentSessionTitle, isOpen]);
+
     const handleRenameCurrentSession = useCallback((newTitle) => {
         if (currentSessionId) {
             historyHandlers.onRename(currentSessionId, newTitle);
