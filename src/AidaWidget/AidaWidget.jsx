@@ -48,7 +48,17 @@ const AidaWidget = (props) => {
     const attachmentsEnabled = Boolean(features?.imageUpload);
 
     const [currentMessage, setCurrentMessage] = useState('');
-    const [selectedModel, setSelectedModel] = useState(AVAILABLE_MODELS[0].value);
+    
+    // ✅ PERSISTENCE ADDED: Initialize model from localStorage
+    const [selectedModel, setSelectedModel] = useState(() => {
+        return localStorage.getItem('aida-selected-model') || AVAILABLE_MODELS[0].value;
+    });
+
+    // ✅ PERSISTENCE ADDED: Save model selection whenever it changes
+    useEffect(() => {
+        localStorage.setItem('aida-selected-model', selectedModel);
+    }, [selectedModel]);
+
     const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false);
     const [editingMessageId, setEditingMessageId] = useState(null);
     const [customPrompt, setCustomPrompt] = useState(() => localStorage.getItem('aida-widget-prompt') || '');
@@ -63,7 +73,6 @@ const AidaWidget = (props) => {
     const [isAutoScrollPaused, setIsAutoScrollPaused] = useState(false);
     const siteLanguage = language || 'en';
     
-    // Core state and functionality hooks
     const { isOpen, isClosing, isFullscreen, theme, setTheme, setIsFullscreen, toggleChatVisibility } = useWidgetState();
     const { messages, setMessages, getSanitizedMessages } = useChatMessages();
     const { isPanelOpen, openPanel, closePanel, historyItems, projects, currentSessionId, setCurrentSessionId, createNewSession, updateCurrentSession, saveCurrentChatToHistory, historyHandlers } = useChatHistory(getSanitizedMessages);
@@ -284,8 +293,6 @@ const AidaWidget = (props) => {
                             currentMessage={currentMessage}
                             setCurrentMessage={setCurrentMessage}
                             handleSendMessage={stableHandleSendMessage}
-                            // ✅ MODIFIED: Only trigger send on Enter if NOT on mobile.
-                            // On mobile, Enter will perform default behavior (new line).
                             handleKeyDown={(e) => { 
                                 if (e.key === 'Enter' && !e.shiftKey && !isMobileViewport) { 
                                     e.preventDefault(); 

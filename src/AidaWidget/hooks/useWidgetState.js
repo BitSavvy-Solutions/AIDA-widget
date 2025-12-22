@@ -1,15 +1,24 @@
+/* src/AidaWidget/hooks/useWidgetState.js */
 import { useState, useEffect, useCallback } from 'react';
 
 /**
- * Manages the core UI state of the widget shell.
- * @returns An object with state and handlers for the widget's UI.
+ * Manages the core UI state of the widget shell with LocalStorage persistence.
  */
 export const useWidgetState = () => {
-    const [isOpen, setIsOpen] = useState(false);
+    // Helper to retrieve boolean values from localStorage
+    const getStoredBool = (key, fallback) => {
+        try {
+            const stored = localStorage.getItem(key);
+            return stored !== null ? stored === 'true' : fallback;
+        } catch {
+            return fallback;
+        }
+    };
+
+    const [isOpen, setIsOpen] = useState(() => getStoredBool('aida-is-open', false));
     const [isClosing, setIsClosing] = useState(false);
-    const [isFullscreen, setIsFullscreen] = useState(false);
+    const [isFullscreen, setIsFullscreen] = useState(() => getStoredBool('aida-is-fullscreen', false));
     
-    // Load theme from localStorage or default to 'dark'
     const [theme, setTheme] = useState(() => {
         try {
             return localStorage.getItem('aida-theme') || 'dark';
@@ -18,30 +27,30 @@ export const useWidgetState = () => {
         }
     });
 
-    // Persist theme to localStorage whenever it changes.
+    // Persist UI states to localStorage whenever they change
     useEffect(() => {
         try {
+            localStorage.setItem('aida-is-open', isOpen);
+            localStorage.setItem('aida-is-fullscreen', isFullscreen);
             localStorage.setItem('aida-theme', theme);
-        } catch (_) {
-            console.warn('Could not save theme to localStorage.');
+        } catch (e) {
+            console.warn('Could not save widget state to localStorage', e);
         }
-    }, [theme]);
+    }, [isOpen, isFullscreen, theme]);
 
     /**
      * Toggles the chat panel's visibility with animations.
-     * The main AidaWidget component will wrap this with other logic (like stopping streams).
      */
     const toggleChatVisibility = useCallback(() => {
         if (isOpen) {
-            // Start the closing animation
             setIsClosing(true);
             
-            // After the animation duration, fully close the widget
             setTimeout(() => {
                 setIsOpen(false);
                 setIsClosing(false);
-                setIsFullscreen(false); // Always reset fullscreen on close
-            }, 300); // Must match animation duration in CSS
+                // Note: We no longer reset isFullscreen to false here 
+                // so that the preference is remembered next time it opens.
+            }, 300); 
         } else {
             setIsOpen(true);
             // On mobile, automatically go fullscreen
