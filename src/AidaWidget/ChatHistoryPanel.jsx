@@ -24,6 +24,7 @@ import {
     BRAND_COLOR
 } from './ProjectAppearance';
 
+// ... (ICON_MENU_PALETTE and createDefaultIconMenuPosition remain unchanged) ...
 const ICON_MENU_PALETTE = {
   dark: {
     background: '#101a2d',
@@ -62,7 +63,9 @@ const ChatHistoryPanel = ({
   onRemoveChatFromProject,
   onDeleteProject,
   onUpdateProjectAppearance,
+  currentSessionId, // ✅ NEW: Received prop for highlighting
 }) => {
+  // ... (State definitions remain unchanged) ...
   const isDark = theme === 'dark';
   const [query, setQuery] = useState('');
   const [isCreatingProject, setIsCreatingProject] = useState(false);
@@ -93,6 +96,7 @@ const ChatHistoryPanel = ({
     () => (typeof window !== 'undefined' ? window.innerWidth < 640 : false)
   );
 
+  // ... (All useEffects and helper functions remain unchanged until the render loop) ...
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const handleResize = () => {
@@ -434,6 +438,7 @@ const ChatHistoryPanel = ({
         } ${isDark ? 'bg-gray-900 text-gray-100 border-l border-gray-800' : 'bg-white text-gray-900 border-l border-gray-200'
         } shadow-xl pointer-events-auto flex flex-col`}
       >
+        {/* ... (Header section remains unchanged) ... */}
         <div
           className={`px-3 py-2 border-b ${
             isDark ? 'border-gray-700/40' : 'border-gray-200/60'
@@ -466,12 +471,14 @@ const ChatHistoryPanel = ({
             />
           </div>
         </div>
+
         <div
           ref={scrollContainerRef}
           className="flex-1 overflow-y-auto p-2 space-y-2"
         >
           <div className={`sticky top-0 z-10 pb-3 ${isDark ? 'bg-gray-900' : 'bg-white'}`}>
             <div className="space-y-2">
+              {/* ... (New Project Input/Button remains unchanged) ... */}
               {isCreatingProject ? (
                 <div className="flex items-center gap-2">
                   <input
@@ -538,6 +545,7 @@ const ChatHistoryPanel = ({
                   New Project
                 </button>
               )}
+
               {projectsList.length > 0 && (
                 <div className="space-y-2 pt-1">
                   {projectsList.map((project) => {
@@ -569,8 +577,10 @@ const ChatHistoryPanel = ({
                     const iconBorderColor = hexToRgba(iconColor, isDark ? 0.45 : 0.35);
                     let iconMenuContent = null;
 
+                    // ... (Icon Menu Logic remains unchanged) ...
                     if (isIconMenuOpen) {
-                      const hasDesktopPosition =
+                        // ... (same as before) ...
+                        const hasDesktopPosition =
                         iconMenuPosition.top !== null && iconMenuPosition.left !== null;
                       const positionalStyle = hasDesktopPosition
                         ? {
@@ -800,11 +810,15 @@ const ChatHistoryPanel = ({
                             <div className="mt-2 space-y-1">
                               {assignedChats.map((chat) => {
                                 const chatMatchesQuery = isMatch(chat);
+                                // ✅ NEW: Highlight active chat inside project
+                                const isCurrent = chat.id === currentSessionId;
                                 return (
                                   <div
                                     key={chat.id}
                                     className={`flex items-center gap-2 rounded-lg ${
                                       chatMatchesQuery ? 'ring-2 ring-amber-400' : ''
+                                    } ${
+                                      isCurrent ? 'ring-2 ring-brand-coral/60 bg-brand-coral/10' : ''
                                     }`}
                                   >
                                     <button
@@ -859,6 +873,9 @@ const ChatHistoryPanel = ({
             const displayTitle = (session.title || '').trim() || 'Untitled chat';
             const allowDrag = !isEditing && !!onAssignChatToProject;
             const isCopied = copiedSession?.id === session.id;
+            // ✅ NEW: Highlight active chat in unassigned list
+            const isCurrent = session.id === currentSessionId;
+
             const baseShareClass = isDark
               ? 'hover:bg-gray-800 text-gray-300'
               : 'hover:bg-gray-100 text-gray-600';
@@ -884,6 +901,8 @@ const ChatHistoryPanel = ({
                     ? 'border-gray-800 bg-gray-900/70 hover:border-gray-700'
                     : 'border-gray-200 bg-white hover:border-gray-300'
                 } ${matched ? 'ring-2 ring-amber-400' : ''} ${
+                  isCurrent ? 'ring-2 ring-brand-coral/60 bg-brand-coral/5' : ''
+                } ${
                   allowDrag ? 'cursor-grab active:cursor-grabbing' : ''
                 } ${draggingChatId === session.id ? 'opacity-80' : ''}`}
                 draggable={allowDrag}
