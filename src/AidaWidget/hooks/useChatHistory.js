@@ -4,6 +4,7 @@ import { useState, useCallback, useMemo } from 'react';
 const HISTORY_KEY = 'aida-chat-history';
 const HISTORY_PROJECTS_KEY = 'aida-history-projects';
 const CURRENT_SESSION_KEY = 'aida-current-session-id';
+
 const DEFAULT_PROJECT_ICON_KEY = 'notebook';
 const DEFAULT_PROJECT_ICON_COLOR = '#9CA3AF';
 
@@ -22,21 +23,56 @@ const ensureProjectDefaults = (project = {}) => {
 
 export const useChatHistory = (getSanitizedMessages) => {
     const [isPanelOpen, setIsPanelOpen] = useState(false);
-    const [historyItems, setHistoryItems] = useState(() => JSON.parse(localStorage.getItem(HISTORY_KEY)) || []);
-    const [projects, setProjects] = useState(() => {
-        const stored = JSON.parse(localStorage.getItem(HISTORY_PROJECTS_KEY)) || [];
-        return stored.map(ensureProjectDefaults);
+    
+    const [historyItems, setHistoryItems] = useState(() => {
+        try {
+            return JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
+        } catch {
+            return [];
+        }
     });
-    const [currentSessionId, setCurrentSessionId] = useState(() => sessionStorage.getItem(CURRENT_SESSION_KEY) || null);
+    
+    const [projects, setProjects] = useState(() => {
+        try {
+            const stored = JSON.parse(localStorage.getItem(HISTORY_PROJECTS_KEY)) || [];
+            return stored.map(ensureProjectDefaults);
+        } catch {
+            return [];
+        }
+    });
+
+    // Initialize from Session Storage. This will be null if the browser window was closed.
+    const [currentSessionId, _setCurrentSessionIdState] = useState(() => {
+        if (typeof window === 'undefined') return null;
+        return sessionStorage.getItem(CURRENT_SESSION_KEY) || null;
+    });
+
+    const setCurrentSessionId = useCallback((id) => {
+        _setCurrentSessionIdState(id);
+        if (id) {
+            sessionStorage.setItem(CURRENT_SESSION_KEY, id);
+        } else {
+            sessionStorage.removeItem(CURRENT_SESSION_KEY);
+        }
+    }, []);
 
     const persistHistory = (items) => {
         setHistoryItems(items);
-        try { localStorage.setItem(HISTORY_KEY, JSON.stringify(items)); } catch { }
+        try {
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(items));
+        } catch (e) {
+            console.warn("LocalStorage History Save Failed", e);
+        }
     };
+    
     const persistProjects = (items) => {
         const normalized = (items || []).map(ensureProjectDefaults);
         setProjects(normalized);
-        try { localStorage.setItem(HISTORY_PROJECTS_KEY, JSON.stringify(normalized)); } catch { }
+        try {
+            localStorage.setItem(HISTORY_PROJECTS_KEY, JSON.stringify(normalized));
+        } catch (e) {
+            console.warn("LocalStorage Projects Save Failed", e);
+        }
     };
 
     const buildTitleFromMessages = useCallback((msgs) => {
@@ -49,28 +85,41 @@ export const useChatHistory = (getSanitizedMessages) => {
         const id = `chat-${Date.now()}`;
         const title = buildTitleFromMessages(currentMsgs);
         const newSession = { id, title, createdAt: Date.now(), messages: currentMsgs, customTitle: false };
+        
+        // Save to History immediately
         setHistoryItems(prev => {
             const updated = [newSession, ...prev].slice(0, 200);
             try { localStorage.setItem(HISTORY_KEY, JSON.stringify(updated)); } catch { }
             return updated;
         });
+
         setCurrentSessionId(id);
-        try { sessionStorage.setItem(CURRENT_SESSION_KEY, id); } catch { }
         return id;
-    }, [buildTitleFromMessages]);
+    }, [buildTitleFromMessages, setCurrentSessionId]);
     
     const updateCurrentSession = useCallback((currentMsgs, explicitId = null) => {
         const targetId = explicitId || currentSessionId;
         if (!targetId) return;
+        
         const autoTitle = buildTitleFromMessages(currentMsgs);
+        
         setHistoryItems(prevItems => {
-            const updatedItems = prevItems.map(h => {
-                if (h.id === targetId) {
-                    const finalTitle = h.customTitle ? h.title : autoTitle;
-                    return { ...h, title: finalTitle, messages: currentMsgs };
-                }
-                return h;
-            });
+            const exists = prevItems.some(h => h.id === targetId);
+            let updatedItems;
+
+            if (!exists) {
+                const newSession = { id: targetId, title: autoTitle, createdAt: Date.now(), messages: currentMsgs, customTitle: false };
+                updatedItems = [newSession, ...prevItems].slice(0, 200);
+            } else {
+                updatedItems = prevItems.map(h => {
+                    if (h.id === targetId) {
+                        const finalTitle = h.customTitle ? h.title : autoTitle;
+                        return { ...h, title: finalTitle, messages: currentMsgs };
+                    }
+                    return h;
+                });
+            }
+            
             try { localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedItems)); } catch { }
             return updatedItems;
         });
@@ -79,80 +128,25 @@ export const useChatHistory = (getSanitizedMessages) => {
     const saveCurrentChatToHistory = useCallback(() => {
         const msgs = getSanitizedMessages();
         if (!msgs || msgs.length === 0) return;
-        if (currentSessionId && historyItems.some(h => h.id === currentSessionId)) {
+        
+        if (currentSessionId) {
             updateCurrentSession(msgs);
         } else {
-            const id = `chat-${Date.now()}`;
-            const title = buildTitleFromMessages(msgs);
-            const newSession = { id, title, createdAt: Date.now(), messages: msgs, customTitle: false };
-            setHistoryItems(prev => {
-                const updated = [newSession, ...prev].slice(0, 200);
-                try { localStorage.setItem(HISTORY_KEY, JSON.stringify(updated)); } catch { }
-                return updated;
-            });
+            createNewSession(msgs);
         }
-    }, [getSanitizedMessages, currentSessionId, historyItems, buildTitleFromMessages, updateCurrentSession]);
-
-    const copyTextToClipboard = useCallback(async (text) => {
-        if (typeof text !== 'string' || text.length === 0) return false;
-        if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-            try { await navigator.clipboard.writeText(text); return true; } catch (_) { }
-        }
-        if (typeof document === 'undefined') return false;
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.setAttribute('readonly', '');
-        textarea.style.position = 'fixed';
-        textarea.style.top = '-9999px';
-        textarea.style.opacity = '0';
-        textarea.style.pointerEvents = 'none';
-        document.body.appendChild(textarea);
-        textarea.focus();
-        textarea.select();
-        let success = false;
-        try { success = document.execCommand('copy'); } catch (_) { success = false; } finally { document.body.removeChild(textarea); }
-        return success;
-    }, []);
-
-    const formatChatForShare = useCallback((session) => {
-        if (!session) return '';
-        const { title, createdAt, messages } = session;
-        const lines = [];
-        const trimmedTitle = (title || '').trim();
-        if (trimmedTitle) lines.push(`Title: ${trimmedTitle}`);
-        if (createdAt) {
-            const date = new Date(createdAt);
-            if (!Number.isNaN(date.getTime())) lines.push(`Created: ${date.toLocaleString()}`);
-        }
-        if (lines.length) lines.push('');
-        if (!Array.isArray(messages) || messages.length === 0) {
-            lines.push('No messages available.');
-        } else {
-            messages.forEach((message, index) => {
-                const rawSender = (message && (message.sender || message.role)) || 'user';
-                const sender = typeof rawSender === 'string' && rawSender.trim() ? rawSender.trim() : 'user';
-                const label = sender === 'bot' ? 'Aida' : sender.charAt(0).toUpperCase() + sender.slice(1);
-                const content = typeof message?.text === 'string' ? message.text : '';
-                if (content.trim().length > 0) lines.push(`${label}: ${content}`);
-                else lines.push(`${label}:`);
-                if (index !== messages.length - 1) lines.push('');
-            });
-        }
-        while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
-        return lines.join('\n');
-    }, []);
+    }, [getSanitizedMessages, currentSessionId, createNewSession, updateCurrentSession]);
 
     const handlers = useMemo(() => ({
         onDelete: (chatId) => {
             const newItems = historyItems.filter(h => h.id !== chatId);
             persistHistory(newItems);
             persistProjects(projects.map(p => ({ ...p, chatIds: (p.chatIds || []).filter(id => id !== chatId) })));
+            if (chatId === currentSessionId) setCurrentSessionId(null);
         },
         onRename: (id, newTitle) => {
             const newItems = historyItems.map(item => item.id === id ? { ...item, title: newTitle.trim() || 'Untitled Chat', customTitle: true } : item);
             persistHistory(newItems);
         },
-        // ✅ MODIFIED: Accept initialChatId to handle creation and assignment atomically
         onCreateProject: (projectName, initialChatId = null) => {
             const trimmed = projectName.trim();
             if (!trimmed || projects.some(p => p.name.toLowerCase() === trimmed.toLowerCase())) return null;
@@ -187,19 +181,21 @@ export const useChatHistory = (getSanitizedMessages) => {
             persistProjects(projects.map(p => p.id === projectId ? ensureProjectDefaults({ ...p, ...updates }) : p));
         },
         onShare: async (session) => {
-            const transcript = formatChatForShare(session);
-            if (!transcript) return false;
-            return copyTextToClipboard(transcript);
+            const lines = [(session.title || 'Untitled Chat'), ''];
+            (session.messages || []).forEach(m => {
+                lines.push(`${m.sender === 'bot' ? 'Aida' : 'User'}: ${m.text || ''}\n`);
+            });
+            try {
+                await navigator.clipboard.writeText(lines.join('\n'));
+                return true;
+            } catch { return false; }
         }
-    }), [historyItems, projects, copyTextToClipboard, formatChatForShare]);
-
-    const openPanel = useCallback(() => setIsPanelOpen(true), []);
-    const closePanel = useCallback(() => setIsPanelOpen(false), []);
+    }), [historyItems, projects, currentSessionId, setCurrentSessionId]);
 
     return {
         isPanelOpen,
-        openPanel,
-        closePanel,
+        openPanel: () => setIsPanelOpen(true),
+        closePanel: () => setIsPanelOpen(false),
         historyItems,
         projects,
         currentSessionId,

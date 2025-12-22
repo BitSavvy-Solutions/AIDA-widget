@@ -263,7 +263,7 @@ const AidaWidget = (props) => {
                             onRemoveChatFromProject={historyHandlers.onRemoveChatFromProject}
                             onUpdateProjectAppearance={historyHandlers.onUpdateProjectAppearance}
                         />
-                        {features.historyProjects && <ChatHistoryPanel theme={theme} open={isPanelOpen} onClose={closePanel} sessions={historyItems} projects={projects} onSelect={handleHistorySelect} {...historyHandlers} />}
+                        {features.historyProjects && <ChatHistoryPanel theme={theme} open={isPanelOpen} onClose={closePanel} sessions={historyItems} projects={projects} onSelect={handleHistorySelect} currentSessionId={currentSessionId} {...historyHandlers} />}
                         <ChatDisplay
                             messages={messages}
                             isLoading={isLoading}

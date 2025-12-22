@@ -62,6 +62,7 @@ const ChatHistoryPanel = ({
   onRemoveChatFromProject,
   onDeleteProject,
   onUpdateProjectAppearance,
+  currentSessionId, // ✅ NEW: Prop for highlighting
 }) => {
   const isDark = theme === 'dark';
   const [query, setQuery] = useState('');
@@ -800,11 +801,15 @@ const ChatHistoryPanel = ({
                             <div className="mt-2 space-y-1">
                               {assignedChats.map((chat) => {
                                 const chatMatchesQuery = isMatch(chat);
+                                // ✅ NEW: Highlight active chat inside project
+                                const isCurrent = chat.id === currentSessionId;
                                 return (
                                   <div
                                     key={chat.id}
-                                    className={`flex items-center gap-2 rounded-lg ${
+                                    className={`flex items-center gap-2 rounded-lg transition-all ${
                                       chatMatchesQuery ? 'ring-2 ring-amber-400' : ''
+                                    } ${
+                                      isCurrent ? 'ring-2 ring-brand-coral border-brand-coral/50 bg-brand-coral/10' : ''
                                     }`}
                                   >
                                     <button
@@ -859,6 +864,9 @@ const ChatHistoryPanel = ({
             const displayTitle = (session.title || '').trim() || 'Untitled chat';
             const allowDrag = !isEditing && !!onAssignChatToProject;
             const isCopied = copiedSession?.id === session.id;
+            // ✅ NEW: Highlight active chat in unassigned list
+            const isCurrent = session.id === currentSessionId;
+
             const baseShareClass = isDark
               ? 'hover:bg-gray-800 text-gray-300'
               : 'hover:bg-gray-100 text-gray-600';
@@ -879,11 +887,13 @@ const ChatHistoryPanel = ({
             return (
               <div
                 key={session.id}
-                className={`group rounded-lg border px-3 py-3 ${
+                className={`group rounded-lg border px-3 py-3 transition-all ${
                   isDark
                     ? 'border-gray-800 bg-gray-900/70 hover:border-gray-700'
                     : 'border-gray-200 bg-white hover:border-gray-300'
                 } ${matched ? 'ring-2 ring-amber-400' : ''} ${
+                  isCurrent ? 'ring-2 ring-brand-coral border-brand-coral/50 bg-brand-coral/5' : ''
+                } ${
                   allowDrag ? 'cursor-grab active:cursor-grabbing' : ''
                 } ${draggingChatId === session.id ? 'opacity-80' : ''}`}
                 draggable={allowDrag}
