@@ -21,6 +21,16 @@ const ensureProjectDefaults = (project = {}) => {
     };
 };
 
+// ✅ NEW: Helper to strip heavy data before saving to History
+const sanitizeForHistory = (msgs) => {
+    if (!Array.isArray(msgs)) return [];
+    return msgs.map(msg => {
+        // Destructure out the heavy fields we don't want in LocalStorage
+        const { attachments, images, reasoning, ...safeMessage } = msg;
+        return safeMessage;
+    });
+};
+
 export const useChatHistory = (getSanitizedMessages) => {
     const [isPanelOpen, setIsPanelOpen] = useState(false);
     
@@ -61,7 +71,7 @@ export const useChatHistory = (getSanitizedMessages) => {
         try {
             localStorage.setItem(HISTORY_KEY, JSON.stringify(items));
         } catch (e) {
-            console.warn("LocalStorage History Save Failed", e);
+            console.warn("LocalStorage History Save Failed (Quota Exceeded)", e);
         }
     };
     
@@ -84,12 +94,16 @@ export const useChatHistory = (getSanitizedMessages) => {
     const createNewSession = useCallback((currentMsgs) => {
         const id = `chat-${Date.now()}`;
         const title = buildTitleFromMessages(currentMsgs);
-        const newSession = { id, title, createdAt: Date.now(), messages: currentMsgs, customTitle: false };
+        
+        // ✅ FIX: Sanitize messages before creating the session object for storage
+        const safeMessages = sanitizeForHistory(currentMsgs);
+        
+        const newSession = { id, title, createdAt: Date.now(), messages: safeMessages, customTitle: false };
         
         // Save to History immediately
         setHistoryItems(prev => {
             const updated = [newSession, ...prev].slice(0, 200);
-            try { localStorage.setItem(HISTORY_KEY, JSON.stringify(updated)); } catch { }
+            try { localStorage.setItem(HISTORY_KEY, JSON.stringify(updated)); } catch (e) { console.warn("History save failed", e); }
             return updated;
         });
 
@@ -103,30 +117,34 @@ export const useChatHistory = (getSanitizedMessages) => {
         
         const autoTitle = buildTitleFromMessages(currentMsgs);
         
+        // ✅ FIX: Sanitize messages before updating storage
+        const safeMessages = sanitizeForHistory(currentMsgs);
+        
         setHistoryItems(prevItems => {
             const exists = prevItems.some(h => h.id === targetId);
             let updatedItems;
 
             if (!exists) {
-                const newSession = { id: targetId, title: autoTitle, createdAt: Date.now(), messages: currentMsgs, customTitle: false };
+                const newSession = { id: targetId, title: autoTitle, createdAt: Date.now(), messages: safeMessages, customTitle: false };
                 updatedItems = [newSession, ...prevItems].slice(0, 200);
             } else {
                 updatedItems = prevItems.map(h => {
                     if (h.id === targetId) {
                         const finalTitle = h.customTitle ? h.title : autoTitle;
-                        return { ...h, title: finalTitle, messages: currentMsgs };
+                        return { ...h, title: finalTitle, messages: safeMessages };
                     }
                     return h;
                 });
             }
             
-            try { localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedItems)); } catch { }
+            try { localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedItems)); } catch (e) { console.warn("History update failed", e); }
             return updatedItems;
         });
     }, [currentSessionId, buildTitleFromMessages]);
 
     const saveCurrentChatToHistory = useCallback(() => {
-        const msgs = getSanitizedMessages();
+        // getSanitizedMessages comes from useChatMessages, which we also need to ensure is strict
+        const msgs = getSanitizedMessages(); 
         if (!msgs || msgs.length === 0) return;
         
         if (currentSessionId) {

@@ -1,12 +1,14 @@
 /* src/AidaWidget/hooks/useChatMessages.js */
 import { useState, useEffect, useCallback } from 'react';
 
-// Helper to remove heavy data (like base64 image strings) before storage.
-// This function is kept local as it's only used here and by the hook's return.
+// Helper to remove heavy data (like base64 image strings and large text attachments) before storage.
 const sanitizeMessagesForStorage = (msgs) => {
     if (!Array.isArray(msgs)) return [];
-    // ✨ MODIFIED: Also remove 'attachments' to prevent large data from bloating localStorage.
-    return msgs.map(({ images, reasoning, attachments, ...m }) => m);
+    // ✅ MODIFIED: Explicitly destructure and discard 'attachments', 'images', and 'reasoning'
+    return msgs.map(msg => {
+        const { images, reasoning, attachments, ...safeMessage } = msg;
+        return safeMessage;
+    });
 };
 
 /**
