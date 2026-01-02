@@ -1,8 +1,8 @@
 /* src/AidaWidget/hooks/useChatHistory.js */
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db, migrateFromLocalStorage } from '../db';
 
-const HISTORY_KEY = 'aida-chat-history';
-const HISTORY_PROJECTS_KEY = 'aida-history-projects';
 const CURRENT_SESSION_KEY = 'aida-current-session-id';
 
 const DEFAULT_PROJECT_ICON_KEY = 'notebook';
@@ -14,44 +14,42 @@ const ensureProjectDefaults = (project = {}) => {
         iconColor = DEFAULT_PROJECT_ICON_COLOR,
     } = project;
 
-    return {
-        ...project,
-        iconKey,
-        iconColor,
-    };
+    return { ...project, iconKey, iconColor };
 };
 
-// ✅ NEW: Helper to strip heavy data before saving to History
+// We can be less aggressive with sanitization now that we have IndexedDB capacity,
+// but it's still good practice to strip derived state if not needed.
 const sanitizeForHistory = (msgs) => {
     if (!Array.isArray(msgs)) return [];
     return msgs.map(msg => {
-        // Destructure out the heavy fields we don't want in LocalStorage
-        const { attachments, images, reasoning, ...safeMessage } = msg;
+        // We keep attachments/images now! IndexedDB can handle blobs/base64 better.
+        // We might strip 'reasoning' if it's huge and not needed for history.
+        const { ...safeMessage } = msg; 
         return safeMessage;
     });
 };
 
 export const useChatHistory = (getSanitizedMessages) => {
     const [isPanelOpen, setIsPanelOpen] = useState(false);
-    
-    const [historyItems, setHistoryItems] = useState(() => {
-        try {
-            return JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
-        } catch {
-            return [];
-        }
-    });
-    
-    const [projects, setProjects] = useState(() => {
-        try {
-            const stored = JSON.parse(localStorage.getItem(HISTORY_PROJECTS_KEY)) || [];
-            return stored.map(ensureProjectDefaults);
-        } catch {
-            return [];
-        }
-    });
 
-    // Initialize from Session Storage. This will be null if the browser window was closed.
+    // Run migration once on mount
+    useEffect(() => {
+        migrateFromLocalStorage();
+    }, []);
+
+    // ✅ DEXIE: Automatically keeps 'historyItems' in sync with DB
+    const historyItems = useLiveQuery(
+        () => db.chats.orderBy('createdAt').reverse().toArray(),
+        []
+    ) || [];
+
+    // ✅ DEXIE: Automatically keeps 'projects' in sync with DB
+    const projects = useLiveQuery(
+        () => db.projects.toArray(),
+        []
+    ) || [];
+
+    // Initialize from Session Storage. 
     const [currentSessionId, _setCurrentSessionIdState] = useState(() => {
         if (typeof window === 'undefined') return null;
         return sessionStorage.getItem(CURRENT_SESSION_KEY) || null;
@@ -66,84 +64,68 @@ export const useChatHistory = (getSanitizedMessages) => {
         }
     }, []);
 
-    const persistHistory = (items) => {
-        setHistoryItems(items);
-        try {
-            localStorage.setItem(HISTORY_KEY, JSON.stringify(items));
-        } catch (e) {
-            console.warn("LocalStorage History Save Failed (Quota Exceeded)", e);
-        }
-    };
-    
-    const persistProjects = (items) => {
-        const normalized = (items || []).map(ensureProjectDefaults);
-        setProjects(normalized);
-        try {
-            localStorage.setItem(HISTORY_PROJECTS_KEY, JSON.stringify(normalized));
-        } catch (e) {
-            console.warn("LocalStorage Projects Save Failed", e);
-        }
-    };
-
     const buildTitleFromMessages = useCallback((msgs) => {
         const firstUser = (msgs || []).find(m => m.sender === 'user' && (m.text || '').trim());
         const base = firstUser ? firstUser.text.trim() : 'New Chat';
         return base.length > 60 ? `${base.slice(0, 57)}…` : base;
     }, []);
 
-    const createNewSession = useCallback((currentMsgs) => {
+    const createNewSession = useCallback(async (currentMsgs) => {
         const id = `chat-${Date.now()}`;
         const title = buildTitleFromMessages(currentMsgs);
-        
-        // ✅ FIX: Sanitize messages before creating the session object for storage
         const safeMessages = sanitizeForHistory(currentMsgs);
         
-        const newSession = { id, title, createdAt: Date.now(), messages: safeMessages, customTitle: false };
+        const newSession = { 
+            id, 
+            title, 
+            createdAt: Date.now(), 
+            messages: safeMessages, 
+            customTitle: false 
+        };
         
-        // Save to History immediately
-        setHistoryItems(prev => {
-            const updated = [newSession, ...prev].slice(0, 200);
-            try { localStorage.setItem(HISTORY_KEY, JSON.stringify(updated)); } catch (e) { console.warn("History save failed", e); }
-            return updated;
-        });
-
-        setCurrentSessionId(id);
-        return id;
+        try {
+            await db.chats.add(newSession);
+            setCurrentSessionId(id);
+            return id;
+        } catch (e) {
+            console.error("Failed to create session in DB", e);
+            return null;
+        }
     }, [buildTitleFromMessages, setCurrentSessionId]);
     
-    const updateCurrentSession = useCallback((currentMsgs, explicitId = null) => {
+    const updateCurrentSession = useCallback(async (currentMsgs, explicitId = null) => {
         const targetId = explicitId || currentSessionId;
         if (!targetId) return;
         
         const autoTitle = buildTitleFromMessages(currentMsgs);
-        
-        // ✅ FIX: Sanitize messages before updating storage
         const safeMessages = sanitizeForHistory(currentMsgs);
         
-        setHistoryItems(prevItems => {
-            const exists = prevItems.some(h => h.id === targetId);
-            let updatedItems;
-
-            if (!exists) {
-                const newSession = { id: targetId, title: autoTitle, createdAt: Date.now(), messages: safeMessages, customTitle: false };
-                updatedItems = [newSession, ...prevItems].slice(0, 200);
+        try {
+            const existing = await db.chats.get(targetId);
+            
+            if (!existing) {
+                // If it doesn't exist (edge case), create it
+                await db.chats.put({
+                    id: targetId,
+                    title: autoTitle,
+                    createdAt: Date.now(),
+                    messages: safeMessages,
+                    customTitle: false
+                });
             } else {
-                updatedItems = prevItems.map(h => {
-                    if (h.id === targetId) {
-                        const finalTitle = h.customTitle ? h.title : autoTitle;
-                        return { ...h, title: finalTitle, messages: safeMessages };
-                    }
-                    return h;
+                // Update existing
+                const finalTitle = existing.customTitle ? existing.title : autoTitle;
+                await db.chats.update(targetId, {
+                    title: finalTitle,
+                    messages: safeMessages
                 });
             }
-            
-            try { localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedItems)); } catch (e) { console.warn("History update failed", e); }
-            return updatedItems;
-        });
+        } catch (e) {
+            console.error("Failed to update session in DB", e);
+        }
     }, [currentSessionId, buildTitleFromMessages]);
 
     const saveCurrentChatToHistory = useCallback(() => {
-        // getSanitizedMessages comes from useChatMessages, which we also need to ensure is strict
         const msgs = getSanitizedMessages(); 
         if (!msgs || msgs.length === 0) return;
         
@@ -155,48 +137,76 @@ export const useChatHistory = (getSanitizedMessages) => {
     }, [getSanitizedMessages, currentSessionId, createNewSession, updateCurrentSession]);
 
     const handlers = useMemo(() => ({
-        onDelete: (chatId) => {
-            const newItems = historyItems.filter(h => h.id !== chatId);
-            persistHistory(newItems);
-            persistProjects(projects.map(p => ({ ...p, chatIds: (p.chatIds || []).filter(id => id !== chatId) })));
-            if (chatId === currentSessionId) setCurrentSessionId(null);
+        onDelete: async (chatId) => {
+            try {
+                await db.chats.delete(chatId);
+                // Also remove this chat ID from any projects
+                const projectsToUpdate = projects.filter(p => (p.chatIds || []).includes(chatId));
+                for (const p of projectsToUpdate) {
+                    const newChatIds = p.chatIds.filter(id => id !== chatId);
+                    await db.projects.update(p.id, { chatIds: newChatIds });
+                }
+                if (chatId === currentSessionId) setCurrentSessionId(null);
+            } catch (e) {
+                console.error("Delete failed", e);
+            }
         },
-        onRename: (id, newTitle) => {
-            const newItems = historyItems.map(item => item.id === id ? { ...item, title: newTitle.trim() || 'Untitled Chat', customTitle: true } : item);
-            persistHistory(newItems);
+        onRename: async (id, newTitle) => {
+            try {
+                await db.chats.update(id, { 
+                    title: newTitle.trim() || 'Untitled Chat', 
+                    customTitle: true 
+                });
+            } catch (e) { console.error("Rename failed", e); }
         },
-        onCreateProject: (projectName, initialChatId = null) => {
+        onCreateProject: async (projectName, initialChatId = null) => {
             const trimmed = projectName.trim();
-            if (!trimmed || projects.some(p => p.name.toLowerCase() === trimmed.toLowerCase())) return null;
+            if (!trimmed) return null;
+            
+            // Check for duplicates (simple check)
+            const exists = projects.some(p => p.name.toLowerCase() === trimmed.toLowerCase());
+            if (exists) return null;
+
             const newId = `project-${Date.now()}`;
             const chatIds = initialChatId ? [initialChatId] : [];
             const newProject = ensureProjectDefaults({ id: newId, name: trimmed, chatIds });
-            persistProjects([newProject, ...projects]);
-            return newId;
+            
+            try {
+                await db.projects.add(newProject);
+                return newId;
+            } catch (e) { console.error("Create project failed", e); return null; }
         },
-        onDeleteProject: (projectId) => {
-            persistProjects(projects.filter(p => p.id !== projectId));
+        onDeleteProject: async (projectId) => {
+            try { await db.projects.delete(projectId); } catch (e) { console.error(e); }
         },
-        onAssignChatToProject: (projectId, chatId) => {
-            persistProjects(projects.map(p => {
-                if (p.id !== projectId || (p.chatIds || []).includes(chatId)) return p;
-                return { ...p, chatIds: [...p.chatIds, chatId] };
-            }));
+        onAssignChatToProject: async (projectId, chatId) => {
+            try {
+                const project = await db.projects.get(projectId);
+                if (project && !(project.chatIds || []).includes(chatId)) {
+                    await db.projects.update(projectId, {
+                        chatIds: [...(project.chatIds || []), chatId]
+                    });
+                }
+            } catch (e) { console.error(e); }
         },
-        onRemoveChatFromProject: (projectId, chatId) => {
-            persistProjects(projects.map(p => {
-                if (p.id !== projectId) return p;
-                return { ...p, chatIds: (p.chatIds || []).filter(id => id !== chatId) };
-            }));
+        onRemoveChatFromProject: async (projectId, chatId) => {
+            try {
+                const project = await db.projects.get(projectId);
+                if (project) {
+                    await db.projects.update(projectId, {
+                        chatIds: (project.chatIds || []).filter(id => id !== chatId)
+                    });
+                }
+            } catch (e) { console.error(e); }
         },
-        onRenameProject: (projectId, name) => {
+        onRenameProject: async (projectId, name) => {
             const trimmed = (name || '').trim();
             if (!trimmed) return;
-            persistProjects(projects.map(p => p.id === projectId ? { ...p, name: trimmed } : p));
+            try { await db.projects.update(projectId, { name: trimmed }); } catch (e) { console.error(e); }
         },
-        onUpdateProjectAppearance: (projectId, updates = {}) => {
+        onUpdateProjectAppearance: async (projectId, updates = {}) => {
             if (!projectId || !updates) return;
-            persistProjects(projects.map(p => p.id === projectId ? ensureProjectDefaults({ ...p, ...updates }) : p));
+            try { await db.projects.update(projectId, updates); } catch (e) { console.error(e); }
         },
         onShare: async (session) => {
             const lines = [(session.title || 'Untitled Chat'), ''];
@@ -208,7 +218,7 @@ export const useChatHistory = (getSanitizedMessages) => {
                 return true;
             } catch { return false; }
         }
-    }), [historyItems, projects, currentSessionId, setCurrentSessionId]);
+    }), [projects, currentSessionId, setCurrentSessionId]);
 
     return {
         isPanelOpen,

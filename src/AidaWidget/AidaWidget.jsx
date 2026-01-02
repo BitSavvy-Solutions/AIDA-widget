@@ -74,7 +74,10 @@ const AidaWidget = (props) => {
     const siteLanguage = language || 'en';
     
     const { isOpen, isClosing, isFullscreen, theme, setTheme, setIsFullscreen, toggleChatVisibility } = useWidgetState();
-    const { messages, setMessages, getSanitizedMessages } = useChatMessages();
+    
+    // ✅ CHANGED: Destructure loadMessagesForSession to handle DB loading
+    const { messages, setMessages, getSanitizedMessages, loadMessagesForSession } = useChatMessages();
+    
     const { isPanelOpen, openPanel, closePanel, historyItems, projects, currentSessionId, setCurrentSessionId, createNewSession, updateCurrentSession, saveCurrentChatToHistory, historyHandlers } = useChatHistory(getSanitizedMessages);
     const { isOpen: isPromptModalOpen, open: openPromptModal, close: closePromptModal } = useModal();
     const { attachments, setAttachments, addImageAttachments, addTextAttachment, addFolderAttachments, addUrlAttachment, removeAttachment, clearAttachments, isAttachmentModalOpen, openModal: openAttachmentModal, closeModal: closeAttachmentModal } = useAttachments(setSelectedModel);
@@ -94,6 +97,13 @@ const AidaWidget = (props) => {
     const { countdown: autoRecordCountdown, start: startAutoRecordTimer, cancel: cancelAutoRecordTimer, setIsPaused: setIsRecordTimerPaused } = useCountdown(startRecording, 3);
     const displayText = useDisplayAnimation({ isOpen, isLoading });
     
+    // ✅ NEW EFFECT: Load messages from IndexedDB when currentSessionId changes
+    useEffect(() => {
+        if (loadMessagesForSession) {
+            loadMessagesForSession(currentSessionId);
+        }
+    }, [currentSessionId, loadMessagesForSession]);
+
     useEffect(() => {
         if (!isLoading) setIsAutoScrollPaused(false);
     }, [isLoading]);
@@ -214,11 +224,11 @@ const AidaWidget = (props) => {
 
     const handleRetry = useCallback(async (botMessageId) => { if (isLoading) return; const botIndex = messages.findIndex(m => m.id === botMessageId); if (botIndex === -1) return; let userIndex = -1; for (let i = botIndex - 1; i >= 0; i--) { if (messages[i].sender === 'user' && (messages[i].text || messages[i].attachments?.length > 0)) { userIndex = i; break; } } if (userIndex === -1) return; const userMessageToRetry = messages[userIndex]; const historyForPayload = messages.slice(0, userIndex); const newBotMessageId = `bot-${Date.now()}`; setMessages([...historyForPayload, userMessageToRetry, { id: newBotMessageId, sender: 'bot', text: '' }]); await streamResponse({ userMessage: userMessageToRetry, botMessageId: newBotMessageId, historyForPayload, sessionId: currentSessionId }); }, [isLoading, messages, streamResponse, setMessages, currentSessionId]);
     
+    // ✅ CHANGED: Simplified to just set ID. The useEffect handles loading data.
     const handleHistorySelect = useCallback((session) => {
-        setMessages(session.messages || []);
         setCurrentSessionId(session.id);
         closePanel();
-    }, [setMessages, setCurrentSessionId, closePanel]);
+    }, [setCurrentSessionId, closePanel]);
 
     const currentSession = historyItems.find(h => h.id === currentSessionId);
     const currentSessionTitle = currentSession?.title || "New Chat";
