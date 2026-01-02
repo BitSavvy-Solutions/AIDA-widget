@@ -103,7 +103,11 @@ export const useAttachments = (setSelectedModel) => {
 
             if (results.length > 0) {
                 setAttachments(prev => [...prev, ...results]);
-                const visionlessModels = new Set(['deepseek/deepseek-r1', 'deepseek/deepseek-v3.2']);
+                const visionlessModels = new Set([
+                    'deepseek/deepseek-r1',
+                    'deepseek/deepseek-v3.2',
+                    'deepseek/deepseek-chat-v3-0324',
+                ]);
                 setSelectedModel(prevModel => visionlessModels.has(prevModel) ? 'google/gemini-3-flash-preview' : prevModel);
             }
         } catch (e) {
@@ -198,7 +202,7 @@ export const useAttachments = (setSelectedModel) => {
                 const errorData = await response.json().catch(() => ({}));
                 throw new Error(errorData.error || `HTTP error ${response.status}`);
             }
-            
+
             const responseBody = await response.json();
             let actualData;
 
@@ -213,7 +217,7 @@ export const useAttachments = (setSelectedModel) => {
             }
 
             const markdownContent = actualData.content || '';
-            
+
             const finalAttachment = {
                 id: tempId,
                 type: 'text',

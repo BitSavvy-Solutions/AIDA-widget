@@ -5,12 +5,14 @@ import AttachmentButton from './AttachmentButton';
 
 export const AVAILABLE_MODELS = [
     { value: 'deepseek/deepseek-v3.2', label: 'Deepseek 3.2' },
+    { value: 'deepseek/deepseek-chat-v3-0324', label: 'Deepseek V3' },
     { value: 'deepseek/deepseek-r1', label: 'Deepseek Reasoner R1'},
     { value: 'openai/gpt-5.1', label: 'GPT-5.1' },
     { value: 'google/gemini-3-flash-preview', label: 'Gemini Flash 3 Pre' },
     { value: 'google/gemini-3-pro-preview', label: 'Gemini Pro 3 (reasoner)' },
     { value: 'perplexity/sonar', label: 'Perplexity Sonar'}
 ];
+
 
 const ChatInput = ({
     currentMessage,
