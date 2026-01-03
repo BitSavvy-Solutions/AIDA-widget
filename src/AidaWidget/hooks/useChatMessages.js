@@ -1,46 +1,49 @@
 /* src/AidaWidget/hooks/useChatMessages.js */
 import { useState, useEffect, useCallback } from 'react';
+import { db } from '../db';
 
-// Helper to remove heavy data (like base64 image strings and large text attachments) before storage.
+// Helper to remove heavy data if we still want to use sessionStorage as a backup/cache
 const sanitizeMessagesForStorage = (msgs) => {
     if (!Array.isArray(msgs)) return [];
-    // ✅ MODIFIED: Explicitly destructure and discard 'attachments', 'images', and 'reasoning'
     return msgs.map(msg => {
-        const { images, reasoning, attachments, ...safeMessage } = msg;
+        // We can keep images in memory, but maybe strip them for sessionStorage if we use it
+        const { ...safeMessage } = msg;
         return safeMessage;
     });
 };
 
-/**
- * Manages the messages array for the current chat session,
- * syncing it with sessionStorage.
- * @returns An object with the messages array, its setter, and the sanitization utility.
- */
 export const useChatMessages = () => {
-    const [messages, setMessages] = useState(() => {
-        try {
-            const storedMessages = sessionStorage.getItem('chatMessages');
-            return storedMessages ? JSON.parse(storedMessages) : [];
-        } catch (e) {
-            console.warn('Could not parse messages from sessionStorage:', e);
-            return [];
-        }
-    });
+    const [messages, setMessages] = useState([]);
 
-    // Effect to persist messages to sessionStorage whenever they change.
-    useEffect(() => {
-        try {
-            const sanitized = sanitizeMessagesForStorage(messages);
-            sessionStorage.setItem('chatMessages', JSON.stringify(sanitized));
-        } catch (e) {
-            console.warn('Skipping chatMessages persist, likely due to storage limits:', e);
+    // We expose a method to load messages specifically for a session ID
+    // This is called by AidaWidget when currentSessionId changes
+    const loadMessagesForSession = useCallback(async (sessionId) => {
+        if (!sessionId) {
+            setMessages([]);
+            return;
         }
-    }, [messages]);
+        try {
+            const session = await db.chats.get(sessionId);
+            if (session && session.messages) {
+                setMessages(session.messages);
+            } else {
+                setMessages([]);
+            }
+        } catch (e) {
+            console.error("Error loading messages from DB:", e);
+            setMessages([]);
+        }
+    }, []);
 
-    // We also return the sanitizer function because useChatHistory will need it.
+    // We still return getSanitizedMessages for the history hook to use when saving
     const getSanitizedMessages = useCallback(() => {
         return sanitizeMessagesForStorage(messages);
     }, [messages]);
 
-    return { messages, setMessages, getSanitizedMessages };
+    return { 
+        messages, 
+        setMessages, 
+        getSanitizedMessages,
+        loadMessagesForSession 
+    };
 };
