@@ -418,6 +418,16 @@ const ChatDisplay = ({
                                                 e.target.style.height = 'auto';
                                                 e.target.style.height = `${e.target.scrollHeight}px`;
                                             }}
+                                            // ✅ ADDED: Keyboard shortcuts for Save (Ctrl/Cmd+Enter) and Cancel (Esc)
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Escape') {
+                                                    e.preventDefault();
+                                                    onCancelEdit();
+                                                } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                                                    e.preventDefault();
+                                                    onSaveEdit();
+                                                }
+                                            }}
                                             className={`w-full p-2 rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 edit-textarea ${
                                                 isDark ? 'bg-gray-800 text-white border border-gray-700' : 'bg-white text-gray-900 border border-gray-300'
                                             }`}
