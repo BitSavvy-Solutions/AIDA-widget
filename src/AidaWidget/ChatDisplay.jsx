@@ -2,12 +2,11 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { HiSpeakerWave, HiPlay, HiPause, HiPaperClip, HiChevronDown, HiChevronUp, HiClipboard, HiCheck } from 'react-icons/hi2';
+import { HiSpeakerWave, HiPlay, HiPause, HiPaperClip, HiChevronDown, HiChevronUp, HiClipboard, HiCheck, HiPencilSquare } from 'react-icons/hi2';
 import ReasoningDisplay from './ReasoningDisplay';
 
 import ShikiHighlighter, { isInlineCode } from 'react-shiki';
 
-// ✅ ADDED: Whitelist of languages Shiki is guaranteed to support.
 const SUPPORTED_LANGUAGES = new Set([
     'javascript', 'js', 'jsx', 'typescript', 'ts', 'tsx',
     'json', 'jsonc', 'html', 'css', 'scss', 'less',
@@ -29,7 +28,6 @@ const CodeBlock = ({ className, children, node, ...props }) => {
     const [copied, setCopied] = useState(false);
     const code = String(children).replace(/\n$/, '');
     
-    // Logic for collapsing long code blocks
     const lineCount = code.split('\n').length;
     const COLLAPSE_THRESHOLD = 15;
     const isLongCode = lineCount > COLLAPSE_THRESHOLD;
@@ -53,17 +51,11 @@ const CodeBlock = ({ className, children, node, ...props }) => {
         }
     };
     
-    // ✅ NEW: Extract the full string (filename) from the class name
-    // e.g., "language-src/components/App.jsx" -> "src/components/App.jsx"
     const rawFilename = className ? className.replace('language-', '') : '';
 
-    // ✅ MODIFIED: Logic to extract just the extension for Shiki highlighting
     const getLangFromFilename = (filename) => {
         if (!filename) return 'text';
-        // Split by dot to find extension
         const parts = filename.split('.');
-        // If there is an extension (e.g. file.js), take the last part
-        // If no extension (e.g. Dockerfile), take the whole thing
         const lang = parts.length > 1 ? parts[parts.length - 1] : filename;
         return lang ? lang.toLowerCase() : 'text';
     };
@@ -89,14 +81,10 @@ const CodeBlock = ({ className, children, node, ...props }) => {
 
     return (
         <div className="relative group my-4 rounded-lg border border-white/10 bg-[#1e1e1e] overflow-hidden shadow-sm">
-            {/* ✅ NEW: Header Bar displaying Filename and Copy Button */}
             <div className="flex items-center justify-between px-4 py-2 bg-[#2d2d2d] border-b border-white/5">
-                {/* Filename Display */}
                 <span className="text-xs text-gray-400 font-mono truncate mr-4">
                     {rawFilename || language} 
                 </span>
-
-                {/* Copy Button (Moved here) */}
                 <button
                     type="button"
                     onClick={onCopy}
@@ -116,8 +104,6 @@ const CodeBlock = ({ className, children, node, ...props }) => {
                     )}
                 </button>
             </div>
-
-            {/* Code Content Container */}
             <div className={`relative transition-all duration-300 ease-in-out ${isCollapsed ? 'max-h-[320px] overflow-hidden' : ''}`}>
                 <ShikiHighlighter
                     language={language}
@@ -128,14 +114,10 @@ const CodeBlock = ({ className, children, node, ...props }) => {
                 >
                     {code}
                 </ShikiHighlighter>
-
-                {/* Gradient Overlay for collapsed state */}
                 {isCollapsed && (
                     <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#1e1e1e] to-transparent pointer-events-none z-10" />
                 )}
             </div>
-
-            {/* Expand/Collapse Footer */}
             {isLongCode && (
                 <button
                     type="button"
@@ -170,7 +152,12 @@ const ChatDisplay = ({
     messages,
     messagesEndRef,
     siteLanguage,
+    editingMessageId,
+    editDraft,
+    setEditDraft,
     onStartEdit,
+    onCancelEdit,
+    onSaveEdit,
     onScrollStateChange,
     onUserScrollAway,
     programmaticScrollRef,
@@ -178,6 +165,7 @@ const ChatDisplay = ({
     theme = 'dark',
     onImagePreview,
     onRetryBotMessage,
+    onRegenerateResponse,
     isLoading = false,
     liveReasoning,
     onViewAttachments,
@@ -185,6 +173,7 @@ const ChatDisplay = ({
     const [copiedId, setCopiedId] = useState(null);
     const containerRef = useRef(null);
     const messageBodyRefs = useRef(new Map());
+    const editInputRef = useRef(null);
 
     const [speakingMessageId, setSpeakingMessageId] = useState(null);
     const [speechStatus, setSpeechStatus] = useState('idle');
@@ -194,6 +183,14 @@ const ChatDisplay = ({
     const [liveReasoningInfo, setLiveReasoningInfo] = useState({ botId: null, startTime: null });
 
     const speechApiSupported = useMemo(() => typeof window !== 'undefined' && 'speechSynthesis' in window, []);
+
+    useEffect(() => {
+        if (editingMessageId && editInputRef.current) {
+            editInputRef.current.focus();
+            editInputRef.current.style.height = 'auto';
+            editInputRef.current.style.height = `${editInputRef.current.scrollHeight}px`;
+        }
+    }, [editingMessageId]);
 
     useEffect(() => {
         const isTimerTicking = isLoading &&
@@ -342,6 +339,7 @@ const ChatDisplay = ({
                 const hasImages = Array.isArray(message.images) && message.images.length > 0;
                 const hasAttachments = Array.isArray(message.attachments) && message.attachments.length > 0;
                 const isBot = message.sender === 'bot';
+                const isEditing = editingMessageId === message.id;
 
                 const isLastMessage = index === messages.length - 1;
                 const isBotLoading = isBot && isLastMessage && isLoading;
@@ -387,7 +385,7 @@ const ChatDisplay = ({
                                     if (el) messageBodyRefs.current.set(message.id, el);
                                     else messageBodyRefs.current.delete(message.id);
                                 }}
-                                className={`${message.sender === 'user' ? 'user-message rounded-l-xl' : 'bot-message'}`}
+                                className={`${message.sender === 'user' ? 'user-message rounded-l-xl' : 'bot-message'} ${isEditing ? 'w-full' : ''}`}
                                 dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'}
                             >
                                 {hasImages && (
@@ -409,30 +407,75 @@ const ChatDisplay = ({
                                         ))}
                                     </div>
                                 )}
-                                {trimmedText !== '' ? (
-                                    <ReactMarkdown
-                                        remarkPlugins={[remarkGfm]}
-                                        components={{
-                                            code: CodeBlock,
-                                            a({ href, children }) {
-                                                return (
-                                                    <a href={href} target="_blank" rel="noopener noreferrer" className="markdown-link">
-                                                        {children}
-                                                    </a>
-                                                );
-                                            }
-                                        }}
-                                    >
-                                        {String(messageText).replace(/<br\s*\/?>(?=\s*)/gi, '  \n')}
-                                    </ReactMarkdown>
-                                ) : (
-                                    showThinkingDots ? (
-                                        <div className="thinking-dots" role="status" aria-live="polite" aria-label="Assistant is thinking">
-                                            <span className="dot" />
-                                            <span className="dot" />
-                                            <span className="dot" />
+                                
+                                {isEditing ? (
+                                    <div className="w-full">
+                                        <textarea
+                                            ref={editInputRef}
+                                            value={editDraft}
+                                            onChange={(e) => {
+                                                setEditDraft(e.target.value);
+                                                e.target.style.height = 'auto';
+                                                e.target.style.height = `${e.target.scrollHeight}px`;
+                                            }}
+                                            // ✅ ADDED: Keyboard shortcuts for Save (Ctrl/Cmd+Enter) and Cancel (Esc)
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Escape') {
+                                                    e.preventDefault();
+                                                    onCancelEdit();
+                                                } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                                                    e.preventDefault();
+                                                    onSaveEdit();
+                                                }
+                                            }}
+                                            className={`w-full p-2 rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 edit-textarea ${
+                                                isDark ? 'bg-gray-800 text-white border border-gray-700' : 'bg-white text-gray-900 border border-gray-300'
+                                            }`}
+                                            rows={1}
+                                        />
+                                        <div className="flex justify-end gap-2 mt-2">
+                                            <button
+                                                onClick={onCancelEdit}
+                                                className={`px-3 py-1 text-xs rounded-md border transition-colors ${
+                                                    isDark ? 'border-gray-600 hover:bg-gray-700 text-gray-300' : 'border-gray-300 hover:bg-gray-100 text-gray-600'
+                                                }`}
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                onClick={onSaveEdit}
+                                                className="px-3 py-1 text-xs rounded-md bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+                                            >
+                                                Save
+                                            </button>
                                         </div>
-                                    ) : null
+                                    </div>
+                                ) : (
+                                    trimmedText !== '' ? (
+                                        <ReactMarkdown
+                                            remarkPlugins={[remarkGfm]}
+                                            components={{
+                                                code: CodeBlock,
+                                                a({ href, children }) {
+                                                    return (
+                                                        <a href={href} target="_blank" rel="noopener noreferrer" className="markdown-link">
+                                                            {children}
+                                                        </a>
+                                                    );
+                                                }
+                                            }}
+                                        >
+                                            {String(messageText).replace(/<br\s*\/?>(?=\s*)/gi, '  \n')}
+                                        </ReactMarkdown>
+                                    ) : (
+                                        showThinkingDots ? (
+                                            <div className="thinking-dots" role="status" aria-live="polite" aria-label="Assistant is thinking">
+                                                <span className="dot" />
+                                                <span className="dot" />
+                                                <span className="dot" />
+                                            </div>
+                                        ) : null
+                                    )
                                 )}
                             </div>
                            
@@ -454,8 +497,9 @@ const ChatDisplay = ({
                                 </div>
                             )}
 
-                            {!isBotLoading && (
+                            {!isBotLoading && !isEditing && (
                                 <div className="mt-3 flex items-center gap-2 select-none">
+                                    {/* 1. Copy Button */}
                                     <button
                                         type="button"
                                         onClick={() => handleCopy(messageText, message.id)}
@@ -467,7 +511,9 @@ const ChatDisplay = ({
                                             <path d="M16 1H4c-1.1 0-2 .9-2 2v12h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
                                         </svg>
                                     </button>
-                                    {isBot && speechApiSupported && trimmedText !== '' && (
+
+                                    {/* Speech Button (Optional, kept near copy) */}
+                                    {speechApiSupported && trimmedText !== '' && (
                                         <button
                                             type="button"
                                             onClick={() => handleToggleSpeech(message)}
@@ -490,6 +536,26 @@ const ChatDisplay = ({
                                             )}
                                         </button>
                                     )}
+
+                                    {/* 2. Retry / Regenerate Button */}
+                                    {/* For User: Regenerate Response */}
+                                    {message.sender === 'user' && onRegenerateResponse && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onRegenerateResponse(message.id)}
+                                            disabled={isLoading}
+                                            className="text-gray-400 hover:text-gray-600 transition-colors p-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            aria-label="Regenerate response"
+                                            title="Regenerate response"
+                                        >
+                                            {/* Same SVG as Bot Retry */}
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                                                <path d="M12 6V3L8 7l4 4V8c2.76 0 5 2.24 5 5 0 1.01-.3 1.95-.82 2.73l1.46 1.46C18.54 15.77 19 14.44 19 13c0-3.87-3.13-7-7-7zm-6.64.64L3.9 8.1C3.27 9.36 3 10.66 3 12c0 3.87 3.13 7 7 7v3l4-4-4-4v3c-2.76 0-5-2.24-5-5 0-1.01.3-1.95.82-2.73L5.36 6.64z"/>
+                                            </svg>
+                                        </button>
+                                    )}
+
+                                    {/* For Bot: Retry Response */}
                                     {message.sender === 'bot' && onRetryBotMessage && canRetry && (
                                         <button
                                             type="button"
@@ -504,24 +570,22 @@ const ChatDisplay = ({
                                             </svg>
                                         </button>
                                     )}
-                                    {message.sender === 'user' && (
+
+                                    {/* 3. Edit Button */}
+                                    {onStartEdit && (
                                         <button
                                             type="button"
-                                            onClick={() => onStartEdit && onStartEdit(message.id)}
+                                            onClick={() => onStartEdit(message)}
                                             className="text-gray-400 hover:text-gray-600 transition-colors p-1"
                                             aria-label="Edit message"
                                             title="Edit message"
                                         >
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                                                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm2.92 2.33H5v-0.92l8.06-8.06.92.92L5.92 19.58zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
-                                            </svg>
+                                            <HiPencilSquare className="w-4 h-4" />
                                         </button>
                                     )}
+
                                     {copiedId === message.id && (
                                         <span className="text-xs text-green-600">Copied</span>
-                                    )}
-                                    {message.sender === 'user' && message.edited && (
-                                        <span className="text-xs text-gray-400">Edited</span>
                                     )}
                                  </div>
                              )}

@@ -60,7 +60,11 @@ const AidaWidget = (props) => {
     }, [selectedModel]);
 
     const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false);
+    
+    // ✅ ADDED: Editing State
     const [editingMessageId, setEditingMessageId] = useState(null);
+    const [editDraft, setEditDraft] = useState('');
+
     const [customPrompt, setCustomPrompt] = useState(() => localStorage.getItem('aida-widget-prompt') || '');
     const [promptDraft, setPromptDraft] = useState('');
     const [imagePreview, setImagePreview] = useState(null);
@@ -141,21 +145,38 @@ const AidaWidget = (props) => {
         });
     }, [setMessages]);
 
-    const handleStartEdit = useCallback((messageId) => {
-        const messageToEdit = messages.find(m => m.id === messageId);
-        if (!messageToEdit) return;
-        setCurrentMessage(messageToEdit.text || '');
-        setAttachments(messageToEdit.attachments || []);
-        setEditingMessageId(messageId);
-        inputRef.current?.focus();
-    }, [messages, setAttachments]);
-    
-    const cancelEdit = useCallback(() => {
+    // ✅ ADDED: Edit Handlers
+    const handleStartEdit = useCallback((message) => {
+        setEditingMessageId(message.id);
+        setEditDraft(message.text || '');
+    }, []);
+
+    const handleCancelEdit = useCallback(() => {
         setEditingMessageId(null);
-        setCurrentMessage('');
-        clearAttachments();
-    }, [clearAttachments]);
-    
+        setEditDraft('');
+    }, []);
+
+    const handleSaveEdit = useCallback(() => {
+        if (!editingMessageId) return;
+
+        setMessages(prevMessages => {
+            const updatedMessages = prevMessages.map(msg => 
+                msg.id === editingMessageId ? { ...msg, text: editDraft } : msg
+            );
+            
+            // Persist to DB immediately
+            if (currentSessionId) {
+                updateCurrentSession(updatedMessages);
+            }
+            
+            return updatedMessages;
+        });
+
+        setEditingMessageId(null);
+        setEditDraft('');
+    }, [editingMessageId, editDraft, currentSessionId, updateCurrentSession, setMessages]);
+
+
     const shouldAutoScroll = isLoading ? !isAutoScrollPaused : isAtBottom;
     
     const getLocalizedGreeting = (lang) => ({ 'ar': "✨ مرحبًا! أنا آيدا، مساعدتك الرقمية الذكية 🤖💖 كيف يمكنني مساعدتك اليوم؟ 😊", 'fr': "👋 Coucou ! Moi c’est Aida, ta super assistante numérique ✨💻 Comment puis-je t’aider aujourd’hui ? 😄" }[lang] || "Hey hey! 👋 I'm Aida, your sparkly smart digital assistant 🤖💖 How can I help you today? 😄");
@@ -167,7 +188,7 @@ const AidaWidget = (props) => {
     const resetChat = () => { saveCurrentChatToHistory(); setMessages([]); setCurrentSessionId(null); clearAttachments(); };
     const handleRecordButtonClick = useCallback(() => { if (isLoading || isTranscribing) return; cancelAutoRecordTimer(); isRecording ? stopRecording() : startRecording(); }, [isRecording, isLoading, isTranscribing, stopRecording, startRecording, cancelAutoRecordTimer]);
 
-       const stableHandleSendMessage = useCallback(async (messageTextOverride = null) => {
+    const stableHandleSendMessage = useCallback(async (messageTextOverride = null) => {
         const text = messageTextOverride ?? currentMessage;
         if ((!text.trim() && attachments.length === 0) || isLoading) return;
         cancelAutoSendTimer(); 
@@ -179,51 +200,68 @@ const AidaWidget = (props) => {
         let userMessage = null;
         let activeSessionId = currentSessionId; 
 
-        if (editingMessageId) {
-            const idx = messages.findIndex(m => m.id === editingMessageId);
-            if (idx === -1) return;
-            userMessage = { 
-                ...messages[idx], 
-                text: text.trim(), 
-                edited: true, 
-                model: finalModelName, 
-                attachments, 
-                images: imageAttachments 
-            };
-            const historyBefore = messages.slice(0, idx);
-            nextMessages = [...historyBefore, userMessage, { id: botMessageId, text: '', sender: 'bot' }];
-            setMessages(nextMessages);
-            if (activeSessionId) {
-                updateCurrentSession(nextMessages);
-            }
+        // Simplified: Only handles new message creation
+        userMessage = { 
+            id: `user-${Date.now()}`, 
+            sender: 'user', 
+            text: text.trim(), 
+            model: finalModelName, 
+            webSearchEnabled: isWebSearchEnabled, 
+            attachments, 
+            images: imageAttachments 
+        };
+        nextMessages = [...messages, userMessage, { id: botMessageId, sender: 'bot', text: '' }];
+        setMessages(nextMessages);
+        if (!activeSessionId) {
+            activeSessionId = createNewSession(nextMessages); 
         } else {
-            userMessage = { 
-                id: `user-${Date.now()}`, 
-                sender: 'user', 
-                text: text.trim(), 
-                model: finalModelName, 
-                webSearchEnabled: isWebSearchEnabled, 
-                attachments, 
-                images: imageAttachments 
-            };
-            nextMessages = [...messages, userMessage, { id: botMessageId, sender: 'bot', text: '' }];
-            setMessages(nextMessages);
-            if (!activeSessionId) {
-                activeSessionId = createNewSession(nextMessages); 
-            } else {
-                updateCurrentSession(nextMessages);
-            }
+            updateCurrentSession(nextMessages);
         }
+
         setCurrentMessage(''); 
         clearAttachments(); 
-        setEditingMessageId(null); 
+        setEditingMessageId(null); // Ensure we aren't editing when sending new
         if (isWebSearchEnabled) setIsWebSearchEnabled(false);
         const historyForPayload = nextMessages.slice(0, -1); 
         await streamResponse({ userMessage, botMessageId, historyForPayload, sessionId: activeSessionId });
-    }, [currentMessage, attachments, isLoading, editingMessageId, selectedModel, isWebSearchEnabled, messages, currentSessionId, streamResponse, setMessages, createNewSession, updateCurrentSession, cancelAutoSendTimer, cancelAutoRecordTimer, clearAttachments]);
+    }, [currentMessage, attachments, isLoading, selectedModel, isWebSearchEnabled, messages, currentSessionId, streamResponse, setMessages, createNewSession, updateCurrentSession, cancelAutoSendTimer, cancelAutoRecordTimer, clearAttachments]);
 
     const handleRetry = useCallback(async (botMessageId) => { if (isLoading) return; const botIndex = messages.findIndex(m => m.id === botMessageId); if (botIndex === -1) return; let userIndex = -1; for (let i = botIndex - 1; i >= 0; i--) { if (messages[i].sender === 'user' && (messages[i].text || messages[i].attachments?.length > 0)) { userIndex = i; break; } } if (userIndex === -1) return; const userMessageToRetry = messages[userIndex]; const historyForPayload = messages.slice(0, userIndex); const newBotMessageId = `bot-${Date.now()}`; setMessages([...historyForPayload, userMessageToRetry, { id: newBotMessageId, sender: 'bot', text: '' }]); await streamResponse({ userMessage: userMessageToRetry, botMessageId: newBotMessageId, historyForPayload, sessionId: currentSessionId }); }, [isLoading, messages, streamResponse, setMessages, currentSessionId]);
     
+    // ✅ NEW: Handle Regenerate from User Message
+    const handleRegenerate = useCallback(async (userMessageId) => {
+        if (isLoading) return;
+        
+        const userIndex = messages.findIndex(m => m.id === userMessageId);
+        if (userIndex === -1) return;
+
+        const userMessageToRegenerate = messages[userIndex];
+        
+        // Slice history up to this user message (exclusive of the user message itself for payload construction logic in hook)
+        // But we want the UI to show up to this user message + new bot message.
+        const historyForPayload = messages.slice(0, userIndex);
+        
+        const newBotMessageId = `bot-${Date.now()}`;
+        
+        // Reset UI state to: [History before] + [This User Message] + [New Empty Bot Message]
+        const nextMessages = [...historyForPayload, userMessageToRegenerate, { id: newBotMessageId, sender: 'bot', text: '' }];
+        
+        setMessages(nextMessages);
+        
+        // Update DB immediately to reflect truncation
+        if (currentSessionId) {
+            updateCurrentSession(nextMessages);
+        }
+
+        await streamResponse({ 
+            userMessage: userMessageToRegenerate, 
+            botMessageId: newBotMessageId, 
+            historyForPayload, 
+            sessionId: currentSessionId 
+        });
+    }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession]);
+
+
     // ✅ CHANGED: Simplified to just set ID. The useEffect handles loading data.
     const handleHistorySelect = useCallback((session) => {
         setCurrentSessionId(session.id);
@@ -313,9 +351,17 @@ const AidaWidget = (props) => {
                             shouldAutoScroll={shouldAutoScroll}
                             onScrollStateChange={handleScrollStateChange}
                             onUserScrollAway={handleUserScrollAway}
+                            // ✅ ADDED: Edit props
+                            editingMessageId={editingMessageId}
+                            editDraft={editDraft}
+                            setEditDraft={setEditDraft}
                             onStartEdit={handleStartEdit}
+                            onCancelEdit={handleCancelEdit}
+                            onSaveEdit={handleSaveEdit}
                             onImagePreview={setImagePreview}
                             onRetryBotMessage={features.retryMessage ? handleRetry : undefined}
+                            // ✅ ADDED: Regenerate prop
+                            onRegenerateResponse={features.retryMessage ? handleRegenerate : undefined}
                             onViewAttachments={handleViewAttachments}
                         />
                         <ChatInput 
@@ -345,8 +391,6 @@ const AidaWidget = (props) => {
                             selectedModel={selectedModel}
                             setSelectedModel={setSelectedModel}
                             translations={translations}
-                            isEditing={!!editingMessageId}
-                            cancelEdit={cancelEdit}
                             attachmentCount={attachments.length}
                             onOpenAttachments={openAttachmentModal}
                             isWebSearchEnabled={isWebSearchEnabled}
