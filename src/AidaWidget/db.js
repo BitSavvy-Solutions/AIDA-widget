@@ -35,8 +35,8 @@ export const migrateFromLocalStorage = async () => {
 
     localStorage.setItem('aida-db-migrated', 'true');
     // Optional: Clear old data
-    localStorage.removeItem('aida-chat-history');
-    localStorage.removeItem('aida-history-projects');
+    //localStorage.removeItem('aida-chat-history');
+    //localStorage.removeItem('aida-history-projects');
     console.log('AidaWidget: Migration to IndexedDB successful.');
   } catch (error) {
     console.error('AidaWidget: Migration failed', error);
