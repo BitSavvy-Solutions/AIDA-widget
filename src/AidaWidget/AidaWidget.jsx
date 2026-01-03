@@ -228,6 +228,40 @@ const AidaWidget = (props) => {
 
     const handleRetry = useCallback(async (botMessageId) => { if (isLoading) return; const botIndex = messages.findIndex(m => m.id === botMessageId); if (botIndex === -1) return; let userIndex = -1; for (let i = botIndex - 1; i >= 0; i--) { if (messages[i].sender === 'user' && (messages[i].text || messages[i].attachments?.length > 0)) { userIndex = i; break; } } if (userIndex === -1) return; const userMessageToRetry = messages[userIndex]; const historyForPayload = messages.slice(0, userIndex); const newBotMessageId = `bot-${Date.now()}`; setMessages([...historyForPayload, userMessageToRetry, { id: newBotMessageId, sender: 'bot', text: '' }]); await streamResponse({ userMessage: userMessageToRetry, botMessageId: newBotMessageId, historyForPayload, sessionId: currentSessionId }); }, [isLoading, messages, streamResponse, setMessages, currentSessionId]);
     
+    // ✅ NEW: Handle Regenerate from User Message
+    const handleRegenerate = useCallback(async (userMessageId) => {
+        if (isLoading) return;
+        
+        const userIndex = messages.findIndex(m => m.id === userMessageId);
+        if (userIndex === -1) return;
+
+        const userMessageToRegenerate = messages[userIndex];
+        
+        // Slice history up to this user message (exclusive of the user message itself for payload construction logic in hook)
+        // But we want the UI to show up to this user message + new bot message.
+        const historyForPayload = messages.slice(0, userIndex);
+        
+        const newBotMessageId = `bot-${Date.now()}`;
+        
+        // Reset UI state to: [History before] + [This User Message] + [New Empty Bot Message]
+        const nextMessages = [...historyForPayload, userMessageToRegenerate, { id: newBotMessageId, sender: 'bot', text: '' }];
+        
+        setMessages(nextMessages);
+        
+        // Update DB immediately to reflect truncation
+        if (currentSessionId) {
+            updateCurrentSession(nextMessages);
+        }
+
+        await streamResponse({ 
+            userMessage: userMessageToRegenerate, 
+            botMessageId: newBotMessageId, 
+            historyForPayload, 
+            sessionId: currentSessionId 
+        });
+    }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession]);
+
+
     // ✅ CHANGED: Simplified to just set ID. The useEffect handles loading data.
     const handleHistorySelect = useCallback((session) => {
         setCurrentSessionId(session.id);
@@ -326,6 +360,8 @@ const AidaWidget = (props) => {
                             onSaveEdit={handleSaveEdit}
                             onImagePreview={setImagePreview}
                             onRetryBotMessage={features.retryMessage ? handleRetry : undefined}
+                            // ✅ ADDED: Regenerate prop
+                            onRegenerateResponse={features.retryMessage ? handleRegenerate : undefined}
                             onViewAttachments={handleViewAttachments}
                         />
                         <ChatInput 

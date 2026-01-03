@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { HiSpeakerWave, HiPlay, HiPause, HiPaperClip, HiChevronDown, HiChevronUp, HiClipboard, HiCheck, HiPencilSquare, HiXMark } from 'react-icons/hi2';
+import { HiSpeakerWave, HiPlay, HiPause, HiPaperClip, HiChevronDown, HiChevronUp, HiClipboard, HiCheck, HiPencilSquare } from 'react-icons/hi2';
 import ReasoningDisplay from './ReasoningDisplay';
 
 import ShikiHighlighter, { isInlineCode } from 'react-shiki';
@@ -28,7 +28,6 @@ const CodeBlock = ({ className, children, node, ...props }) => {
     const [copied, setCopied] = useState(false);
     const code = String(children).replace(/\n$/, '');
     
-    // Logic for collapsing long code blocks
     const lineCount = code.split('\n').length;
     const COLLAPSE_THRESHOLD = 15;
     const isLongCode = lineCount > COLLAPSE_THRESHOLD;
@@ -166,6 +165,7 @@ const ChatDisplay = ({
     theme = 'dark',
     onImagePreview,
     onRetryBotMessage,
+    onRegenerateResponse,
     isLoading = false,
     liveReasoning,
     onViewAttachments,
@@ -489,6 +489,7 @@ const ChatDisplay = ({
 
                             {!isBotLoading && !isEditing && (
                                 <div className="mt-3 flex items-center gap-2 select-none">
+                                    {/* 1. Copy Button */}
                                     <button
                                         type="button"
                                         onClick={() => handleCopy(messageText, message.id)}
@@ -500,7 +501,9 @@ const ChatDisplay = ({
                                             <path d="M16 1H4c-1.1 0-2 .9-2 2v12h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
                                         </svg>
                                     </button>
-                                    {isBot && speechApiSupported && trimmedText !== '' && (
+
+                                    {/* Speech Button (Optional, kept near copy) */}
+                                    {speechApiSupported && trimmedText !== '' && (
                                         <button
                                             type="button"
                                             onClick={() => handleToggleSpeech(message)}
@@ -523,6 +526,26 @@ const ChatDisplay = ({
                                             )}
                                         </button>
                                     )}
+
+                                    {/* 2. Retry / Regenerate Button */}
+                                    {/* For User: Regenerate Response */}
+                                    {message.sender === 'user' && onRegenerateResponse && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onRegenerateResponse(message.id)}
+                                            disabled={isLoading}
+                                            className="text-gray-400 hover:text-gray-600 transition-colors p-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            aria-label="Regenerate response"
+                                            title="Regenerate response"
+                                        >
+                                            {/* Same SVG as Bot Retry */}
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                                                <path d="M12 6V3L8 7l4 4V8c2.76 0 5 2.24 5 5 0 1.01-.3 1.95-.82 2.73l1.46 1.46C18.54 15.77 19 14.44 19 13c0-3.87-3.13-7-7-7zm-6.64.64L3.9 8.1C3.27 9.36 3 10.66 3 12c0 3.87 3.13 7 7 7v3l4-4-4-4v3c-2.76 0-5-2.24-5-5 0-1.01.3-1.95.82-2.73L5.36 6.64z"/>
+                                            </svg>
+                                        </button>
+                                    )}
+
+                                    {/* For Bot: Retry Response */}
                                     {message.sender === 'bot' && onRetryBotMessage && canRetry && (
                                         <button
                                             type="button"
@@ -537,6 +560,8 @@ const ChatDisplay = ({
                                             </svg>
                                         </button>
                                     )}
+
+                                    {/* 3. Edit Button */}
                                     {onStartEdit && (
                                         <button
                                             type="button"
@@ -548,6 +573,7 @@ const ChatDisplay = ({
                                             <HiPencilSquare className="w-4 h-4" />
                                         </button>
                                     )}
+
                                     {copiedId === message.id && (
                                         <span className="text-xs text-green-600">Copied</span>
                                     )}
