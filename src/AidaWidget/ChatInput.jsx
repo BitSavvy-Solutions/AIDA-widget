@@ -36,8 +36,7 @@ const ChatInput = ({
     selectedModel,
     setSelectedModel,
     translations,
-    isEditing = false,
-    cancelEdit,
+    // REMOVED: isEditing and cancelEdit props
     attachmentCount = 0,
     onOpenAttachments,
     isWebSearchEnabled,
@@ -233,14 +232,7 @@ const ChatInput = ({
 
     return (
         <div className={`relative p-4 rounded-none transition-colors ${theme === 'dark' ? 'border-t border-gray-800 bg-gray-900 text-gray-100' : 'border-t border-gray-200 bg-white text-gray-900'}`}>
-            {isEditing && (
-                <div className="mb-2 -mt-1 flex items-center justify-between rounded-md bg-amber-50 border border-amber-200 px-3 py-1.5 text-amber-800 text-sm">
-                    <span>Editing message — press Enter to save</span>
-                    <button onClick={cancelEdit} className="flex items-center gap-1 text-amber-800 hover:text-amber-900" aria-label="Cancel edit">
-                        <HiXMark className="h-4 w-4" /> Cancel
-                    </button>
-                </div>
-            )}
+            {/* REMOVED: Editing banner */}
             <div className={`flex items-end rounded-lg px-3 py-1 mb-3 transition-colors ${theme === 'dark' ? 'border border-gray-700 bg-gray-800' : 'border border-gray-300 bg-gray-50'}`}>
                {/* ✅ MODIFIED: Removed disabled={isTranscribing} and the "Transcribing..." placeholder */}
                <textarea 
@@ -250,7 +242,7 @@ const ChatInput = ({
                     onKeyDown={handleKeyDown}
                     // ✅ ADDED: Attach the paste handler
                     onPaste={handlePaste}
-                    placeholder={isEditing ? "Edit your message..." : (translations.inputPlaceholder || "Type your message...")} 
+                    placeholder={translations.inputPlaceholder || "Type your message..."} 
                     dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'} 
                     rows={1} 
                     className={`flex-1 bg-transparent px-0 py-2 resize-none focus:outline-none custom-scrollbar overflow-y-auto whitespace-pre-wrap leading-tight ${theme === 'dark' ? 'text-gray-100 placeholder-gray-400' : ''} min-h-[42px] max-h-[200px]`} 
@@ -299,7 +291,7 @@ const ChatInput = ({
                 <div className="flex items-center chat-action-buttons relative flex-shrink-0">
                     {features.imageUpload && (
                         // ✅ MODIFIED: Removed isTranscribing from disabled check
-                        <AttachmentButton count={attachmentCount} onClick={onOpenAttachments} disabled={isEditing} theme={theme}/>
+                        <AttachmentButton count={attachmentCount} onClick={onOpenAttachments} theme={theme}/>
                     )}
                     {features.voiceInput && renderRecordButton()}
                     {renderSendButton()}
