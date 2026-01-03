@@ -60,7 +60,11 @@ const AidaWidget = (props) => {
     }, [selectedModel]);
 
     const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false);
-    // REMOVED: editingMessageId state
+    
+    // ✅ ADDED: Editing State
+    const [editingMessageId, setEditingMessageId] = useState(null);
+    const [editDraft, setEditDraft] = useState('');
+
     const [customPrompt, setCustomPrompt] = useState(() => localStorage.getItem('aida-widget-prompt') || '');
     const [promptDraft, setPromptDraft] = useState('');
     const [imagePreview, setImagePreview] = useState(null);
@@ -141,7 +145,37 @@ const AidaWidget = (props) => {
         });
     }, [setMessages]);
 
-    // REMOVED: handleStartEdit and cancelEdit functions
+    // ✅ ADDED: Edit Handlers
+    const handleStartEdit = useCallback((message) => {
+        setEditingMessageId(message.id);
+        setEditDraft(message.text || '');
+    }, []);
+
+    const handleCancelEdit = useCallback(() => {
+        setEditingMessageId(null);
+        setEditDraft('');
+    }, []);
+
+    const handleSaveEdit = useCallback(() => {
+        if (!editingMessageId) return;
+
+        setMessages(prevMessages => {
+            const updatedMessages = prevMessages.map(msg => 
+                msg.id === editingMessageId ? { ...msg, text: editDraft } : msg
+            );
+            
+            // Persist to DB immediately
+            if (currentSessionId) {
+                updateCurrentSession(updatedMessages);
+            }
+            
+            return updatedMessages;
+        });
+
+        setEditingMessageId(null);
+        setEditDraft('');
+    }, [editingMessageId, editDraft, currentSessionId, updateCurrentSession, setMessages]);
+
 
     const shouldAutoScroll = isLoading ? !isAutoScrollPaused : isAtBottom;
     
@@ -186,7 +220,7 @@ const AidaWidget = (props) => {
 
         setCurrentMessage(''); 
         clearAttachments(); 
-        // REMOVED: setEditingMessageId(null);
+        setEditingMessageId(null); // Ensure we aren't editing when sending new
         if (isWebSearchEnabled) setIsWebSearchEnabled(false);
         const historyForPayload = nextMessages.slice(0, -1); 
         await streamResponse({ userMessage, botMessageId, historyForPayload, sessionId: activeSessionId });
@@ -283,7 +317,13 @@ const AidaWidget = (props) => {
                             shouldAutoScroll={shouldAutoScroll}
                             onScrollStateChange={handleScrollStateChange}
                             onUserScrollAway={handleUserScrollAway}
-                            // REMOVED: onStartEdit prop
+                            // ✅ ADDED: Edit props
+                            editingMessageId={editingMessageId}
+                            editDraft={editDraft}
+                            setEditDraft={setEditDraft}
+                            onStartEdit={handleStartEdit}
+                            onCancelEdit={handleCancelEdit}
+                            onSaveEdit={handleSaveEdit}
                             onImagePreview={setImagePreview}
                             onRetryBotMessage={features.retryMessage ? handleRetry : undefined}
                             onViewAttachments={handleViewAttachments}
@@ -315,7 +355,6 @@ const AidaWidget = (props) => {
                             selectedModel={selectedModel}
                             setSelectedModel={setSelectedModel}
                             translations={translations}
-                            // REMOVED: isEditing and cancelEdit props
                             attachmentCount={attachments.length}
                             onOpenAttachments={openAttachmentModal}
                             isWebSearchEnabled={isWebSearchEnabled}
