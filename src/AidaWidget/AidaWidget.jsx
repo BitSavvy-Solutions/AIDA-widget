@@ -226,29 +226,78 @@ const AidaWidget = (props) => {
         await streamResponse({ userMessage, botMessageId, historyForPayload, sessionId: activeSessionId });
     }, [currentMessage, attachments, isLoading, selectedModel, isWebSearchEnabled, messages, currentSessionId, streamResponse, setMessages, createNewSession, updateCurrentSession, cancelAutoSendTimer, cancelAutoRecordTimer, clearAttachments]);
 
-    const handleRetry = useCallback(async (botMessageId) => { if (isLoading) return; const botIndex = messages.findIndex(m => m.id === botMessageId); if (botIndex === -1) return; let userIndex = -1; for (let i = botIndex - 1; i >= 0; i--) { if (messages[i].sender === 'user' && (messages[i].text || messages[i].attachments?.length > 0)) { userIndex = i; break; } } if (userIndex === -1) return; const userMessageToRetry = messages[userIndex]; const historyForPayload = messages.slice(0, userIndex); const newBotMessageId = `bot-${Date.now()}`; setMessages([...historyForPayload, userMessageToRetry, { id: newBotMessageId, sender: 'bot', text: '' }]); await streamResponse({ userMessage: userMessageToRetry, botMessageId: newBotMessageId, historyForPayload, sessionId: currentSessionId }); }, [isLoading, messages, streamResponse, setMessages, currentSessionId]);
+    // ✅ MODIFIED: handleRetry now uses current selectedModel
+    const handleRetry = useCallback(async (botMessageId) => { 
+        if (isLoading) return; 
+        
+        const botIndex = messages.findIndex(m => m.id === botMessageId); 
+        if (botIndex === -1) return; 
+        
+        let userIndex = -1; 
+        for (let i = botIndex - 1; i >= 0; i--) { 
+            if (messages[i].sender === 'user' && (messages[i].text || messages[i].attachments?.length > 0)) { 
+                userIndex = i; 
+                break; 
+            } 
+        } 
+        if (userIndex === -1) return; 
+
+        // Calculate model based on CURRENT selection, not historical selection
+        const finalModelName = isWebSearchEnabled ? `${selectedModel}:online` : selectedModel;
+
+        // Create updated user message with new model
+        const userMessageToRetry = {
+            ...messages[userIndex],
+            model: finalModelName,
+            webSearchEnabled: isWebSearchEnabled
+        };
+
+        const historyForPayload = messages.slice(0, userIndex); 
+        const newBotMessageId = `bot-${Date.now()}`; 
+        
+        // Update state with the MODIFIED user message (so history reflects the model used)
+        const nextMessages = [...historyForPayload, userMessageToRetry, { id: newBotMessageId, sender: 'bot', text: '' }];
+        setMessages(nextMessages); 
+        
+        // Update DB
+        if (currentSessionId) {
+            updateCurrentSession(nextMessages);
+        }
+
+        await streamResponse({ 
+            userMessage: userMessageToRetry, 
+            botMessageId: newBotMessageId, 
+            historyForPayload, 
+            sessionId: currentSessionId 
+        }); 
+    }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession, selectedModel, isWebSearchEnabled]);
     
-    // ✅ NEW: Handle Regenerate from User Message
+    // ✅ MODIFIED: handleRegenerate now uses current selectedModel
     const handleRegenerate = useCallback(async (userMessageId) => {
         if (isLoading) return;
         
         const userIndex = messages.findIndex(m => m.id === userMessageId);
         if (userIndex === -1) return;
 
-        const userMessageToRegenerate = messages[userIndex];
+        // Calculate model based on CURRENT selection
+        const finalModelName = isWebSearchEnabled ? `${selectedModel}:online` : selectedModel;
+
+        // Create updated user message with new model
+        const userMessageToRegenerate = {
+            ...messages[userIndex],
+            model: finalModelName,
+            webSearchEnabled: isWebSearchEnabled
+        };
         
-        // Slice history up to this user message (exclusive of the user message itself for payload construction logic in hook)
-        // But we want the UI to show up to this user message + new bot message.
         const historyForPayload = messages.slice(0, userIndex);
-        
         const newBotMessageId = `bot-${Date.now()}`;
         
-        // Reset UI state to: [History before] + [This User Message] + [New Empty Bot Message]
+        // Reset UI state to: [History before] + [UPDATED User Message] + [New Empty Bot Message]
         const nextMessages = [...historyForPayload, userMessageToRegenerate, { id: newBotMessageId, sender: 'bot', text: '' }];
         
         setMessages(nextMessages);
         
-        // Update DB immediately to reflect truncation
+        // Update DB immediately to reflect truncation and model update
         if (currentSessionId) {
             updateCurrentSession(nextMessages);
         }
@@ -259,7 +308,7 @@ const AidaWidget = (props) => {
             historyForPayload, 
             sessionId: currentSessionId 
         });
-    }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession]);
+    }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession, selectedModel, isWebSearchEnabled]);
 
 
     // ✅ CHANGED: Simplified to just set ID. The useEffect handles loading data.
