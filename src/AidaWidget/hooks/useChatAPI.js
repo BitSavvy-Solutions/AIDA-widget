@@ -14,14 +14,17 @@ export const useChatAPI = ({
 }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [lastCost, setLastCost] = useState(0);
-    // ✨ MODIFIED: Added `contentHasStarted` to the state shape.
     const [liveReasoning, setLiveReasoning] = useState({ text: '', botId: null, contentHasStarted: false });
+    // ✨ ADDED: State to hold API errors
+    const [apiError, setApiError] = useState(null);
+    
     const liveReasoningTextRef = useRef('');
     const streamAbortControllerRef = useRef(null);
 
     const langMap = { eng: "en", fra: "fr", ara: "ar", hin: "hi", tgl: "tl", ukr: "uk", san: "sa", nya: "ny" };
     const supportedLanguages = Object.values(langMap);
 
+    // ... (formatMessageContent and buildMessageHistoryPayload remain unchanged) ...
     const formatMessageContent = useCallback((message) => {
         if (!message) return '';
         let content = message.text || '';
@@ -49,7 +52,6 @@ export const useChatAPI = ({
         return content;
     }, []);
 
-
     const buildMessageHistoryPayload = useCallback((history = []) => {
         const messageHistory = [];
         if (pageContext && Object.keys(pageContext).length > 0) {
@@ -63,28 +65,23 @@ export const useChatAPI = ({
                 type: m.sender === 'user' ? 'human' : 'ai',
                 content: formatMessageContent(m)
             };
-
-            // ✅ FIX: Check for and attach images to historical user messages as well.
-            // The AI was losing visual context from previous turns.
             if (m.sender === 'user' && Array.isArray(m.images) && m.images.length > 0) {
                 const imageUrls = m.images.map(img => img.src).filter(Boolean);
                 if (imageUrls.length > 0) {
                     messagePayload.image_data_urls = imageUrls;
                 }
             }
-            
             messageHistory.push(messagePayload);
         });
 
         return messageHistory;
     }, [customPrompt, pageContext, formatMessageContent]);
 
-    // ✅ FIX: Added sessionId to the arguments
     const streamResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId }) => {
         setIsLoading(true);
         setLastCost(0);
-        // ✨ MODIFIED: Reset the full liveReasoning state object.
         setLiveReasoning({ text: '', botId: botMessageId, contentHasStarted: false });
+        setApiError(null); // Clear previous errors
         liveReasoningTextRef.current = '';
 
         const abortController = new AbortController();
@@ -117,7 +114,40 @@ export const useChatAPI = ({
                 signal: abortController.signal,
             });
 
-            if (!response.ok || !response.body) {
+            // ✨ MODIFIED: Enhanced Error Handling
+            if (!response.ok) {
+                let errorMessage = `HTTP error! status: ${response.status}`;
+                try {
+                    const errorData = await response.json();
+                    
+                    // Handle the specific nested structure if present (based on your log)
+                    if (errorData._HttpResponse__body) {
+                        try {
+                            const nestedBody = JSON.parse(errorData._HttpResponse__body);
+                            errorMessage = nestedBody.error || nestedBody.message || errorMessage;
+                        } catch (e) {
+                            errorMessage = errorData._HttpResponse__body;
+                        }
+                    } else {
+                        // Standard JSON error
+                        errorMessage = errorData.error || errorData.message || errorMessage;
+                    }
+                } catch (e) {
+                    // If response isn't JSON, stick to the status text
+                    console.warn("Could not parse error response JSON", e);
+                }
+
+                // Set the error state to trigger the modal
+                const errorObj = { message: errorMessage, status: response.status };
+                setApiError(errorObj);
+                
+                // Also update the chat UI to show a failure message
+                setMessages(prev => prev.map(m => m.id === botMessageId ? { ...m, text: "An error occurred. Please check the details." } : m));
+                
+                throw new Error(errorMessage);
+            }
+
+            if (!response.body) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
@@ -142,17 +172,15 @@ export const useChatAPI = ({
                                     finalMessages = updated; 
                                     return updated;
                                 });
-                                // ✅ NEW: Signal that the main content stream has started.
                                 setLiveReasoning(prev => {
                                     if (!prev.contentHasStarted) {
                                         return { ...prev, contentHasStarted: true };
                                     }
-                                    return prev; // No state change needed if already started.
+                                    return prev;
                                 });
                             }
                             if (data.reasoning_content) {
                                 liveReasoningTextRef.current += data.reasoning_content;
-                                // ✨ MODIFIED: Update only the text, preserving other flags.
                                 setLiveReasoning(prev => ({ ...prev, text: liveReasoningTextRef.current }));
                             }
                             if (data.cost !== undefined) setLastCost(data.cost);
@@ -169,9 +197,6 @@ export const useChatAPI = ({
                 ));
             }
             
-            // ✅ FIX: Use the explicit sessionId passed from the widget.
-            // This ensures that even if currentSessionId (state) is null in this closure,
-            // we still save to the correct history entry.
             const targetSessionId = sessionId || currentSessionId;
             if (targetSessionId && finalMessages) {
                 updateCurrentSession(finalMessages, targetSessionId);
@@ -182,14 +207,14 @@ export const useChatAPI = ({
                 console.info("Chat streaming was stopped by the user.");
             } else {
                 console.error("Chatbot API error:", error);
-                setMessages(prev => prev.map(m => m.id === botMessageId ? { ...m, text: "Oops! I couldn't connect. Please try again." } : m));
+                // If apiError wasn't set (e.g. network failure before response), set it here
+                setApiError(prev => prev || { message: error.message || "Network error or API unreachable." });
             }
         } finally {
             if (streamAbortControllerRef.current === abortController) {
                 streamAbortControllerRef.current = null;
             }
             setIsLoading(false);
-            // ✨ MODIFIED: Reset the full reasoning state.
             setLiveReasoning({ text: '', botId: null, contentHasStarted: false });
         }
     };
@@ -207,5 +232,14 @@ export const useChatAPI = ({
         }
     }, [setMessages, updateCurrentSession, currentSessionId]);
 
-    return { isLoading, lastCost, liveReasoning, streamResponse, stopStreaming };
+    // ✨ ADDED: Return apiError and a clearer
+    return { 
+        isLoading, 
+        lastCost, 
+        liveReasoning, 
+        streamResponse, 
+        stopStreaming, 
+        apiError, 
+        clearApiError: () => setApiError(null) 
+    };
 };

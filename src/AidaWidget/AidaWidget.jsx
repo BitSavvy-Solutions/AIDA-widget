@@ -5,6 +5,7 @@ import ChatHeader from './ChatHeader';
 import ChatHistoryPanel from './ChatHistoryPanel';
 import ChatDisplay from './ChatDisplay';
 import AttachmentModal from './AttachmentModal';
+import ErrorModal from './ErrorModal'; // ✅ ADDED
 import './AidaWidget.css';
 import ChatInput, { AVAILABLE_MODELS } from './ChatInput'; 
 
@@ -95,7 +96,10 @@ const AidaWidget = (props) => {
 
     const requestFullscreen = useCallback(() => setIsFullscreen(true), [setIsFullscreen]);
     const { sidebarRef, sidebarInlineStyle, resizeHandleProps, isResizing } = useResizableSidebar({ isOpen, isFullscreen, isMobileViewport, isEnabled: features.resizable, onRequestFullscreen: requestFullscreen });
-    const { isLoading, lastCost, liveReasoning, streamResponse, stopStreaming } = useChatAPI({ apiConfig, messages, setMessages, currentSessionId, updateCurrentSession, user, pageContext, customPrompt });
+    
+    // ✅ MODIFIED: Destructure apiError and clearApiError from useChatAPI
+    const { isLoading, lastCost, liveReasoning, streamResponse, stopStreaming, apiError, clearApiError } = useChatAPI({ apiConfig, messages, setMessages, currentSessionId, updateCurrentSession, user, pageContext, customPrompt });
+    
     const { isRecording, isTranscribing, elapsedTime, startRecording, stopRecording, cancelTranscription, lastInputWasVoiceRef, transcriptionError, retryTranscription, clearFailedTranscription, isNearingTimeLimit } = useVoiceInput({ transcriptionUrl: apiConfig.transcriptionUrl, onTranscriptionComplete: (text) => { setCurrentMessage(p => p.trim() ? `${p} ${text}` : text); if (text) startAutoSendTimer(); } });
     const { countdown: autoSendCountdown, start: startAutoSendTimer, cancel: cancelAutoSendTimer, setIsPaused: setIsSendTimerPaused } = useCountdown(() => stableHandleSendMessage(), 3);
     const { countdown: autoRecordCountdown, start: startAutoRecordTimer, cancel: cancelAutoRecordTimer, setIsPaused: setIsRecordTimerPaused } = useCountdown(startRecording, 3);
@@ -323,14 +327,12 @@ const AidaWidget = (props) => {
     useEffect(() => {
         if (isOpen) {
             // When the chat is open, show "AIDA - Title"
-            // If it's a default title, you might just want "AIDA" or "AIDA - New Chat"
             const titlePrefix = "AIDA";
             document.title = currentSessionTitle && currentSessionTitle !== "New Chat" 
                 ? `${titlePrefix} - ${currentSessionTitle}`
                 : titlePrefix;
         } else {
             // Optional: Reset to a default title when the widget is closed
-            // document.title = "AIDA"; 
         }
 
         // Cleanup function: Reset title when component unmounts
@@ -400,7 +402,6 @@ const AidaWidget = (props) => {
                             shouldAutoScroll={shouldAutoScroll}
                             onScrollStateChange={handleScrollStateChange}
                             onUserScrollAway={handleUserScrollAway}
-                            // ✅ ADDED: Edit props
                             editingMessageId={editingMessageId}
                             editDraft={editDraft}
                             setEditDraft={setEditDraft}
@@ -409,7 +410,6 @@ const AidaWidget = (props) => {
                             onSaveEdit={handleSaveEdit}
                             onImagePreview={setImagePreview}
                             onRetryBotMessage={features.retryMessage ? handleRetry : undefined}
-                            // ✅ ADDED: Regenerate prop
                             onRegenerateResponse={features.retryMessage ? handleRegenerate : undefined}
                             onViewAttachments={handleViewAttachments}
                         />
@@ -483,6 +483,15 @@ const AidaWidget = (props) => {
                     </div>
                 </div>
             )}
+
+            {/* ✅ ADDED: Error Modal */}
+            <ErrorModal 
+                isOpen={!!apiError} 
+                onClose={clearApiError} 
+                error={apiError} 
+                userEmail={user?.email} 
+                theme={theme} 
+            />
         </>
     );
 };
