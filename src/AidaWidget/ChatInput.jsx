@@ -10,6 +10,7 @@ export const AVAILABLE_MODELS = [
     { value: 'openai/gpt-5.1', label: 'GPT-5.1' },
     { value: 'google/gemini-3-flash-preview', label: 'Gemini Flash 3 Pre' },
     { value: 'google/gemini-3-pro-preview', label: 'Gemini Pro 3 (reasoner)' },
+    { value: 'google/gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image' }, // ✅ ADDED
     { value: 'perplexity/sonar', label: 'Perplexity Sonar'}
 ];
 

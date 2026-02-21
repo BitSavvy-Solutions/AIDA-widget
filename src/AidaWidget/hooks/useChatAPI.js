@@ -15,7 +15,6 @@ export const useChatAPI = ({
     const [isLoading, setIsLoading] = useState(false);
     const [lastCost, setLastCost] = useState(0);
     const [liveReasoning, setLiveReasoning] = useState({ text: '', botId: null, contentHasStarted: false });
-    // ✨ ADDED: State to hold API errors
     const [apiError, setApiError] = useState(null);
     
     const liveReasoningTextRef = useRef('');
@@ -24,7 +23,6 @@ export const useChatAPI = ({
     const langMap = { eng: "en", fra: "fr", ara: "ar", hin: "hi", tgl: "tl", ukr: "uk", san: "sa", nya: "ny" };
     const supportedLanguages = Object.values(langMap);
 
-    // ... (formatMessageContent and buildMessageHistoryPayload remain unchanged) ...
     const formatMessageContent = useCallback((message) => {
         if (!message) return '';
         let content = message.text || '';
@@ -81,7 +79,7 @@ export const useChatAPI = ({
         setIsLoading(true);
         setLastCost(0);
         setLiveReasoning({ text: '', botId: botMessageId, contentHasStarted: false });
-        setApiError(null); // Clear previous errors
+        setApiError(null); 
         liveReasoningTextRef.current = '';
 
         const abortController = new AbortController();
@@ -114,13 +112,10 @@ export const useChatAPI = ({
                 signal: abortController.signal,
             });
 
-            // ✨ MODIFIED: Enhanced Error Handling
             if (!response.ok) {
                 let errorMessage = `HTTP error! status: ${response.status}`;
                 try {
                     const errorData = await response.json();
-                    
-                    // Handle the specific nested structure if present (based on your log)
                     if (errorData._HttpResponse__body) {
                         try {
                             const nestedBody = JSON.parse(errorData._HttpResponse__body);
@@ -129,21 +124,15 @@ export const useChatAPI = ({
                             errorMessage = errorData._HttpResponse__body;
                         }
                     } else {
-                        // Standard JSON error
                         errorMessage = errorData.error || errorData.message || errorMessage;
                     }
                 } catch (e) {
-                    // If response isn't JSON, stick to the status text
                     console.warn("Could not parse error response JSON", e);
                 }
 
-                // Set the error state to trigger the modal
                 const errorObj = { message: errorMessage, status: response.status };
                 setApiError(errorObj);
-                
-                // Also update the chat UI to show a failure message
                 setMessages(prev => prev.map(m => m.id === botMessageId ? { ...m, text: "An error occurred. Please check the details." } : m));
-                
                 throw new Error(errorMessage);
             }
 
@@ -166,6 +155,8 @@ export const useChatAPI = ({
                     if (part.startsWith('data: ')) {
                         try {
                             const data = JSON.parse(part.substring(6));
+                            
+                            // 1. Handle Text Content
                             if (data.delta_content) {
                                 setMessages(prev => {
                                     const updated = prev.map(m => m.id === botMessageId ? { ...m, text: m.text + data.delta_content } : m);
@@ -179,11 +170,37 @@ export const useChatAPI = ({
                                     return prev;
                                 });
                             }
+
+                            // 2. Handle Generated Images (✅ ADDED)
+                            if (data.images && Array.isArray(data.images)) {
+                                const newImages = data.images.map(img => ({
+                                    src: img.image_url.url, // Extract the base64 URL
+                                    id: `gen-img-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                                    name: 'Generated Image'
+                                }));
+
+                                setMessages(prev => {
+                                    const updated = prev.map(m => {
+                                        if (m.id === botMessageId) {
+                                            const currentImages = m.images || [];
+                                            return { ...m, images: [...currentImages, ...newImages] };
+                                        }
+                                        return m;
+                                    });
+                                    finalMessages = updated;
+                                    return updated;
+                                });
+                            }
+
+                            // 3. Handle Reasoning
                             if (data.reasoning_content) {
                                 liveReasoningTextRef.current += data.reasoning_content;
                                 setLiveReasoning(prev => ({ ...prev, text: liveReasoningTextRef.current }));
                             }
+
+                            // 4. Handle Cost
                             if (data.cost !== undefined) setLastCost(data.cost);
+
                         } catch (e) { console.error("Stream parse error:", part, e); }
                     }
                 }
@@ -207,7 +224,6 @@ export const useChatAPI = ({
                 console.info("Chat streaming was stopped by the user.");
             } else {
                 console.error("Chatbot API error:", error);
-                // If apiError wasn't set (e.g. network failure before response), set it here
                 setApiError(prev => prev || { message: error.message || "Network error or API unreachable." });
             }
         } finally {
@@ -232,7 +248,6 @@ export const useChatAPI = ({
         }
     }, [setMessages, updateCurrentSession, currentSessionId]);
 
-    // ✨ ADDED: Return apiError and a clearer
     return { 
         isLoading, 
         lastCost, 
