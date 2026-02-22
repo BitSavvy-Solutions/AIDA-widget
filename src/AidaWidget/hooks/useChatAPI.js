@@ -85,6 +85,7 @@ export const useChatAPI = ({
         const abortController = new AbortController();
         streamAbortControllerRef.current = abortController;
 
+        // We still calculate this for language detection, but we don't send it as user_input anymore
         const currentUserInput = formatMessageContent(userMessage);
         const detectedLang = franc(currentUserInput);
         const detectedLanguageCode = supportedLanguages.includes(langMap[detectedLang]) ? langMap[detectedLang] : "en";
@@ -93,7 +94,7 @@ export const useChatAPI = ({
 
         try {
             const payload = {
-                user_input: currentUserInput,
+                // ✅ REMOVED: user_input: currentUserInput,
                 message_history: buildMessageHistoryPayload(historyForPayload),
                 user_id: user.id,
                 email: user.email,
@@ -171,7 +172,7 @@ export const useChatAPI = ({
                                 });
                             }
 
-                            // 2. Handle Generated Images (✅ ADDED)
+                            // 2. Handle Generated Images
                             if (data.images && Array.isArray(data.images)) {
                                 const newImages = data.images.map(img => ({
                                     src: img.image_url.url, // Extract the base64 URL
