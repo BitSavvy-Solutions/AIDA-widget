@@ -5,7 +5,7 @@ import ChatHeader from './ChatHeader';
 import ChatHistoryPanel from './ChatHistoryPanel';
 import ChatDisplay from './ChatDisplay';
 import AttachmentModal from './AttachmentModal';
-import ErrorModal from './ErrorModal'; // ✅ ADDED
+import ErrorModal from './ErrorModal';
 import './AidaWidget.css';
 import ChatInput, { AVAILABLE_MODELS } from './ChatInput'; 
 
@@ -50,19 +50,16 @@ const AidaWidget = (props) => {
 
     const [currentMessage, setCurrentMessage] = useState('');
     
-    // ✅ PERSISTENCE ADDED: Initialize model from localStorage
     const [selectedModel, setSelectedModel] = useState(() => {
         return localStorage.getItem('aida-selected-model') || AVAILABLE_MODELS[0].value;
     });
 
-    // ✅ PERSISTENCE ADDED: Save model selection whenever it changes
     useEffect(() => {
         localStorage.setItem('aida-selected-model', selectedModel);
     }, [selectedModel]);
 
     const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false);
     
-    // ✅ ADDED: Editing State
     const [editingMessageId, setEditingMessageId] = useState(null);
     const [editDraft, setEditDraft] = useState('');
 
@@ -80,7 +77,6 @@ const AidaWidget = (props) => {
     
     const { isOpen, isClosing, isFullscreen, theme, setTheme, setIsFullscreen, toggleChatVisibility } = useWidgetState();
     
-    // ✅ CHANGED: Destructure loadMessagesForSession to handle DB loading
     const { messages, setMessages, getSanitizedMessages, loadMessagesForSession } = useChatMessages();
     
     const { isPanelOpen, openPanel, closePanel, historyItems, projects, currentSessionId, setCurrentSessionId, createNewSession, updateCurrentSession, saveCurrentChatToHistory, historyHandlers } = useChatHistory(getSanitizedMessages);
@@ -97,7 +93,6 @@ const AidaWidget = (props) => {
     const requestFullscreen = useCallback(() => setIsFullscreen(true), [setIsFullscreen]);
     const { sidebarRef, sidebarInlineStyle, resizeHandleProps, isResizing } = useResizableSidebar({ isOpen, isFullscreen, isMobileViewport, isEnabled: features.resizable, onRequestFullscreen: requestFullscreen });
     
-    // ✅ MODIFIED: Destructure apiError and clearApiError from useChatAPI
     const { isLoading, lastCost, liveReasoning, streamResponse, stopStreaming, apiError, clearApiError } = useChatAPI({ apiConfig, messages, setMessages, currentSessionId, updateCurrentSession, user, pageContext, customPrompt });
     
     const { isRecording, isTranscribing, elapsedTime, startRecording, stopRecording, cancelTranscription, lastInputWasVoiceRef, transcriptionError, retryTranscription, clearFailedTranscription, isNearingTimeLimit } = useVoiceInput({ transcriptionUrl: apiConfig.transcriptionUrl, onTranscriptionComplete: (text) => { setCurrentMessage(p => p.trim() ? `${p} ${text}` : text); if (text) startAutoSendTimer(); } });
@@ -105,7 +100,6 @@ const AidaWidget = (props) => {
     const { countdown: autoRecordCountdown, start: startAutoRecordTimer, cancel: cancelAutoRecordTimer, setIsPaused: setIsRecordTimerPaused } = useCountdown(startRecording, 3);
     const displayText = useDisplayAnimation({ isOpen, isLoading });
     
-    // ✅ NEW EFFECT: Load messages from IndexedDB when currentSessionId changes
     useEffect(() => {
         if (loadMessagesForSession) {
             loadMessagesForSession(currentSessionId);
@@ -149,7 +143,6 @@ const AidaWidget = (props) => {
         });
     }, [setMessages]);
 
-    // ✅ ADDED: Edit Handlers
     const handleStartEdit = useCallback((message) => {
         setEditingMessageId(message.id);
         setEditDraft(message.text || '');
@@ -168,7 +161,6 @@ const AidaWidget = (props) => {
                 msg.id === editingMessageId ? { ...msg, text: editDraft } : msg
             );
             
-            // Persist to DB immediately
             if (currentSessionId) {
                 updateCurrentSession(updatedMessages);
             }
@@ -204,7 +196,6 @@ const AidaWidget = (props) => {
         let userMessage = null;
         let activeSessionId = currentSessionId; 
 
-        // Simplified: Only handles new message creation
         userMessage = { 
             id: `user-${Date.now()}`, 
             sender: 'user', 
@@ -224,13 +215,15 @@ const AidaWidget = (props) => {
 
         setCurrentMessage(''); 
         clearAttachments(); 
-        setEditingMessageId(null); // Ensure we aren't editing when sending new
+        setEditingMessageId(null); 
         if (isWebSearchEnabled) setIsWebSearchEnabled(false);
+        
+        // ✅ CORRECT: Includes the new user message
         const historyForPayload = nextMessages.slice(0, -1); 
         await streamResponse({ userMessage, botMessageId, historyForPayload, sessionId: activeSessionId });
     }, [currentMessage, attachments, isLoading, selectedModel, isWebSearchEnabled, messages, currentSessionId, streamResponse, setMessages, createNewSession, updateCurrentSession, cancelAutoSendTimer, cancelAutoRecordTimer, clearAttachments]);
 
-    // ✅ MODIFIED: handleRetry now uses current selectedModel
+    // ✅ FIXED: handleRetry now correctly includes the user message in historyForPayload
     const handleRetry = useCallback(async (botMessageId) => { 
         if (isLoading) return; 
         
@@ -246,24 +239,24 @@ const AidaWidget = (props) => {
         } 
         if (userIndex === -1) return; 
 
-        // Calculate model based on CURRENT selection, not historical selection
         const finalModelName = isWebSearchEnabled ? `${selectedModel}:online` : selectedModel;
 
-        // Create updated user message with new model
         const userMessageToRetry = {
             ...messages[userIndex],
             model: finalModelName,
             webSearchEnabled: isWebSearchEnabled
         };
 
-        const historyForPayload = messages.slice(0, userIndex); 
+        const previousHistory = messages.slice(0, userIndex); 
+        // ✅ FIX: Append the user message to the history so the API sees the prompt
+        const historyForPayload = [...previousHistory, userMessageToRetry];
+        
         const newBotMessageId = `bot-${Date.now()}`; 
         
-        // Update state with the MODIFIED user message (so history reflects the model used)
-        const nextMessages = [...historyForPayload, userMessageToRetry, { id: newBotMessageId, sender: 'bot', text: '' }];
+        // Update UI state
+        const nextMessages = [...previousHistory, userMessageToRetry, { id: newBotMessageId, sender: 'bot', text: '' }];
         setMessages(nextMessages); 
         
-        // Update DB
         if (currentSessionId) {
             updateCurrentSession(nextMessages);
         }
@@ -276,32 +269,32 @@ const AidaWidget = (props) => {
         }); 
     }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession, selectedModel, isWebSearchEnabled]);
     
-    // ✅ MODIFIED: handleRegenerate now uses current selectedModel
+    // ✅ FIXED: handleRegenerate now correctly includes the user message in historyForPayload
     const handleRegenerate = useCallback(async (userMessageId) => {
         if (isLoading) return;
         
         const userIndex = messages.findIndex(m => m.id === userMessageId);
         if (userIndex === -1) return;
 
-        // Calculate model based on CURRENT selection
         const finalModelName = isWebSearchEnabled ? `${selectedModel}:online` : selectedModel;
 
-        // Create updated user message with new model
         const userMessageToRegenerate = {
             ...messages[userIndex],
             model: finalModelName,
             webSearchEnabled: isWebSearchEnabled
         };
         
-        const historyForPayload = messages.slice(0, userIndex);
+        const previousHistory = messages.slice(0, userIndex);
+        // ✅ FIX: Append the user message to the history so the API sees the prompt
+        const historyForPayload = [...previousHistory, userMessageToRegenerate];
+
         const newBotMessageId = `bot-${Date.now()}`;
         
-        // Reset UI state to: [History before] + [UPDATED User Message] + [New Empty Bot Message]
-        const nextMessages = [...historyForPayload, userMessageToRegenerate, { id: newBotMessageId, sender: 'bot', text: '' }];
+        // Update UI state
+        const nextMessages = [...previousHistory, userMessageToRegenerate, { id: newBotMessageId, sender: 'bot', text: '' }];
         
         setMessages(nextMessages);
         
-        // Update DB immediately to reflect truncation and model update
         if (currentSessionId) {
             updateCurrentSession(nextMessages);
         }
@@ -315,7 +308,6 @@ const AidaWidget = (props) => {
     }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession, selectedModel, isWebSearchEnabled]);
 
 
-    // ✅ CHANGED: Simplified to just set ID. The useEffect handles loading data.
     const handleHistorySelect = useCallback((session) => {
         setCurrentSessionId(session.id);
         closePanel();
@@ -326,16 +318,11 @@ const AidaWidget = (props) => {
     
     useEffect(() => {
         if (isOpen) {
-            // When the chat is open, show "AIDA - Title"
             const titlePrefix = "AIDA";
             document.title = currentSessionTitle && currentSessionTitle !== "New Chat" 
                 ? `${titlePrefix} - ${currentSessionTitle}`
                 : titlePrefix;
-        } else {
-            // Optional: Reset to a default title when the widget is closed
         }
-
-        // Cleanup function: Reset title when component unmounts
         return () => {
             document.title = "AIDA"; 
         };
@@ -484,7 +471,6 @@ const AidaWidget = (props) => {
                 </div>
             )}
 
-            {/* ✅ ADDED: Error Modal */}
             <ErrorModal 
                 isOpen={!!apiError} 
                 onClose={clearApiError} 
