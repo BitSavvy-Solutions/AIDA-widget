@@ -767,3 +767,13 @@ textarea.auto-expand {
   font-size: 0.95rem;
   line-height: 1.5;
 }
+
+.no-spinner::-webkit-inner-spin-button, 
+.no-spinner::-webkit-outer-spin-button { 
+  -webkit-appearance: none; 
+  margin: 0; 
+}
+
+.no-spinner {
+  -moz-appearance: textfield; /* Firefox */
+}
