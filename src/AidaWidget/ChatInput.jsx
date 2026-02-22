@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { HiPaperAirplane, HiOutlineMicrophone, HiStop, HiArrowPath, HiXMark, HiChevronDown, HiOutlineGlobeAlt } from 'react-icons/hi2';
 import AttachmentButton from './AttachmentButton';
+import ContextSelector from './ContextSelector'; // ✅ Ensure this is imported
 
 export const AVAILABLE_MODELS = [
     { value: 'deepseek/deepseek-v3.2', label: 'Deepseek 3.2' },
@@ -10,10 +11,9 @@ export const AVAILABLE_MODELS = [
     { value: 'openai/gpt-5.1', label: 'GPT-5.1' },
     { value: 'google/gemini-3-flash-preview', label: 'Gemini Flash 3 Pre' },
     { value: 'google/gemini-3-pro-preview', label: 'Gemini Pro 3 (reasoner)' },
-    { value: 'google/gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image' }, // ✅ ADDED
+    { value: 'google/gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image' },
     { value: 'perplexity/sonar', label: 'Perplexity Sonar'}
 ];
-
 
 const ChatInput = ({
     currentMessage,
@@ -37,7 +37,6 @@ const ChatInput = ({
     selectedModel,
     setSelectedModel,
     translations,
-    // REMOVED: isEditing and cancelEdit props
     attachmentCount = 0,
     onOpenAttachments,
     isWebSearchEnabled,
@@ -49,15 +48,15 @@ const ChatInput = ({
     onRetryTranscription,
     onClearFailedTranscription,
     isNearingTimeLimit,
-    // ✅ ADDED: Receive the image handler
     onAddImages,
+    contextLimit,
+    setContextLimit
 }) => {
     const [isHoveringSend, setIsHoveringSend] = useState(false);
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
     const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
     const [isHoveringCancel, setIsHoveringCancel] = useState(false);
 
-    // ✅ RESTORED: isTranscribing is back in isPillMode to keep the pill visible
     const isPillMode = autoRecordCountdown !== null || transcriptionError || isRecording || isTranscribing;
 
     const formatTime = (seconds) => {
@@ -68,7 +67,6 @@ const ChatInput = ({
 
     const selectedModelLabel = AVAILABLE_MODELS.find(m => m.value === selectedModel)?.label || selectedModel;
 
-    // ✅ ADDED: Handle paste events to capture images from clipboard
     const handlePaste = (e) => {
         const items = e.clipboardData?.items;
         if (!items) return;
@@ -82,7 +80,7 @@ const ChatInput = ({
         }
 
         if (imageFiles.length > 0 && features.imageUpload && onAddImages) {
-            e.preventDefault(); // Prevent pasting binary data into text area
+            e.preventDefault(); 
             onAddImages(imageFiles);
         }
     };
@@ -108,7 +106,6 @@ const ChatInput = ({
             );
         }
         
-        // ✅ MODIFIED: Removed isTranscribing from disabled check
         const isDisabled = isRecording || (!currentMessage.trim() && attachmentCount === 0);
         
         return (
@@ -171,7 +168,6 @@ const ChatInput = ({
                 </div>
             );
         } else if (isRecording || isTranscribing) {
-            // ✅ RESTORED: Original Pill logic for recording/transcribing
             const isCurrentlyRecording = isRecording;
             const isCurrentlyTranscribing = isTranscribing;
             const isCancelHover = isCurrentlyTranscribing && isHoveringCancel;
@@ -233,15 +229,12 @@ const ChatInput = ({
 
     return (
         <div className={`relative p-4 rounded-none transition-colors ${theme === 'dark' ? 'border-t border-gray-800 bg-gray-900 text-gray-100' : 'border-t border-gray-200 bg-white text-gray-900'}`}>
-            {/* REMOVED: Editing banner */}
             <div className={`flex items-end rounded-lg px-3 py-1 mb-3 transition-colors ${theme === 'dark' ? 'border border-gray-700 bg-gray-800' : 'border border-gray-300 bg-gray-50'}`}>
-               {/* ✅ MODIFIED: Removed disabled={isTranscribing} and the "Transcribing..." placeholder */}
                <textarea 
                     ref={inputRef} 
                     value={currentMessage} 
                     onChange={(e) => setCurrentMessage(e.target.value)} 
                     onKeyDown={handleKeyDown}
-                    // ✅ ADDED: Attach the paste handler
                     onPaste={handlePaste}
                     placeholder={translations.inputPlaceholder || "Type your message..."} 
                     dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'} 
@@ -252,10 +245,9 @@ const ChatInput = ({
             </div>
             
             <div className="flex items-center justify-between">
-                <div className="relative flex items-center min-w-0 flex-1 mr-2">
+                <div className="relative flex items-center min-w-0 flex-1 mr-2 gap-2">
                     {features.webSearch && (
                         <button
-                            // ✅ MODIFIED: Removed disabled={isTranscribing}
                             type="button" onClick={() => setIsWebSearchEnabled(p => !p)}
                             className={`p-2 rounded-full disabled:opacity-50 transition-colors flex-shrink-0 ${isWebSearchEnabled ? (theme === 'dark' ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-100 text-blue-600') : (theme === 'dark' ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100')}`}
                             aria-pressed={isWebSearchEnabled} aria-label="Toggle web search" title="Toggle web search"
@@ -263,11 +255,12 @@ const ChatInput = ({
                             <HiOutlineGlobeAlt className="h-6 w-6" />
                         </button>
                     )}
+                    
+                    {/* Model Selector */}
                     {features.modelSelection && (
-                        <div className="relative ml-2 min-w-0">
+                        <div className="relative min-w-0">
                              <button
-                                // ✅ MODIFIED: Removed disabled={isTranscribing}
-                                type="button" onClick={() => setIsModelMenuOpen((p) => !p)}
+                                type="button" onClick={() => { setIsModelMenuOpen((p) => !p); }}
                                 className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm disabled:opacity-50 transition-colors max-w-full ${theme === 'dark' ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`}
                                 aria-haspopup="menu" aria-expanded={isModelMenuOpen} aria-label={`Select AI Model (current: ${selectedModelLabel})`} title="Select AI Model"
                             >
@@ -287,11 +280,17 @@ const ChatInput = ({
                             )}
                         </div>
                     )}
+
+                    {/* ✅ NEW: Sleek Context Selector */}
+                    <ContextSelector 
+                        value={contextLimit} 
+                        onChange={setContextLimit} 
+                        theme={theme} 
+                    />
                 </div>
 
                 <div className="flex items-center chat-action-buttons relative flex-shrink-0">
                     {features.imageUpload && (
-                        // ✅ MODIFIED: Removed isTranscribing from disabled check
                         <AttachmentButton count={attachmentCount} onClick={onOpenAttachments} theme={theme}/>
                     )}
                     {features.voiceInput && renderRecordButton()}
