@@ -54,9 +54,20 @@ const AidaWidget = (props) => {
         return localStorage.getItem('aida-selected-model') || AVAILABLE_MODELS[0].value;
     });
 
+    // ✅ ADDED: State for context limit (default 10)
+    const [contextLimit, setContextLimit] = useState(() => {
+        const stored = localStorage.getItem('aida-context-limit');
+        return stored ? Number(stored) : 10;
+    });
+
     useEffect(() => {
         localStorage.setItem('aida-selected-model', selectedModel);
     }, [selectedModel]);
+
+    // ✅ ADDED: Persist context limit
+    useEffect(() => {
+        localStorage.setItem('aida-context-limit', contextLimit);
+    }, [contextLimit]);
 
     const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false);
     
@@ -218,12 +229,11 @@ const AidaWidget = (props) => {
         setEditingMessageId(null); 
         if (isWebSearchEnabled) setIsWebSearchEnabled(false);
         
-        // ✅ CORRECT: Includes the new user message
         const historyForPayload = nextMessages.slice(0, -1); 
-        await streamResponse({ userMessage, botMessageId, historyForPayload, sessionId: activeSessionId });
-    }, [currentMessage, attachments, isLoading, selectedModel, isWebSearchEnabled, messages, currentSessionId, streamResponse, setMessages, createNewSession, updateCurrentSession, cancelAutoSendTimer, cancelAutoRecordTimer, clearAttachments]);
+        // ✅ UPDATED: Pass contextLimit
+        await streamResponse({ userMessage, botMessageId, historyForPayload, sessionId: activeSessionId, contextLimit });
+    }, [currentMessage, attachments, isLoading, selectedModel, isWebSearchEnabled, messages, currentSessionId, streamResponse, setMessages, createNewSession, updateCurrentSession, cancelAutoSendTimer, cancelAutoRecordTimer, clearAttachments, contextLimit]);
 
-    // ✅ FIXED: handleRetry now correctly includes the user message in historyForPayload
     const handleRetry = useCallback(async (botMessageId) => { 
         if (isLoading) return; 
         
@@ -248,12 +258,10 @@ const AidaWidget = (props) => {
         };
 
         const previousHistory = messages.slice(0, userIndex); 
-        // ✅ FIX: Append the user message to the history so the API sees the prompt
         const historyForPayload = [...previousHistory, userMessageToRetry];
         
         const newBotMessageId = `bot-${Date.now()}`; 
         
-        // Update UI state
         const nextMessages = [...previousHistory, userMessageToRetry, { id: newBotMessageId, sender: 'bot', text: '' }];
         setMessages(nextMessages); 
         
@@ -261,15 +269,16 @@ const AidaWidget = (props) => {
             updateCurrentSession(nextMessages);
         }
 
+        // ✅ UPDATED: Pass contextLimit
         await streamResponse({ 
             userMessage: userMessageToRetry, 
             botMessageId: newBotMessageId, 
             historyForPayload, 
-            sessionId: currentSessionId 
+            sessionId: currentSessionId,
+            contextLimit
         }); 
-    }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession, selectedModel, isWebSearchEnabled]);
+    }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession, selectedModel, isWebSearchEnabled, contextLimit]);
     
-    // ✅ FIXED: handleRegenerate now correctly includes the user message in historyForPayload
     const handleRegenerate = useCallback(async (userMessageId) => {
         if (isLoading) return;
         
@@ -285,12 +294,10 @@ const AidaWidget = (props) => {
         };
         
         const previousHistory = messages.slice(0, userIndex);
-        // ✅ FIX: Append the user message to the history so the API sees the prompt
         const historyForPayload = [...previousHistory, userMessageToRegenerate];
 
         const newBotMessageId = `bot-${Date.now()}`;
         
-        // Update UI state
         const nextMessages = [...previousHistory, userMessageToRegenerate, { id: newBotMessageId, sender: 'bot', text: '' }];
         
         setMessages(nextMessages);
@@ -299,13 +306,15 @@ const AidaWidget = (props) => {
             updateCurrentSession(nextMessages);
         }
 
+        // ✅ UPDATED: Pass contextLimit
         await streamResponse({ 
             userMessage: userMessageToRegenerate, 
             botMessageId: newBotMessageId, 
             historyForPayload, 
-            sessionId: currentSessionId 
+            sessionId: currentSessionId,
+            contextLimit
         });
-    }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession, selectedModel, isWebSearchEnabled]);
+    }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession, selectedModel, isWebSearchEnabled, contextLimit]);
 
 
     const handleHistorySelect = useCallback((session) => {
@@ -399,6 +408,8 @@ const AidaWidget = (props) => {
                             onRetryBotMessage={features.retryMessage ? handleRetry : undefined}
                             onRegenerateResponse={features.retryMessage ? handleRegenerate : undefined}
                             onViewAttachments={handleViewAttachments}
+                            // ✅ ADDED: Pass contextLimit to display
+                            contextLimit={contextLimit}
                         />
                         <ChatInput 
                             currentMessage={currentMessage}
@@ -439,6 +450,9 @@ const AidaWidget = (props) => {
                             onClearFailedTranscription={clearFailedTranscription}
                             isNearingTimeLimit={isNearingTimeLimit}
                             onAddImages={addImageAttachments}
+                            // ✅ ADDED: Pass contextLimit props
+                            contextLimit={contextLimit}
+                            setContextLimit={setContextLimit}
                         />
                     </div>
                 </div>

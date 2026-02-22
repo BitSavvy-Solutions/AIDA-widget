@@ -10,10 +10,19 @@ export const AVAILABLE_MODELS = [
     { value: 'openai/gpt-5.1', label: 'GPT-5.1' },
     { value: 'google/gemini-3-flash-preview', label: 'Gemini Flash 3 Pre' },
     { value: 'google/gemini-3-pro-preview', label: 'Gemini Pro 3 (reasoner)' },
-    { value: 'google/gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image' }, // ✅ ADDED
+    { value: 'google/gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image' },
     { value: 'perplexity/sonar', label: 'Perplexity Sonar'}
 ];
 
+// ✅ ADDED: Options for context limit
+const CONTEXT_LIMIT_OPTIONS = [
+    { value: 2, label: '2 msgs' },
+    { value: 5, label: '5 msgs' },
+    { value: 10, label: '10 msgs' },
+    { value: 20, label: '20 msgs' },
+    { value: 50, label: '50 msgs' },
+    { value: 1000, label: 'All' }, // Using a high number for "All"
+];
 
 const ChatInput = ({
     currentMessage,
@@ -37,7 +46,6 @@ const ChatInput = ({
     selectedModel,
     setSelectedModel,
     translations,
-    // REMOVED: isEditing and cancelEdit props
     attachmentCount = 0,
     onOpenAttachments,
     isWebSearchEnabled,
@@ -49,15 +57,18 @@ const ChatInput = ({
     onRetryTranscription,
     onClearFailedTranscription,
     isNearingTimeLimit,
-    // ✅ ADDED: Receive the image handler
     onAddImages,
+    // ✅ ADDED: Props for context limit
+    contextLimit,
+    setContextLimit
 }) => {
     const [isHoveringSend, setIsHoveringSend] = useState(false);
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
     const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
     const [isHoveringCancel, setIsHoveringCancel] = useState(false);
+    // ✅ ADDED: State for context menu
+    const [isContextLimitMenuOpen, setIsContextLimitMenuOpen] = useState(false);
 
-    // ✅ RESTORED: isTranscribing is back in isPillMode to keep the pill visible
     const isPillMode = autoRecordCountdown !== null || transcriptionError || isRecording || isTranscribing;
 
     const formatTime = (seconds) => {
@@ -67,8 +78,9 @@ const ChatInput = ({
     };
 
     const selectedModelLabel = AVAILABLE_MODELS.find(m => m.value === selectedModel)?.label || selectedModel;
+    // ✅ ADDED: Label helper
+    const selectedContextLabel = CONTEXT_LIMIT_OPTIONS.find(o => o.value === contextLimit)?.label || `${contextLimit} msgs`;
 
-    // ✅ ADDED: Handle paste events to capture images from clipboard
     const handlePaste = (e) => {
         const items = e.clipboardData?.items;
         if (!items) return;
@@ -82,7 +94,7 @@ const ChatInput = ({
         }
 
         if (imageFiles.length > 0 && features.imageUpload && onAddImages) {
-            e.preventDefault(); // Prevent pasting binary data into text area
+            e.preventDefault(); 
             onAddImages(imageFiles);
         }
     };
@@ -108,7 +120,6 @@ const ChatInput = ({
             );
         }
         
-        // ✅ MODIFIED: Removed isTranscribing from disabled check
         const isDisabled = isRecording || (!currentMessage.trim() && attachmentCount === 0);
         
         return (
@@ -171,7 +182,6 @@ const ChatInput = ({
                 </div>
             );
         } else if (isRecording || isTranscribing) {
-            // ✅ RESTORED: Original Pill logic for recording/transcribing
             const isCurrentlyRecording = isRecording;
             const isCurrentlyTranscribing = isTranscribing;
             const isCancelHover = isCurrentlyTranscribing && isHoveringCancel;
@@ -233,15 +243,12 @@ const ChatInput = ({
 
     return (
         <div className={`relative p-4 rounded-none transition-colors ${theme === 'dark' ? 'border-t border-gray-800 bg-gray-900 text-gray-100' : 'border-t border-gray-200 bg-white text-gray-900'}`}>
-            {/* REMOVED: Editing banner */}
             <div className={`flex items-end rounded-lg px-3 py-1 mb-3 transition-colors ${theme === 'dark' ? 'border border-gray-700 bg-gray-800' : 'border border-gray-300 bg-gray-50'}`}>
-               {/* ✅ MODIFIED: Removed disabled={isTranscribing} and the "Transcribing..." placeholder */}
                <textarea 
                     ref={inputRef} 
                     value={currentMessage} 
                     onChange={(e) => setCurrentMessage(e.target.value)} 
                     onKeyDown={handleKeyDown}
-                    // ✅ ADDED: Attach the paste handler
                     onPaste={handlePaste}
                     placeholder={translations.inputPlaceholder || "Type your message..."} 
                     dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'} 
@@ -255,7 +262,6 @@ const ChatInput = ({
                 <div className="relative flex items-center min-w-0 flex-1 mr-2">
                     {features.webSearch && (
                         <button
-                            // ✅ MODIFIED: Removed disabled={isTranscribing}
                             type="button" onClick={() => setIsWebSearchEnabled(p => !p)}
                             className={`p-2 rounded-full disabled:opacity-50 transition-colors flex-shrink-0 ${isWebSearchEnabled ? (theme === 'dark' ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-100 text-blue-600') : (theme === 'dark' ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100')}`}
                             aria-pressed={isWebSearchEnabled} aria-label="Toggle web search" title="Toggle web search"
@@ -263,11 +269,12 @@ const ChatInput = ({
                             <HiOutlineGlobeAlt className="h-6 w-6" />
                         </button>
                     )}
+                    
+                    {/* Model Selector */}
                     {features.modelSelection && (
                         <div className="relative ml-2 min-w-0">
                              <button
-                                // ✅ MODIFIED: Removed disabled={isTranscribing}
-                                type="button" onClick={() => setIsModelMenuOpen((p) => !p)}
+                                type="button" onClick={() => { setIsModelMenuOpen((p) => !p); setIsContextLimitMenuOpen(false); }}
                                 className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm disabled:opacity-50 transition-colors max-w-full ${theme === 'dark' ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`}
                                 aria-haspopup="menu" aria-expanded={isModelMenuOpen} aria-label={`Select AI Model (current: ${selectedModelLabel})`} title="Select AI Model"
                             >
@@ -287,11 +294,33 @@ const ChatInput = ({
                             )}
                         </div>
                     )}
+
+                    {/* ✅ ADDED: Context Limit Selector */}
+                    <div className="relative ml-1 min-w-0">
+                        <button
+                            type="button" onClick={() => { setIsContextLimitMenuOpen((p) => !p); setIsModelMenuOpen(false); }}
+                            className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm disabled:opacity-50 transition-colors max-w-full ${theme === 'dark' ? 'text-gray-400 hover:bg-gray-700 hover:text-gray-200' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'}`}
+                            aria-haspopup="menu" aria-expanded={isContextLimitMenuOpen} aria-label={`Select Context Limit (current: ${selectedContextLabel})`} title="Context Window Limit"
+                        >
+                            <span className="truncate">{selectedContextLabel}</span>
+                            <HiChevronDown className="h-3 w-3 flex-shrink-0" />
+                        </button>
+                        {isContextLimitMenuOpen && (
+                            <div className={`absolute z-50 left-0 bottom-full mb-2 w-32 rounded-md shadow-lg overflow-hidden ${theme === 'dark' ? 'bg-gray-800 border border-gray-700 text-gray-100' : 'bg-white border border-gray-200 text-gray-900'}`} role="menu">
+                                {CONTEXT_LIMIT_OPTIONS.map((opt) => (
+                                    <button key={opt.value} type="button" onClick={() => { setContextLimit(opt.value); setIsContextLimitMenuOpen(false); }}
+                                        className={`w-full text-left px-3 py-2 text-sm ${theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-50'} ${contextLimit === opt.value ? (theme === 'dark' ? 'bg-gray-700 font-medium' : 'bg-gray-100 font-medium') : ''}`} role="menuitem"
+                                    >
+                                        {opt.label}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 <div className="flex items-center chat-action-buttons relative flex-shrink-0">
                     {features.imageUpload && (
-                        // ✅ MODIFIED: Removed isTranscribing from disabled check
                         <AttachmentButton count={attachmentCount} onClick={onOpenAttachments} theme={theme}/>
                     )}
                     {features.voiceInput && renderRecordButton()}

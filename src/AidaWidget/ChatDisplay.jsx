@@ -169,6 +169,8 @@ const ChatDisplay = ({
     isLoading = false,
     liveReasoning,
     onViewAttachments,
+    // ✅ ADDED: Prop for context limit
+    contextLimit = 10
 }) => {
     const [copiedId, setCopiedId] = useState(null);
     const containerRef = useRef(null);
@@ -331,6 +333,9 @@ const ChatDisplay = ({
 
     const isDark = theme === 'dark';
 
+    // ✅ ADDED: Calculate the starting index for active messages
+    const activeStartIndex = Math.max(0, messages.length - contextLimit);
+
     return (
         <div ref={containerRef} className={`relative flex-1 overflow-y-auto p-4 space-y-4 ${isDark ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
             {messages.map((message, index) => {
@@ -355,6 +360,10 @@ const ChatDisplay = ({
                 const showThinkingDots = isBotLoading && !showReasoning && trimmedText === '' && !hasImages;
                 const hideBotMessage = isBot && !isBotLoading && trimmedText === '' && !hasImages && !hasBakedInReasoning;
                 
+                // ✅ ADDED: Determine if message is active based on context limit
+                const isMessageActive = index >= activeStartIndex;
+                const opacityClass = isMessageActive ? 'opacity-100' : 'opacity-40 grayscale transition-all duration-500';
+
                 let canRetry = false;
                 if (isBot && onRetryBotMessage) {
                     for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
@@ -369,7 +378,8 @@ const ChatDisplay = ({
                 if (hideBotMessage) return null;
 
                 return (
-                    <div key={message.id} className={`flex ${message.sender === 'user' ? 'justify-end pl-10' : 'justify-start'}`}>
+                    // ✅ MODIFIED: Applied opacityClass to the wrapper div
+                    <div key={message.id} className={`flex ${message.sender === 'user' ? 'justify-end pl-10' : 'justify-start'} ${opacityClass}`}>
                         <div className={`flex flex-col w-full ${message.sender === 'user' ? 'items-end' : 'items-start'}`}>
                             {showReasoning && (
                                 <ReasoningDisplay

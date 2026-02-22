@@ -52,12 +52,15 @@ export const useChatAPI = ({
 
     const buildMessageHistoryPayload = useCallback((history = []) => {
         const messageHistory = [];
+        // System instructions are ALWAYS added first, regardless of history slicing
         if (pageContext && Object.keys(pageContext).length > 0) {
             messageHistory.push({ type: 'ai', content: `<PageContext>\n${JSON.stringify(pageContext, null, 2)}\n</PageContext>` });
         }
         if ((customPrompt || '').trim()) {
             messageHistory.push({ type: 'human', content: customPrompt.trim() });
         }
+        
+        // Add the sliced history
         (history || []).forEach(m => {
             const messagePayload = {
                 type: m.sender === 'user' ? 'human' : 'ai',
@@ -75,7 +78,8 @@ export const useChatAPI = ({
         return messageHistory;
     }, [customPrompt, pageContext, formatMessageContent]);
 
-    const streamResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId }) => {
+    // ✅ UPDATED: Added contextLimit parameter
+    const streamResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit = 10 }) => {
         setIsLoading(true);
         setLastCost(0);
         setLiveReasoning({ text: '', botId: botMessageId, contentHasStarted: false });
@@ -85,17 +89,24 @@ export const useChatAPI = ({
         const abortController = new AbortController();
         streamAbortControllerRef.current = abortController;
 
-        // We still calculate this for language detection, but we don't send it as user_input anymore
         const currentUserInput = formatMessageContent(userMessage);
         const detectedLang = franc(currentUserInput);
         const detectedLanguageCode = supportedLanguages.includes(langMap[detectedLang]) ? langMap[detectedLang] : "en";
         const imageAttachments = (userMessage.attachments || []).filter(att => att.type === 'image');
         const imageUrls = imageAttachments.map(img => img.src).filter(Boolean);
 
+        // ✅ NEW: Apply context limit logic
+        // If contextLimit is 'Infinity' or very large, it takes everything.
+        // We slice from the end (-limit).
+        let limitedHistory = historyForPayload;
+        if (typeof contextLimit === 'number' && contextLimit > 0) {
+            limitedHistory = historyForPayload.slice(-contextLimit);
+        }
+
         try {
             const payload = {
-                // ✅ REMOVED: user_input: currentUserInput,
-                message_history: buildMessageHistoryPayload(historyForPayload),
+                // Pass the limited history to the builder
+                message_history: buildMessageHistoryPayload(limitedHistory),
                 user_id: user.id,
                 email: user.email,
                 page_path: window.location.pathname,
@@ -157,7 +168,6 @@ export const useChatAPI = ({
                         try {
                             const data = JSON.parse(part.substring(6));
                             
-                            // 1. Handle Text Content
                             if (data.delta_content) {
                                 setMessages(prev => {
                                     const updated = prev.map(m => m.id === botMessageId ? { ...m, text: m.text + data.delta_content } : m);
@@ -172,10 +182,9 @@ export const useChatAPI = ({
                                 });
                             }
 
-                            // 2. Handle Generated Images
                             if (data.images && Array.isArray(data.images)) {
                                 const newImages = data.images.map(img => ({
-                                    src: img.image_url.url, // Extract the base64 URL
+                                    src: img.image_url.url,
                                     id: `gen-img-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                                     name: 'Generated Image'
                                 }));
@@ -193,13 +202,11 @@ export const useChatAPI = ({
                                 });
                             }
 
-                            // 3. Handle Reasoning
                             if (data.reasoning_content) {
                                 liveReasoningTextRef.current += data.reasoning_content;
                                 setLiveReasoning(prev => ({ ...prev, text: liveReasoningTextRef.current }));
                             }
 
-                            // 4. Handle Cost
                             if (data.cost !== undefined) setLastCost(data.cost);
 
                         } catch (e) { console.error("Stream parse error:", part, e); }
