@@ -2,18 +2,7 @@
 import React, { useState } from 'react';
 import { HiPaperAirplane, HiOutlineMicrophone, HiStop, HiArrowPath, HiXMark, HiChevronDown, HiOutlineGlobeAlt } from 'react-icons/hi2';
 import AttachmentButton from './AttachmentButton';
-import ContextSelector from './ContextSelector'; // ✅ Ensure this is imported
-
-export const AVAILABLE_MODELS = [
-    { value: 'deepseek/deepseek-v3.2', label: 'Deepseek 3.2' },
-    { value: 'deepseek/deepseek-chat-v3-0324', label: 'Deepseek V3' },
-    { value: 'deepseek/deepseek-r1', label: 'Deepseek Reasoner R1'},
-    { value: 'openai/gpt-5.1', label: 'GPT-5.1' },
-    { value: 'google/gemini-3-flash-preview', label: 'Gemini Flash 3 Pre' },
-    { value: 'google/gemini-3-pro-preview', label: 'Gemini Pro 3 (reasoner)' },
-    { value: 'google/gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image' },
-    { value: 'perplexity/sonar', label: 'Perplexity Sonar'}
-];
+import ContextSelector from './ContextSelector';
 
 const ChatInput = ({
     currentMessage,
@@ -36,6 +25,7 @@ const ChatInput = ({
     setIsRecordTimerPaused,
     selectedModel,
     setSelectedModel,
+    availableModels = [], // ✅ NEW: Receives models via props
     translations,
     attachmentCount = 0,
     onOpenAttachments,
@@ -65,7 +55,8 @@ const ChatInput = ({
         return `${minutes}:${secs}`;
     };
 
-    const selectedModelLabel = AVAILABLE_MODELS.find(m => m.value === selectedModel)?.label || selectedModel;
+    // ✅ UPDATED: Find label from the passed availableModels prop
+    const selectedModelLabel = availableModels.find(m => m.value === selectedModel)?.label || selectedModel;
 
     const handlePaste = (e) => {
         const items = e.clipboardData?.items;
@@ -239,7 +230,6 @@ const ChatInput = ({
                     placeholder={translations.inputPlaceholder || "Type your message..."} 
                     dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'} 
                     rows={1} 
-                    // ✅ UPDATED: Reduced py-2 to py-1 and min-h-[42px] to min-h-[32px]
                     className={`flex-1 bg-transparent px-0 py-1 resize-none focus:outline-none custom-scrollbar overflow-y-auto whitespace-pre-wrap leading-tight ${theme === 'dark' ? 'text-gray-100 placeholder-gray-400' : ''} min-h-[32px] max-h-[200px]`} 
                     style={{ overflowY: 'auto', overflowX: 'hidden' }}
                 />
@@ -270,7 +260,8 @@ const ChatInput = ({
                             </button>
                             {isModelMenuOpen && (
                                 <div className={`absolute z-50 left-0 bottom-full mb-2 w-48 rounded-md shadow-lg overflow-hidden ${theme === 'dark' ? 'bg-gray-800 border border-gray-700 text-gray-100' : 'bg-white border border-gray-200 text-gray-900'}`} role="menu">
-                                    {AVAILABLE_MODELS.map((opt) => (
+                                    {/* ✅ UPDATED: Map over availableModels prop */}
+                                    {availableModels.map((opt) => (
                                         <button key={opt.value} type="button" onClick={() => { setSelectedModel(opt.value); setIsModelMenuOpen(false); }}
                                             className={`w-full text-left px-3 py-2 text-sm ${theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-50'} ${selectedModel === opt.value ? (theme === 'dark' ? 'bg-gray-700 font-medium' : 'bg-gray-100 font-medium') : ''}`} role="menuitem"
                                         >
@@ -282,7 +273,6 @@ const ChatInput = ({
                         </div>
                     )}
 
-                    {/* ✅ NEW: Sleek Context Selector */}
                     <ContextSelector 
                         value={contextLimit} 
                         onChange={setContextLimit} 

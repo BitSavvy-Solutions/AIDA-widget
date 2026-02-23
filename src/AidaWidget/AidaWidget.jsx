@@ -7,7 +7,7 @@ import ChatDisplay from './ChatDisplay';
 import AttachmentModal from './AttachmentModal';
 import ErrorModal from './ErrorModal';
 import './AidaWidget.css';
-import ChatInput, { AVAILABLE_MODELS } from './ChatInput'; 
+import ChatInput from './ChatInput'; 
 
 import {
     useWidgetState,
@@ -25,12 +25,25 @@ import {
 
 import { CHAT_URL, TRANSCRIPTION_URL } from './utils/apiConfig';
 
+// ✅ NEW: Default models definition moved here
+const DEFAULT_MODELS = [
+    { value: 'deepseek/deepseek-v3.2', label: 'Deepseek 3.2' },
+    { value: 'deepseek/deepseek-chat-v3-0324', label: 'Deepseek V3' },
+    { value: 'deepseek/deepseek-r1', label: 'Deepseek Reasoner R1'},
+    { value: 'openai/gpt-5.1', label: 'GPT-5.1' },
+    { value: 'google/gemini-3-flash-preview', label: 'Gemini Flash 3 Pre' },
+    { value: 'google/gemini-3-pro-preview', label: 'Gemini Pro 3 (reasoner)' },
+    { value: 'google/gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image' },
+    { value: 'perplexity/sonar', label: 'Perplexity Sonar'}
+];
+
 const defaultProps = {
     apiConfig: { chatUrl: CHAT_URL, transcriptionUrl: TRANSCRIPTION_URL },
     language: 'en',
     translations: { transcribing: 'Transcribing...', inputPlaceholder: 'Type a message to Aida...' },
     user: {},
     pageContext: {},
+    models: [], // ✅ NEW: Default empty, falls back to DEFAULT_MODELS
     features: {
         resizable: true,
         modelSelection: true,
@@ -45,16 +58,21 @@ const defaultProps = {
 };
 
 const AidaWidget = (props) => {
-    const { apiConfig, user, language, translations, pageContext, features } = { ...defaultProps, ...props };
+    const { apiConfig, user, language, translations, pageContext, features, models } = { ...defaultProps, ...props };
     const attachmentsEnabled = Boolean(features?.imageUpload);
+
+    // ✅ NEW: Determine which models to use
+    const availableModels = (models && models.length > 0) ? models : DEFAULT_MODELS;
 
     const [currentMessage, setCurrentMessage] = useState('');
     
     const [selectedModel, setSelectedModel] = useState(() => {
-        return localStorage.getItem('aida-selected-model') || AVAILABLE_MODELS[0].value;
+        const saved = localStorage.getItem('aida-selected-model');
+        // ✅ UPDATED: Ensure saved model exists in current available list, else default to first
+        const exists = availableModels.some(m => m.value === saved);
+        return exists ? saved : availableModels[0].value;
     });
 
-    // ✅ ADDED: State for context limit (default 10)
     const [contextLimit, setContextLimit] = useState(() => {
         const stored = localStorage.getItem('aida-context-limit');
         return stored ? Number(stored) : 10;
@@ -64,7 +82,6 @@ const AidaWidget = (props) => {
         localStorage.setItem('aida-selected-model', selectedModel);
     }, [selectedModel]);
 
-    // ✅ ADDED: Persist context limit
     useEffect(() => {
         localStorage.setItem('aida-context-limit', contextLimit);
     }, [contextLimit]);
@@ -230,7 +247,6 @@ const AidaWidget = (props) => {
         if (isWebSearchEnabled) setIsWebSearchEnabled(false);
         
         const historyForPayload = nextMessages.slice(0, -1); 
-        // ✅ UPDATED: Pass contextLimit
         await streamResponse({ userMessage, botMessageId, historyForPayload, sessionId: activeSessionId, contextLimit });
     }, [currentMessage, attachments, isLoading, selectedModel, isWebSearchEnabled, messages, currentSessionId, streamResponse, setMessages, createNewSession, updateCurrentSession, cancelAutoSendTimer, cancelAutoRecordTimer, clearAttachments, contextLimit]);
 
@@ -269,7 +285,6 @@ const AidaWidget = (props) => {
             updateCurrentSession(nextMessages);
         }
 
-        // ✅ UPDATED: Pass contextLimit
         await streamResponse({ 
             userMessage: userMessageToRetry, 
             botMessageId: newBotMessageId, 
@@ -306,7 +321,6 @@ const AidaWidget = (props) => {
             updateCurrentSession(nextMessages);
         }
 
-        // ✅ UPDATED: Pass contextLimit
         await streamResponse({ 
             userMessage: userMessageToRegenerate, 
             botMessageId: newBotMessageId, 
@@ -408,7 +422,6 @@ const AidaWidget = (props) => {
                             onRetryBotMessage={features.retryMessage ? handleRetry : undefined}
                             onRegenerateResponse={features.retryMessage ? handleRegenerate : undefined}
                             onViewAttachments={handleViewAttachments}
-                            // ✅ ADDED: Pass contextLimit to display
                             contextLimit={contextLimit}
                         />
                         <ChatInput 
@@ -437,6 +450,7 @@ const AidaWidget = (props) => {
                             setIsRecordTimerPaused={setIsRecordTimerPaused}
                             selectedModel={selectedModel}
                             setSelectedModel={setSelectedModel}
+                            availableModels={availableModels} // ✅ NEW: Pass resolved models
                             translations={translations}
                             attachmentCount={attachments.length}
                             onOpenAttachments={openAttachmentModal}
@@ -450,7 +464,6 @@ const AidaWidget = (props) => {
                             onClearFailedTranscription={clearFailedTranscription}
                             isNearingTimeLimit={isNearingTimeLimit}
                             onAddImages={addImageAttachments}
-                            // ✅ ADDED: Pass contextLimit props
                             contextLimit={contextLimit}
                             setContextLimit={setContextLimit}
                         />
