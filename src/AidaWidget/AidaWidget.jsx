@@ -25,16 +25,21 @@ import {
 
 import { CHAT_URL, TRANSCRIPTION_URL } from './utils/apiConfig';
 
-// ✅ NEW: Default models definition moved here
+// ✅ UPDATED: Added 'category' to models for icons and color coding
 const DEFAULT_MODELS = [
-    { value: 'deepseek/deepseek-v3.2', label: 'Deepseek 3.2' },
-    { value: 'deepseek/deepseek-chat-v3-0324', label: 'Deepseek V3' },
-    { value: 'deepseek/deepseek-r1', label: 'Deepseek Reasoner R1'},
-    { value: 'openai/gpt-5.1', label: 'GPT-5.1' },
-    { value: 'google/gemini-3-flash-preview', label: 'Gemini Flash 3 Pre' },
-    { value: 'google/gemini-3-pro-preview', label: 'Gemini Pro 3 (reasoner)' },
-    { value: 'google/gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image' },
-    { value: 'perplexity/sonar', label: 'Perplexity Sonar'}
+    { value: 'deepseek/deepseek-r1', label: 'Deepseek Reasoner R1', category: 'reasoning' },
+    { value: 'deepseek/deepseek-v3.2', label: 'Deepseek 3.2', category: 'reasoning' },
+    { value: 'deepseek/deepseek-chat-v3-0324', label: 'Deepseek V3', category: 'reasoning' },
+    { value: 'openai/gpt-5.1', label: 'GPT-5.1', category: 'reasoning' },
+
+    { value: 'google/gemini-3-pro-preview', label: 'Gemini Pro 3 (Reasoner)', category: 'reasoning' },
+    { value: 'google/gemini-3-flash-preview', label: 'Gemini Flash 3 Pre', category: 'chat' },
+
+    { value: 'google/gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image', category: 'vision' },
+    
+
+    { value: 'openai/gpt-5.1', label: 'GPT-5.1', category: 'chat' },
+    { value: 'perplexity/sonar', label: 'Perplexity Sonar', category: 'chat'}
 ];
 
 const defaultProps = {
@@ -43,7 +48,7 @@ const defaultProps = {
     translations: { transcribing: 'Transcribing...', inputPlaceholder: 'Type a message to Aida...' },
     user: {},
     pageContext: {},
-    models: [], // ✅ NEW: Default empty, falls back to DEFAULT_MODELS
+    models: [], 
     features: {
         resizable: true,
         modelSelection: true,
@@ -61,14 +66,13 @@ const AidaWidget = (props) => {
     const { apiConfig, user, language, translations, pageContext, features, models } = { ...defaultProps, ...props };
     const attachmentsEnabled = Boolean(features?.imageUpload);
 
-    // ✅ NEW: Determine which models to use
+    // Determine which models to use
     const availableModels = (models && models.length > 0) ? models : DEFAULT_MODELS;
 
     const [currentMessage, setCurrentMessage] = useState('');
     
     const [selectedModel, setSelectedModel] = useState(() => {
         const saved = localStorage.getItem('aida-selected-model');
-        // ✅ UPDATED: Ensure saved model exists in current available list, else default to first
         const exists = availableModels.some(m => m.value === saved);
         return exists ? saved : availableModels[0].value;
     });
@@ -450,7 +454,7 @@ const AidaWidget = (props) => {
                             setIsRecordTimerPaused={setIsRecordTimerPaused}
                             selectedModel={selectedModel}
                             setSelectedModel={setSelectedModel}
-                            availableModels={availableModels} // ✅ NEW: Pass resolved models
+                            availableModels={availableModels}
                             translations={translations}
                             attachmentCount={attachments.length}
                             onOpenAttachments={openAttachmentModal}

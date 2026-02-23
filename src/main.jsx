@@ -59,12 +59,7 @@ if (import.meta.env.DEV) {
     user: { email: 'dev-user@example.com', id: 'dev-id' },
     translations: { transcribing: 'Transcribing...', inputPlaceholder: 'Type a message to Aida...' },
     // ✅ NEW: Example of passing custom models configuration
-    models: [
-        { value: 'deepseek/deepseek-v3.2', label: 'Deepseek 3.2 (Dev)' },
-        { value: 'deepseek/deepseek-r1', label: 'Deepseek Reasoner R1 (Dev)'},
-        { value: 'openai/gpt-5.1', label: 'GPT-5.1 (Dev)' },
-        { value: 'google/gemini-3-flash-preview', label: 'Gemini Flash 3 (Dev)' },
-    ],
+
     features: {
       resizable: true,
       modelSelection: true,

@@ -1,6 +1,9 @@
 /* src/AidaWidget/ChatInput.jsx */
 import React, { useState } from 'react';
-import { HiPaperAirplane, HiOutlineMicrophone, HiStop, HiArrowPath, HiXMark, HiChevronDown, HiOutlineGlobeAlt } from 'react-icons/hi2';
+import { 
+    HiPaperAirplane, HiOutlineMicrophone, HiStop, HiArrowPath, HiXMark, 
+    HiChevronDown, HiOutlineGlobeAlt, HiLightBulb, HiPhoto, HiChatBubbleLeftRight 
+} from 'react-icons/hi2';
 import AttachmentButton from './AttachmentButton';
 import ContextSelector from './ContextSelector';
 
@@ -25,7 +28,7 @@ const ChatInput = ({
     setIsRecordTimerPaused,
     selectedModel,
     setSelectedModel,
-    availableModels = [], // ✅ NEW: Receives models via props
+    availableModels = [], 
     translations,
     attachmentCount = 0,
     onOpenAttachments,
@@ -55,8 +58,39 @@ const ChatInput = ({
         return `${minutes}:${secs}`;
     };
 
-    // ✅ UPDATED: Find label from the passed availableModels prop
-    const selectedModelLabel = availableModels.find(m => m.value === selectedModel)?.label || selectedModel;
+    // ✅ UPDATED: Helper to get visual properties based on model category
+    const getModelVisuals = (category) => {
+        switch (category) {
+            case 'reasoning':
+                return { 
+                    icon: HiLightBulb, 
+                    colorClass: 'text-purple-500', 
+                    bgClass: theme === 'dark' ? 'bg-purple-500/10' : 'bg-purple-50',
+                    borderClass: 'border-purple-500/30'
+                };
+            case 'vision':
+                return { 
+                    icon: HiPhoto, 
+                    colorClass: 'text-pink-500', 
+                    bgClass: theme === 'dark' ? 'bg-pink-500/10' : 'bg-pink-50',
+                    borderClass: 'border-pink-500/30'
+                };
+            case 'chat':
+            default:
+                return { 
+                    icon: HiChatBubbleLeftRight, 
+                    colorClass: 'text-blue-500', 
+                    bgClass: theme === 'dark' ? 'bg-blue-500/10' : 'bg-blue-50',
+                    borderClass: 'border-blue-500/30'
+                };
+        }
+    };
+
+    // Find current model object
+    const currentModelObj = availableModels.find(m => m.value === selectedModel);
+    const selectedModelLabel = currentModelObj?.label || selectedModel;
+    const currentVisuals = getModelVisuals(currentModelObj?.category || 'chat');
+    const CurrentIcon = currentVisuals.icon;
 
     const handlePaste = (e) => {
         const items = e.clipboardData?.items;
@@ -252,22 +286,49 @@ const ChatInput = ({
                         <div className="relative min-w-0">
                              <button
                                 type="button" onClick={() => { setIsModelMenuOpen((p) => !p); }}
-                                className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm disabled:opacity-50 transition-colors max-w-full ${theme === 'dark' ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`}
+                                className={`flex items-center gap-2 rounded-full px-3 py-1 text-sm disabled:opacity-50 transition-colors max-w-full border ${theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} ${currentVisuals.colorClass} ${currentVisuals.borderClass} ${currentVisuals.bgClass}`}
                                 aria-haspopup="menu" aria-expanded={isModelMenuOpen} aria-label={`Select AI Model (current: ${selectedModelLabel})`} title="Select AI Model"
                             >
-                                <span className="truncate">{selectedModelLabel}</span>
-                                <HiChevronDown className="h-4 w-4 flex-shrink-0" />
+                                <CurrentIcon className="h-4 w-4 flex-shrink-0" />
+                                <span className={`truncate ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>{selectedModelLabel}</span>
+                                <HiChevronDown className={`h-3 w-3 flex-shrink-0 opacity-70 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`} />
                             </button>
+                            
                             {isModelMenuOpen && (
-                                <div className={`absolute z-50 left-0 bottom-full mb-2 w-48 rounded-md shadow-lg overflow-hidden ${theme === 'dark' ? 'bg-gray-800 border border-gray-700 text-gray-100' : 'bg-white border border-gray-200 text-gray-900'}`} role="menu">
-                                    {/* ✅ UPDATED: Map over availableModels prop */}
-                                    {availableModels.map((opt) => (
-                                        <button key={opt.value} type="button" onClick={() => { setSelectedModel(opt.value); setIsModelMenuOpen(false); }}
-                                            className={`w-full text-left px-3 py-2 text-sm ${theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-50'} ${selectedModel === opt.value ? (theme === 'dark' ? 'bg-gray-700 font-medium' : 'bg-gray-100 font-medium') : ''}`} role="menuitem"
-                                        >
-                                            {opt.label}
-                                        </button>
-                                    ))}
+                                <div className={`absolute z-50 left-0 bottom-full mb-2 w-56 rounded-lg shadow-xl overflow-hidden border ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : 'bg-white border-gray-200 text-gray-900'}`} role="menu">
+                                    <div className="max-h-64 overflow-y-auto custom-scrollbar p-1">
+                                        {availableModels.map((opt) => {
+                                            const visuals = getModelVisuals(opt.category || 'chat');
+                                            const Icon = visuals.icon;
+                                            const isSelected = selectedModel === opt.value;
+                                            
+                                            return (
+                                                <button 
+                                                    key={opt.value} 
+                                                    type="button" 
+                                                    onClick={() => { setSelectedModel(opt.value); setIsModelMenuOpen(false); }}
+                                                    className={`w-full text-left px-3 py-2.5 text-sm rounded-md flex items-center gap-3 transition-colors ${
+                                                        isSelected 
+                                                            ? (theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100') 
+                                                            : (theme === 'dark' ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50')
+                                                    }`} 
+                                                    role="menuitem"
+                                                >
+                                                    <div className={`p-1.5 rounded-md ${visuals.bgClass} ${visuals.colorClass}`}>
+                                                        <Icon className="w-4 h-4" />
+                                                    </div>
+                                                    <div className="flex flex-col min-w-0">
+                                                        <span className={`font-medium truncate ${isSelected ? (theme === 'dark' ? 'text-white' : 'text-gray-900') : (theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}`}>
+                                                            {opt.label}
+                                                        </span>
+                                                        <span className="text-[10px] opacity-60 uppercase tracking-wider font-semibold">
+                                                            {opt.category || 'Chat'}
+                                                        </span>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             )}
                         </div>
