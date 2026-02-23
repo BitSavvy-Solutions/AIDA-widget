@@ -21,8 +21,8 @@
 
 .lcd-digit {
   position: relative;
-  width: 20px;
-  height: 35px;
+  width: 16px;
+  height: 28px;
   margin: 0 2px;
 }
 
@@ -38,18 +38,18 @@
 }
 
 .segment-a, .segment-d, .segment-g {
-  width: 16px;
-  height: 3px;
+  width: 12px;
+  height: 2px;
   left: 2px;
 }
 
 .segment-a { top: 0; }
-.segment-g { top: 16px; }
+.segment-g { top: 13px; }
 .segment-d { bottom: 0; }
 
 .segment-b, .segment-c, .segment-e, .segment-f {
-  width: 3px;
-  height: 14px;
+  width: 2px;
+  height: 11px;
 }
 
 .segment-b, .segment-c { right: 0; }
@@ -62,14 +62,14 @@
   display: flex;
   flex-direction: column;
   justify-content: space-around;
-  height: 35px;
-  width: 8px;
+  height: 28px;
+  width: 6px;
   padding: 0 2px;
 }
 
 .colon-dot {
-  width: 3px;
-  height: 3px;
+  width: 2px;
+  height: 2px;
   border-radius: 50%;
   background-color: rgba(255, 95, 144, 0.15);
 }
@@ -509,8 +509,8 @@ body.aida-widget-resizing * {
   top: 50%;
   transform: translateY(-50%);
   z-index: 2;
-  width: 8px;
-  height: 35px;
+  width: 6px;
+  height: 28px;
   display: flex;
   flex-direction: column;
   justify-content: space-around;

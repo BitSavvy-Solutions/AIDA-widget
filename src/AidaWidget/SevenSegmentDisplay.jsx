@@ -87,7 +87,7 @@ const SevenSegmentDisplay = ({ text = '', className = '' }) => {
           {characters.map((char, index) => {
             if (char === ':') {
               // Calculate position based on index
-              const position = index * 26; // Adjust based on your digit width + margin
+              const position = index * 20; // Adjust based on your digit width + margin
               return (
                 <div 
                   key={`colon-${index}`} 
