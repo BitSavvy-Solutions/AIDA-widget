@@ -4,8 +4,55 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { HiSpeakerWave, HiPlay, HiPause, HiPaperClip, HiChevronDown, HiChevronUp, HiClipboard, HiCheck, HiPencilSquare } from 'react-icons/hi2';
 import ReasoningDisplay from './ReasoningDisplay';
-
 import ShikiHighlighter, { isInlineCode } from 'react-shiki';
+
+// --- 1. SIMPLIFIED HOOK: Handles the typing logic ---
+const useSmoothTyping = (targetText, isActive) => {
+    const [displayedText, setDisplayedText] = useState('');
+
+    useEffect(() => {
+        // If not active (streaming finished), snap to full text immediately
+        if (!isActive) {
+            setDisplayedText(targetText);
+            return;
+        }
+
+        let animationFrameId;
+
+        const animate = () => {
+            setDisplayedText((prev) => {
+                // If we caught up, stop updating
+                if (prev.length >= targetText.length) return prev;
+
+                // Dynamic Speed: If we are far behind, type faster. If close, type slower.
+                // This prevents the typing from lagging behind a fast API.
+                const distance = targetText.length - prev.length;
+                const speed = Math.max(1, Math.floor(distance / 10)); 
+                
+                return targetText.slice(0, prev.length + speed);
+            });
+            animationFrameId = requestAnimationFrame(animate);
+        };
+
+        animationFrameId = requestAnimationFrame(animate);
+        return () => cancelAnimationFrame(animationFrameId);
+    }, [targetText, isActive]);
+
+    return displayedText;
+};
+
+// --- 2. Helper Component to apply the hook cleanly ---
+const SmoothMessage = ({ text, isStreaming, components }) => {
+    const typedText = useSmoothTyping(text, isStreaming);
+    
+    return (
+        <div className={isStreaming ? "streaming-active" : ""}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+                {String(typedText).replace(/<br\s*\/?>(?=\s*)/gi, '  \n')}
+            </ReactMarkdown>
+        </div>
+    );
+};
 
 const SUPPORTED_LANGUAGES = new Set([
     'javascript', 'js', 'jsx', 'typescript', 'ts', 'tsx',
@@ -169,7 +216,6 @@ const ChatDisplay = ({
     isLoading = false,
     liveReasoning,
     onViewAttachments,
-    // ✅ ADDED: Prop for context limit
     contextLimit = 10
 }) => {
     const [copiedId, setCopiedId] = useState(null);
@@ -185,6 +231,18 @@ const ChatDisplay = ({
     const [liveReasoningInfo, setLiveReasoningInfo] = useState({ botId: null, startTime: null });
 
     const speechApiSupported = useMemo(() => typeof window !== 'undefined' && 'speechSynthesis' in window, []);
+
+    // Define markdown components once
+    const markdownComponents = useMemo(() => ({
+        code: CodeBlock,
+        a({ href, children }) {
+            return (
+                <a href={href} target="_blank" rel="noopener noreferrer" className="markdown-link">
+                    {children}
+                </a>
+            );
+        }
+    }), []);
 
     useEffect(() => {
         if (editingMessageId && editInputRef.current) {
@@ -332,8 +390,6 @@ const ChatDisplay = ({
     }, [copiedId]);
 
     const isDark = theme === 'dark';
-
-    // ✅ ADDED: Calculate the starting index for active messages
     const activeStartIndex = Math.max(0, messages.length - contextLimit);
 
     return (
@@ -360,7 +416,6 @@ const ChatDisplay = ({
                 const showThinkingDots = isBotLoading && !showReasoning && trimmedText === '' && !hasImages;
                 const hideBotMessage = isBot && !isBotLoading && trimmedText === '' && !hasImages && !hasBakedInReasoning;
                 
-                // ✅ ADDED: Determine if message is active based on context limit
                 const isMessageActive = index >= activeStartIndex;
                 const opacityClass = isMessageActive ? 'opacity-100' : 'opacity-40 grayscale transition-all duration-500';
 
@@ -378,7 +433,6 @@ const ChatDisplay = ({
                 if (hideBotMessage) return null;
 
                 return (
-                    // ✅ MODIFIED: Applied opacityClass to the wrapper div
                     <div key={message.id} className={`flex ${message.sender === 'user' ? 'justify-end pl-10' : 'justify-start'} ${opacityClass}`}>
                         <div className={`flex flex-col w-full ${message.sender === 'user' ? 'items-end' : 'items-start'}`}>
                             {showReasoning && (
@@ -428,7 +482,6 @@ const ChatDisplay = ({
                                                 e.target.style.height = 'auto';
                                                 e.target.style.height = `${e.target.scrollHeight}px`;
                                             }}
-                                            // ✅ ADDED: Keyboard shortcuts for Save (Ctrl/Cmd+Enter) and Cancel (Esc)
                                             onKeyDown={(e) => {
                                                 if (e.key === 'Escape') {
                                                     e.preventDefault();
@@ -462,21 +515,21 @@ const ChatDisplay = ({
                                     </div>
                                 ) : (
                                     trimmedText !== '' ? (
-                                        <ReactMarkdown
-                                            remarkPlugins={[remarkGfm]}
-                                            components={{
-                                                code: CodeBlock,
-                                                a({ href, children }) {
-                                                    return (
-                                                        <a href={href} target="_blank" rel="noopener noreferrer" className="markdown-link">
-                                                            {children}
-                                                        </a>
-                                                    );
-                                                }
-                                            }}
-                                        >
-                                            {String(messageText).replace(/<br\s*\/?>(?=\s*)/gi, '  \n')}
-                                        </ReactMarkdown>
+                                        // ✅ MODIFIED: Use the simple wrapper component here
+                                        isBotLoading ? (
+                                            <SmoothMessage 
+                                                text={messageText} 
+                                                isStreaming={true}
+                                                components={markdownComponents}
+                                            />
+                                        ) : (
+                                            <ReactMarkdown
+                                                remarkPlugins={[remarkGfm]}
+                                                components={markdownComponents}
+                                            >
+                                                {String(messageText).replace(/<br\s*\/?>(?=\s*)/gi, '  \n')}
+                                            </ReactMarkdown>
+                                        )
                                     ) : (
                                         showThinkingDots ? (
                                             <div className="thinking-dots" role="status" aria-live="polite" aria-label="Assistant is thinking">
@@ -522,7 +575,7 @@ const ChatDisplay = ({
                                         </svg>
                                     </button>
 
-                                    {/* Speech Button (Optional, kept near copy) */}
+                                    {/* Speech Button */}
                                     {speechApiSupported && trimmedText !== '' && (
                                         <button
                                             type="button"
@@ -547,8 +600,7 @@ const ChatDisplay = ({
                                         </button>
                                     )}
 
-                                    {/* 2. Retry / Regenerate Button */}
-                                    {/* For User: Regenerate Response */}
+                                    {/* Retry/Regenerate Buttons */}
                                     {message.sender === 'user' && onRegenerateResponse && (
                                         <button
                                             type="button"
@@ -558,14 +610,12 @@ const ChatDisplay = ({
                                             aria-label="Regenerate response"
                                             title="Regenerate response"
                                         >
-                                            {/* Same SVG as Bot Retry */}
                                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
                                                 <path d="M12 6V3L8 7l4 4V8c2.76 0 5 2.24 5 5 0 1.01-.3 1.95-.82 2.73l1.46 1.46C18.54 15.77 19 14.44 19 13c0-3.87-3.13-7-7-7zm-6.64.64L3.9 8.1C3.27 9.36 3 10.66 3 12c0 3.87 3.13 7 7 7v3l4-4-4-4v3c-2.76 0-5-2.24-5-5 0-1.01.3-1.95.82-2.73L5.36 6.64z"/>
                                             </svg>
                                         </button>
                                     )}
 
-                                    {/* For Bot: Retry Response */}
                                     {message.sender === 'bot' && onRetryBotMessage && canRetry && (
                                         <button
                                             type="button"
@@ -581,7 +631,6 @@ const ChatDisplay = ({
                                         </button>
                                     )}
 
-                                    {/* 3. Edit Button */}
                                     {onStartEdit && (
                                         <button
                                             type="button"
