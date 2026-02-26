@@ -7,8 +7,8 @@ const isBetaEnvironment =
   window.location.hostname === 'aida.iverse.space';
 
 // --- Agent Backend Configuration (Chat & Transcription) ---
-const AGENT_PROD_HOST = 'https://aitut-agentbackend.azurewebsites.net';
-const AGENT_BETA_HOST = 'https://aitut-agentbackend-beta-g3a7fndzdadbbafd.canadacentral-01.azurewebsites.net';
+const AGENT_PROD_HOST = 'https://aida-agentbackend-prod.graydune-dda4d1ba.canadaeast.azurecontainerapps.io';
+const AGENT_BETA_HOST = 'https://aida-agentbackend-dev.graydune-dda4d1ba.canadaeast.azurecontainerapps.io';
 
 const agentHost = isBetaEnvironment ? AGENT_BETA_HOST : AGENT_PROD_HOST;
 
