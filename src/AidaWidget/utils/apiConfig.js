@@ -2,15 +2,15 @@
 // This file centralizes API configuration and switches endpoints based on the deployment environment.
 
 
-const isBetaEnvironment = 
+const isProdEnvironment = 
   window.location.hostname === 'beta-aitut.iverse.space' || 
   window.location.hostname === 'aida.iverse.space';
 
 // --- Agent Backend Configuration (Chat & Transcription) ---
-const AGENT_PROD_HOST = 'https://aida-agentbackend-prod.graydune-dda4d1ba.canadaeast.azurecontainerapps.io';
-const AGENT_BETA_HOST = 'https://aida-agentbackend-dev.graydune-dda4d1ba.canadaeast.azurecontainerapps.io';
+const AGENT_PROD_HOST = 'https://aida-agentbackend-prod.graydune-dda4d1ba.canadaeast.azurecontainerapps.io/api';
+const AGENT_BETA_HOST = 'https://aida-agentbackend-dev.graydune-dda4d1ba.canadaeast.azurecontainerapps.io/api';
 
-const agentHost = isBetaEnvironment ? AGENT_BETA_HOST : AGENT_PROD_HOST;
+const agentHost = isProdEnvironment ? AGENT_PROD_HOST : AGENT_BETA_HOST;
 
 export const CHAT_URL = `${agentHost}/iverse_agent`;
 export const TRANSCRIPTION_URL = `${agentHost}/transcribe_audio`;
@@ -30,5 +30,5 @@ const CREDITS_PROD_KEY = 'dlkgVHOPghXdpOeE9SgyYe0r6nN3AjuEowskmJsDDhrBAzFuSlPb7g
 // TODO: Replace with your beta function key.
 const CREDITS_BETA_KEY = 'dlkgVHOPghXdpOeE9SgyYe0r6nN3AjuEowskmJsDDhrBAzFuSlPb7g=='; 
 
-export const CREDITS_API_HOST = isBetaEnvironment ? CREDITS_BETA_HOST : CREDITS_PROD_HOST;
-export const CREDITS_API_KEY = isBetaEnvironment ? CREDITS_BETA_KEY : CREDITS_PROD_KEY;
+export const CREDITS_API_HOST = isProdEnvironment ?  CREDITS_PROD_HOST : CREDITS_BETA_HOST;
+export const CREDITS_API_KEY = isProdEnvironment ?  CREDITS_PROD_KEY : CREDITS_BETA_KEY;
