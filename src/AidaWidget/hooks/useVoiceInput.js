@@ -55,10 +55,14 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
             if (!response.ok) throw new Error(`Transcription failed: ${response.statusText}`);
 
             const result = await response.json();
+            
+            // Handle Azure Functions wrapper if present
             const data = typeof result._HttpResponse__body === 'string'
                 ? JSON.parse(result._HttpResponse__body)
                 : result;
-            const transcriptionText = data?.transcription?.text || '';
+
+            // ✅ FIX: Check for 'text' directly (new API) OR 'transcription.text' (old API)
+            const transcriptionText = data?.text || data?.transcription?.text || '';
             
             if (onTranscriptionComplete) {
                 onTranscriptionComplete(transcriptionText);
