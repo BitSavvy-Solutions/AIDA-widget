@@ -27,13 +27,15 @@ import { CHAT_URL, TRANSCRIPTION_URL } from './utils/apiConfig';
 
 // ✅ UPDATED: Added 'category' to models for icons and color coding
 const DEFAULT_MODELS = [
-    { value: 'deepseek/deepseek-r1', label: 'Deepseek Reasoner R1', category: 'reasoning' },
     { value: 'deepseek/deepseek-v3.2', label: 'Deepseek 3.2', category: 'reasoning' },
     { value: 'deepseek/deepseek-chat-v3-0324', label: 'Deepseek V3', category: 'reasoning' },
     { value: 'openai/gpt-5.1', label: 'GPT-5.1', category: 'reasoning' },
 
     { value: 'google/gemini-3-pro-preview', label: 'Gemini Pro 3 (Reasoner)', category: 'reasoning' },
     { value: 'google/gemini-3-flash-preview', label: 'Gemini Flash 3 Pre', category: 'chat' },
+
+    { value: 'anthropic/claude-sonnet-4.6', label: 'Claude Sonnet 4.6', category: 'reasoning' },
+
 
     { value: 'google/gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image', category: 'vision' },
     
