@@ -43,7 +43,10 @@ const ChatInput = ({
     isNearingTimeLimit,
     onAddImages,
     contextLimit,
-    setContextLimit
+    setContextLimit,
+    // ── VAD props ──
+    silenceCountdown,
+    onCancelSilenceCountdown,
 }) => {
     const [isHoveringSend, setIsHoveringSend] = useState(false);
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
@@ -58,7 +61,6 @@ const ChatInput = ({
         return `${minutes}:${secs}`;
     };
 
-    // ✅ UPDATED: Helper to get visual properties based on model category
     const getModelVisuals = (category) => {
         switch (category) {
             case 'reasoning':
@@ -86,7 +88,6 @@ const ChatInput = ({
         }
     };
 
-    // Find current model object
     const currentModelObj = availableModels.find(m => m.value === selectedModel);
     const selectedModelLabel = currentModelObj?.label || selectedModel;
     const currentVisuals = getModelVisuals(currentModelObj?.category || 'chat');
@@ -95,7 +96,6 @@ const ChatInput = ({
     const handlePaste = (e) => {
         const items = e.clipboardData?.items;
         if (!items) return;
-
         const imageFiles = [];
         for (let i = 0; i < items.length; i++) {
             if (items[i].type.indexOf('image') !== -1) {
@@ -103,7 +103,6 @@ const ChatInput = ({
                 if (file) imageFiles.push(file);
             }
         }
-
         if (imageFiles.length > 0 && features.imageUpload && onAddImages) {
             e.preventDefault(); 
             onAddImages(imageFiles);
@@ -123,10 +122,17 @@ const ChatInput = ({
         if (autoSendCountdown !== null) {
             return (
                 <button
-                    onClick={cancelAutoSendTimer} onMouseEnter={() => { setIsHoveringSend(true); setIsSendTimerPaused(true); }} onMouseLeave={() => { setIsHoveringSend(false); setIsSendTimerPaused(false); }}
-                    className={`ml-2 flex items-center justify-center timer-button !w-9 !h-9 ${visibilityClass}`} style={{ animationPlayState: isHoveringSend ? 'paused' : 'running' }} aria-label="Cancel auto-send"
+                    onClick={cancelAutoSendTimer}
+                    onMouseEnter={() => { setIsHoveringSend(true); setIsSendTimerPaused(true); }}
+                    onMouseLeave={() => { setIsHoveringSend(false); setIsSendTimerPaused(false); }}
+                    className={`ml-2 flex items-center justify-center timer-button !w-9 !h-9 ${visibilityClass}`}
+                    style={{ animationPlayState: isHoveringSend ? 'paused' : 'running' }}
+                    aria-label="Cancel auto-send"
                 >
-                    {isHoveringSend ? <HiXMark className="h-5 w-5 text-white" /> : <span className={`${theme === 'dark' ? 'text-white' : 'text-gray-900'} font-bold text-base`}>{autoSendCountdown}</span>}
+                    {isHoveringSend
+                        ? <HiXMark className="h-5 w-5 text-white" />
+                        : <span className={`${theme === 'dark' ? 'text-white' : 'text-gray-900'} font-bold text-base`}>{autoSendCountdown}</span>
+                    }
                 </button>
             );
         }
@@ -135,8 +141,15 @@ const ChatInput = ({
         
         return (
             <button
-                type="button" onClick={() => handleSendMessage()} disabled={isDisabled}
-                className={`ml-2 p-2 rounded-full transition-opacity disabled:opacity-50 ${theme === 'dark' ? (isDisabled ? 'bg-gray-600' : 'bg-gray-700 hover:bg-gray-600') : (isDisabled ? 'bg-gray-300' : 'bg-gray-900 hover:bg-gray-700')} ${visibilityClass}`} aria-label="Send Message"
+                type="button"
+                onClick={() => handleSendMessage()}
+                disabled={isDisabled}
+                className={`ml-2 p-2 rounded-full transition-opacity disabled:opacity-50 ${
+                    theme === 'dark'
+                        ? (isDisabled ? 'bg-gray-600' : 'bg-gray-700 hover:bg-gray-600')
+                        : (isDisabled ? 'bg-gray-300' : 'bg-gray-900 hover:bg-gray-700')
+                } ${visibilityClass}`}
+                aria-label="Send Message"
             >
                 <HiPaperAirplane className={`w-5 h-5 ${isDisabled ? (theme === 'dark' ? 'text-gray-300' : 'text-gray-500') : 'text-white'}`} />
             </button>
@@ -150,19 +163,24 @@ const ChatInput = ({
         if (autoRecordCountdown !== null) {
             pillContent = (
                 <button
-                    onClick={cancelAutoRecordTimer} onMouseEnter={() => { setIsHoveringRecord(true); setIsRecordTimerPaused(true); }} onMouseLeave={() => { setIsHoveringRecord(false); setIsRecordTimerPaused(false); }}
-                    className={`${pillBaseClass} justify-center record-timer-button !w-9 !h-9`} style={{ animationPlayState: isHoveringRecord ? 'paused' : 'running' }} aria-label="Cancel auto-record"
+                    onClick={cancelAutoRecordTimer}
+                    onMouseEnter={() => { setIsHoveringRecord(true); setIsRecordTimerPaused(true); }}
+                    onMouseLeave={() => { setIsHoveringRecord(false); setIsRecordTimerPaused(false); }}
+                    className={`${pillBaseClass} justify-center record-timer-button !w-9 !h-9`}
+                    style={{ animationPlayState: isHoveringRecord ? 'paused' : 'running' }}
+                    aria-label="Cancel auto-record"
                 >
-                    {isHoveringRecord ? <HiXMark className="h-5 w-5 text-white" /> : <span className="text-white font-bold text-base">{autoRecordCountdown}</span>}
+                    {isHoveringRecord
+                        ? <HiXMark className="h-5 w-5 text-white" />
+                        : <span className="text-white font-bold text-base">{autoRecordCountdown}</span>
+                    }
                 </button>
             );
         } else if (transcriptionError) {
             pillContent = (
                 <div 
                     className={`${pillBaseClass} gap-1 rounded-full px-1 h-9 w-auto shadow-md transition-all duration-200 ${
-                        theme === 'dark' 
-                            ? 'bg-red-800' 
-                            : 'bg-red-100 border border-red-200'
+                        theme === 'dark' ? 'bg-red-800' : 'bg-red-100 border border-red-200'
                     }`} 
                     title={`Error: ${transcriptionError}`}
                 >
@@ -196,31 +214,103 @@ const ChatInput = ({
             const isCurrentlyRecording = isRecording;
             const isCurrentlyTranscribing = isTranscribing;
             const isCancelHover = isCurrentlyTranscribing && isHoveringCancel;
-            
-            const pillBgColor = isCurrentlyRecording 
-                ? `bg-red-600 hover:bg-red-700 ${isNearingTimeLimit ? 'animate-pulse' : ''}`
-                : isCancelHover
-                    ? 'bg-red-600 hover:bg-red-700'
-                    : (theme === 'dark' ? 'bg-gray-700' : 'bg-gray-900');
-            
+
+            // ── Silence countdown is active ──────────────────────────────────
+            const hasSilenceCountdown = isCurrentlyRecording && silenceCountdown !== null;
+
+            // Pill background:
+            // • Silence countdown → amber/orange to signal "about to stop"
+            // • Normal recording  → red
+            // • Transcribing      → gray (or red on cancel hover)
+            let pillBgColor;
+            if (hasSilenceCountdown) {
+                pillBgColor = 'bg-amber-500 hover:bg-amber-600';
+            } else if (isCurrentlyRecording) {
+                pillBgColor = `bg-red-600 hover:bg-red-700 ${isNearingTimeLimit ? 'animate-pulse' : ''}`;
+            } else if (isCancelHover) {
+                pillBgColor = 'bg-red-600 hover:bg-red-700';
+            } else {
+                pillBgColor = theme === 'dark' ? 'bg-gray-700' : 'bg-gray-900';
+            }
+
             const pillClassName = `${pillBaseClass} gap-2 !rounded-full !px-3 !py-2 !w-auto !h-auto text-white shadow-md transition-all duration-200 ${pillBgColor} ${isCurrentlyTranscribing ? 'cursor-pointer' : ''}`;
+
+            const handlePillClick = () => {
+                if (isCurrentlyRecording) {
+                    if (hasSilenceCountdown) {
+                        // Cancel the VAD countdown — keep recording
+                        onCancelSilenceCountdown?.();
+                    } else {
+                        handleRecordButtonClick();
+                    }
+                } else if (isCurrentlyTranscribing) {
+                    onCancelTranscription();
+                }
+            };
 
             pillContent = (
                 <button
-                    onClick={isCurrentlyRecording ? handleRecordButtonClick : onCancelTranscription}
+                    onClick={handlePillClick}
                     onMouseEnter={isCurrentlyTranscribing ? () => setIsHoveringCancel(true) : undefined}
                     onMouseLeave={isCurrentlyTranscribing ? () => setIsHoveringCancel(false) : undefined}
                     className={pillClassName}
                     aria-label={
-                        isCurrentlyRecording ? "Stop Recording" 
-                        : isCancelHover ? "Cancel transcription"
-                        : "Transcribing..."
+                        hasSilenceCountdown
+                            ? `Stopping in ${silenceCountdown}s — tap to keep recording`
+                            : isCurrentlyRecording
+                                ? 'Stop Recording'
+                                : isCancelHover
+                                    ? 'Cancel transcription'
+                                    : 'Transcribing...'
                     }
                 >
                     {isCurrentlyRecording ? (
                         <>
-                            <HiStop className="h-5 w-5 flex-shrink-0" />
-                            <span className="font-mono text-sm font-medium tracking-wider">{formatTime(elapsedTime)}</span>
+                            {hasSilenceCountdown ? (
+                                // Silence countdown display
+                                <>
+                                    {/* Animated ring around the countdown number */}
+                                    <span className="relative flex items-center justify-center w-5 h-5 shrink-0">
+                                        <svg
+                                            className="absolute inset-0 w-full h-full -rotate-90"
+                                            viewBox="0 0 20 20"
+                                        >
+                                            <circle
+                                                cx="10" cy="10" r="8"
+                                                fill="none"
+                                                stroke="rgba(255,255,255,0.25)"
+                                                strokeWidth="2"
+                                            />
+                                            <circle
+                                                cx="10" cy="10" r="8"
+                                                fill="none"
+                                                stroke="white"
+                                                strokeWidth="2"
+                                                strokeDasharray={`${2 * Math.PI * 8}`}
+                                                strokeDashoffset={`${2 * Math.PI * 8 * (1 - silenceCountdown / 3)}`}
+                                                strokeLinecap="round"
+                                                style={{ transition: 'stroke-dashoffset 0.9s linear' }}
+                                            />
+                                        </svg>
+                                        <span className="relative text-[10px] font-bold leading-none">
+                                            {silenceCountdown}
+                                        </span>
+                                    </span>
+                                    <span className="font-sans text-xs font-medium">
+                                        Tap to keep
+                                    </span>
+                                    <span className="font-mono text-sm font-medium tracking-wider opacity-70">
+                                        {formatTime(elapsedTime)}
+                                    </span>
+                                </>
+                            ) : (
+                                <>
+                                    <HiStop className="h-5 w-5 flex-shrink-0" />
+                                    <span className="font-mono text-sm font-medium tracking-wider">
+                                        {formatTime(elapsedTime)}
+                                    </span>
+                                </>
+                            )}
                         </>
                     ) : (
                         <>
@@ -228,7 +318,9 @@ const ChatInput = ({
                             {isCancelHover ? (
                                 <span className="font-sans text-sm font-medium">Cancel</span>
                             ) : (
-                                <span className="font-mono text-sm font-medium tracking-wider">{formatTime(elapsedTime)}</span>
+                                <span className="font-mono text-sm font-medium tracking-wider">
+                                    {formatTime(elapsedTime)}
+                                </span>
                             )}
                         </>
                     )}
@@ -243,8 +335,12 @@ const ChatInput = ({
             <>
                 {pillContent}
                 <button
-                    onClick={handleRecordButtonClick} disabled={autoSendCountdown !== null}
-                    className={`${marginClass} p-2 rounded-full text-white transition-all duration-200 disabled:opacity-50 ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-900 hover:bg-gray-700'} ${micVisibilityClass}`} aria-label="Start Recording"
+                    onClick={handleRecordButtonClick}
+                    disabled={autoSendCountdown !== null}
+                    className={`${marginClass} p-2 rounded-full text-white transition-all duration-200 disabled:opacity-50 ${
+                        theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-900 hover:bg-gray-700'
+                    } ${micVisibilityClass}`}
+                    aria-label="Start Recording"
                 >
                     <HiOutlineMicrophone className="w-5 h-5" />
                 </button>
@@ -253,8 +349,14 @@ const ChatInput = ({
     };
 
     return (
-        <div className={`relative p-2 rounded-none transition-colors ${theme === 'dark' ? 'border-t border-gray-800 bg-gray-900 text-gray-100' : 'border-t border-gray-200 bg-white text-gray-900'}`}>
-            <div className={`flex items-end rounded-lg px-3 py-1 mb-2 transition-colors ${theme === 'dark' ? 'border border-gray-700 bg-gray-800' : 'border border-gray-300 bg-gray-50'}`}>
+        <div className={`relative p-2 rounded-none transition-colors ${
+            theme === 'dark'
+                ? 'border-t border-gray-800 bg-gray-900 text-gray-100'
+                : 'border-t border-gray-200 bg-white text-gray-900'
+        }`}>
+            <div className={`flex items-end rounded-lg px-3 py-1 mb-2 transition-colors ${
+                theme === 'dark' ? 'border border-gray-700 bg-gray-800' : 'border border-gray-300 bg-gray-50'
+            }`}>
                <textarea 
                     ref={inputRef} 
                     value={currentMessage} 
@@ -264,7 +366,9 @@ const ChatInput = ({
                     placeholder={translations.inputPlaceholder || "Type your message..."} 
                     dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'} 
                     rows={1} 
-                    className={`flex-1 bg-transparent px-0 py-1 resize-none focus:outline-none custom-scrollbar overflow-y-auto whitespace-pre-wrap leading-tight ${theme === 'dark' ? 'text-gray-100 placeholder-gray-400' : ''} min-h-[32px] max-h-[200px]`} 
+                    className={`flex-1 bg-transparent px-0 py-1 resize-none focus:outline-none custom-scrollbar overflow-y-auto whitespace-pre-wrap leading-tight ${
+                        theme === 'dark' ? 'text-gray-100 placeholder-gray-400' : ''
+                    } min-h-[32px] max-h-[200px]`} 
                     style={{ overflowY: 'auto', overflowX: 'hidden' }}
                 />
             </div>
@@ -273,35 +377,50 @@ const ChatInput = ({
                 <div className="relative flex items-center min-w-0 flex-1 mr-2 gap-2">
                     {features.webSearch && (
                         <button
-                            type="button" onClick={() => setIsWebSearchEnabled(p => !p)}
-                            className={`p-2 rounded-full disabled:opacity-50 transition-colors flex-shrink-0 ${isWebSearchEnabled ? (theme === 'dark' ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-100 text-blue-600') : (theme === 'dark' ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100')}`}
-                            aria-pressed={isWebSearchEnabled} aria-label="Toggle web search" title="Toggle web search"
+                            type="button"
+                            onClick={() => setIsWebSearchEnabled(p => !p)}
+                            className={`p-2 rounded-full disabled:opacity-50 transition-colors flex-shrink-0 ${
+                                isWebSearchEnabled
+                                    ? (theme === 'dark' ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-100 text-blue-600')
+                                    : (theme === 'dark' ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100')
+                            }`}
+                            aria-pressed={isWebSearchEnabled}
+                            aria-label="Toggle web search"
+                            title="Toggle web search"
                         >
                             <HiOutlineGlobeAlt className="h-6 w-6" />
                         </button>
                     )}
                     
-                    {/* Model Selector */}
                     {features.modelSelection && (
                         <div className="relative min-w-0">
-                             <button
-                                type="button" onClick={() => { setIsModelMenuOpen((p) => !p); }}
-                                className={`flex items-center gap-2 rounded-full px-3 py-1 text-sm disabled:opacity-50 transition-colors max-w-full border ${theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} ${currentVisuals.colorClass} ${currentVisuals.borderClass} ${currentVisuals.bgClass}`}
-                                aria-haspopup="menu" aria-expanded={isModelMenuOpen} aria-label={`Select AI Model (current: ${selectedModelLabel})`} title="Select AI Model"
+                            <button
+                                type="button"
+                                onClick={() => setIsModelMenuOpen((p) => !p)}
+                                className={`flex items-center gap-2 rounded-full px-3 py-1 text-sm disabled:opacity-50 transition-colors max-w-full border ${
+                                    theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                                } ${currentVisuals.colorClass} ${currentVisuals.borderClass} ${currentVisuals.bgClass}`}
+                                aria-haspopup="menu"
+                                aria-expanded={isModelMenuOpen}
+                                aria-label={`Select AI Model (current: ${selectedModelLabel})`}
+                                title="Select AI Model"
                             >
                                 <CurrentIcon className="h-4 w-4 flex-shrink-0" />
-                                <span className={`truncate ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>{selectedModelLabel}</span>
+                                <span className={`truncate ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
+                                    {selectedModelLabel}
+                                </span>
                                 <HiChevronDown className={`h-3 w-3 flex-shrink-0 opacity-70 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`} />
                             </button>
                             
                             {isModelMenuOpen && (
-                                <div className={`absolute z-50 left-0 bottom-full mb-2 w-56 rounded-lg shadow-xl overflow-hidden border ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : 'bg-white border-gray-200 text-gray-900'}`} role="menu">
+                                <div className={`absolute z-50 left-0 bottom-full mb-2 w-56 rounded-lg shadow-xl overflow-hidden border ${
+                                    theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : 'bg-white border-gray-200 text-gray-900'
+                                }`} role="menu">
                                     <div className="max-h-64 overflow-y-auto custom-scrollbar p-1">
                                         {availableModels.map((opt) => {
                                             const visuals = getModelVisuals(opt.category || 'chat');
                                             const Icon = visuals.icon;
                                             const isSelected = selectedModel === opt.value;
-                                            
                                             return (
                                                 <button 
                                                     key={opt.value} 
@@ -318,7 +437,11 @@ const ChatInput = ({
                                                         <Icon className="w-4 h-4" />
                                                     </div>
                                                     <div className="flex flex-col min-w-0">
-                                                        <span className={`font-medium truncate ${isSelected ? (theme === 'dark' ? 'text-white' : 'text-gray-900') : (theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}`}>
+                                                        <span className={`font-medium truncate ${
+                                                            isSelected
+                                                                ? (theme === 'dark' ? 'text-white' : 'text-gray-900')
+                                                                : (theme === 'dark' ? 'text-gray-300' : 'text-gray-700')
+                                                        }`}>
                                                             {opt.label}
                                                         </span>
                                                         <span className="text-[10px] opacity-60 uppercase tracking-wider font-semibold">

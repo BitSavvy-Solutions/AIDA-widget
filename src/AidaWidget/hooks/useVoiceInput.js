@@ -1,15 +1,17 @@
-/* src/AidaWidget/hooks/useVoiceInput.js */
+// src/AidaWidget/hooks/useVoiceInput.js
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { useVAD } from './useVAD';
 
-// ✨ ADDED: Constants for recording time limits
 const MAX_RECORDING_SECONDS = 600;
 const WARNING_THRESHOLD_SECONDS = 540;
 
 /**
- * Manages voice input, including recording state, timer, and transcription.
- * @param {object} config - Configuration object.
- * @param {string} config.transcriptionUrl - The URL for the transcription API.
- * @param {Function} config.onTranscriptionComplete - Callback fired with the transcribed text.
+ * Manages voice input, including recording state, timer, VAD-based auto-stop,
+ * and transcription.
+ *
+ * @param {object} config
+ * @param {string}   config.transcriptionUrl          - The URL for the transcription API.
+ * @param {Function} config.onTranscriptionComplete   - Callback fired with the transcribed text.
  * @returns An object with voice input state and control functions.
  */
 export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => {
@@ -18,7 +20,6 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
     const [elapsedTime, setElapsedTime] = useState(0);
     const [transcriptionError, setTranscriptionError] = useState(null);
     const [failedAudioBlob, setFailedAudioBlob] = useState(null);
-    // ✨ ADDED: State for time limit warning
     const [isNearingTimeLimit, setIsNearingTimeLimit] = useState(false);
 
     const mediaRecorderRef = useRef(null);
@@ -27,19 +28,38 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
     const timerIntervalRef = useRef(null);
     const lastInputWasVoiceRef = useRef(false);
     const transcriptionAbortControllerRef = useRef(null);
-    // ✨ ADDED: Ref for the auto-stop timer
     const autoStopTimerRef = useRef(null);
+
+    // ─── VAD integration ────────────────────────────────────────────────────────
+    // We only activate VAD while recording is active.
+    const handleVADSilenceTimeout = useCallback(() => {
+        // Called by VAD when silence countdown reaches zero — stop the recording.
+        if (mediaRecorderRef.current?.state === 'recording') {
+            stopRecording(); // defined below; safe because of hoisting via useCallback deps
+        }
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    // Note: stopRecording is defined after this; we use a ref trick below.
+
+    const stopRecordingRef = useRef(null);
+
+    const { silenceCountdown, vadStatus, cancelSilenceCountdown } = useVAD({
+        isEnabled: isRecording,
+        onSilenceTimeout: useCallback(() => {
+            stopRecordingRef.current?.();
+        }, []),
+    });
+    // ────────────────────────────────────────────────────────────────────────────
 
     const transcribeAudioBlob = useCallback(async (audioBlob) => {
         if (audioBlob.size === 0) {
-            console.warn("Audio blob is empty, skipping transcription.");
+            console.warn('Audio blob is empty, skipping transcription.');
             return;
         }
 
         setIsTranscribing(true);
         setTranscriptionError(null);
         setFailedAudioBlob(null);
-        
+
         const formData = new FormData();
         formData.append('audio_file', audioBlob, 'recording.webm');
 
@@ -50,29 +70,28 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
             const response = await fetch(transcriptionUrl, {
                 method: 'POST',
                 body: formData,
-                signal: abortController.signal
+                signal: abortController.signal,
             });
             if (!response.ok) throw new Error(`Transcription failed: ${response.statusText}`);
 
             const result = await response.json();
-            
-            // Handle Azure Functions wrapper if present
-            const data = typeof result._HttpResponse__body === 'string'
-                ? JSON.parse(result._HttpResponse__body)
-                : result;
 
-            // ✅ FIX: Check for 'text' directly (new API) OR 'transcription.text' (old API)
+            const data =
+                typeof result._HttpResponse__body === 'string'
+                    ? JSON.parse(result._HttpResponse__body)
+                    : result;
+
             const transcriptionText = data?.text || data?.transcription?.text || '';
-            
+
             if (onTranscriptionComplete) {
                 onTranscriptionComplete(transcriptionText);
             }
         } catch (error) {
             if (error.name === 'AbortError') {
-                console.info("Transcription was cancelled by the user.");
+                console.info('Transcription was cancelled by the user.');
             } else {
                 console.error('Transcription error:', error);
-                setTranscriptionError(error.message || "Transcription failed.");
+                setTranscriptionError(error.message || 'Transcription failed.');
                 setFailedAudioBlob(audioBlob);
             }
         } finally {
@@ -81,26 +100,27 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
         }
     }, [transcriptionUrl, onTranscriptionComplete]);
 
-    // ✨ MODIFIED: Moved stopRecording before startRecording because it's used in a timeout.
     const stopRecording = useCallback(() => {
-        if (mediaRecorderRef.current?.state === "recording") {
-            mediaRecorderRef.current.stop(); // This will trigger the 'onstop' event
+        if (mediaRecorderRef.current?.state === 'recording') {
+            mediaRecorderRef.current.stop();
         }
         if (streamRef.current) {
-            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current.getTracks().forEach((track) => track.stop());
             streamRef.current = null;
         }
         if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-
-        // ✨ ADDED: Clear the auto-stop timer if recording is stopped manually
         if (autoStopTimerRef.current) {
             clearTimeout(autoStopTimerRef.current);
             autoStopTimerRef.current = null;
         }
 
         setIsRecording(false);
-        // The useEffect watching elapsedTime will handle resetting isNearingTimeLimit
     }, []);
+
+    // Keep the ref in sync so the VAD callback can always call the latest version
+    useEffect(() => {
+        stopRecordingRef.current = stopRecording;
+    }, [stopRecording]);
 
     const startRecording = useCallback(async () => {
         setTranscriptionError(null);
@@ -113,31 +133,38 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
             mediaRecorderRef.current = recorder;
             audioChunksRef.current = [];
 
-            recorder.ondataavailable = e => {
+            recorder.ondataavailable = (e) => {
                 if (e.data.size > 0) audioChunksRef.current.push(e.data);
             };
             recorder.onstart = () => {
                 lastInputWasVoiceRef.current = true;
                 setIsRecording(true);
                 setElapsedTime(0);
-                setIsNearingTimeLimit(false); // Explicitly reset warning on start
-                timerIntervalRef.current = setInterval(() => setElapsedTime(p => p + 1), 1000);
+                setIsNearingTimeLimit(false);
+                timerIntervalRef.current = setInterval(
+                    () => setElapsedTime((p) => p + 1),
+                    1000
+                );
 
-                // ✨ ADDED: Set a timeout to automatically stop the recording
+                // Hard cap: auto-stop after MAX_RECORDING_SECONDS regardless of VAD
                 autoStopTimerRef.current = setTimeout(() => {
-                    console.log("Recording time limit reached. Stopping automatically.");
-                    stopRecording();
+                    console.log('Recording time limit reached. Stopping automatically.');
+                    stopRecordingRef.current?.();
                 }, MAX_RECORDING_SECONDS * 1000);
             };
             recorder.onstop = () => {
-                transcribeAudioBlob(new Blob(audioChunksRef.current, { type: 'audio/webm' }));
+                transcribeAudioBlob(
+                    new Blob(audioChunksRef.current, { type: 'audio/webm' })
+                );
             };
             recorder.start();
         } catch (err) {
-            console.error("Microphone access error:", err);
-            alert("Could not access the microphone. Please check your browser permissions.");
+            console.error('Microphone access error:', err);
+            alert(
+                'Could not access the microphone. Please check your browser permissions.'
+            );
         }
-    }, [transcribeAudioBlob, stopRecording]); // ✨ ADDED: stopRecording dependency
+    }, [transcribeAudioBlob]);
 
     const cancelTranscription = useCallback(() => {
         if (transcriptionAbortControllerRef.current) {
@@ -156,27 +183,26 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
         setFailedAudioBlob(null);
     }, []);
 
-    // ✨ ADDED: Effect to manage the time limit warning state
+    // Warning threshold effect
     useEffect(() => {
         if (isRecording && elapsedTime >= WARNING_THRESHOLD_SECONDS) {
-            if (!isNearingTimeLimit) {
-                setIsNearingTimeLimit(true);
-            }
+            if (!isNearingTimeLimit) setIsNearingTimeLimit(true);
         } else if (isNearingTimeLimit) {
-            // Reset if recording stops or a new recording starts (elapsedTime goes to 0)
             setIsNearingTimeLimit(false);
         }
     }, [elapsedTime, isRecording, isNearingTimeLimit]);
 
-    // General cleanup effect for intervals and media streams
-    useEffect(() => () => {
-        if(timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-        // ✨ ADDED: Cleanup for auto-stop timer
-        if(autoStopTimerRef.current) clearTimeout(autoStopTimerRef.current);
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach(track => track.stop());
-        }
-    }, []);
+    // General cleanup
+    useEffect(
+        () => () => {
+            if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+            if (autoStopTimerRef.current) clearTimeout(autoStopTimerRef.current);
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach((track) => track.stop());
+            }
+        },
+        []
+    );
 
     return {
         isRecording,
@@ -189,7 +215,10 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
         transcriptionError,
         retryTranscription,
         clearFailedTranscription,
-        // ✨ ADDED: Expose new state
         isNearingTimeLimit,
+        // VAD-specific
+        silenceCountdown,
+        vadStatus,
+        cancelSilenceCountdown,
     };
 };

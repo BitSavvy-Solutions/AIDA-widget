@@ -129,7 +129,22 @@ const AidaWidget = (props) => {
     
     const { isLoading, lastCost, liveReasoning, streamResponse, stopStreaming, apiError, clearApiError } = useChatAPI({ apiConfig, messages, setMessages, currentSessionId, updateCurrentSession, user, pageContext, customPrompt });
     
-    const { isRecording, isTranscribing, elapsedTime, startRecording, stopRecording, cancelTranscription, lastInputWasVoiceRef, transcriptionError, retryTranscription, clearFailedTranscription, isNearingTimeLimit } = useVoiceInput({ transcriptionUrl: apiConfig.transcriptionUrl, onTranscriptionComplete: (text) => { setCurrentMessage(p => p.trim() ? `${p} ${text}` : text); if (text) startAutoSendTimer(); } });
+    const { 
+        isRecording, isTranscribing, elapsedTime, 
+        startRecording, stopRecording, cancelTranscription, 
+        lastInputWasVoiceRef, transcriptionError, retryTranscription, 
+        clearFailedTranscription, isNearingTimeLimit,
+        silenceCountdown,
+        vadStatus,
+        cancelSilenceCountdown,
+    } = useVoiceInput({ 
+        transcriptionUrl: apiConfig.transcriptionUrl, 
+        onTranscriptionComplete: (text) => { 
+            setCurrentMessage(p => p.trim() ? `${p} ${text}` : text); 
+            if (text) startAutoSendTimer(); 
+        } 
+    });
+
     const { countdown: autoSendCountdown, start: startAutoSendTimer, cancel: cancelAutoSendTimer, setIsPaused: setIsSendTimerPaused } = useCountdown(() => stableHandleSendMessage(), 3);
     const { countdown: autoRecordCountdown, start: startAutoRecordTimer, cancel: cancelAutoRecordTimer, setIsPaused: setIsRecordTimerPaused } = useCountdown(startRecording, 3);
     const displayText = useDisplayAnimation({ isOpen, isLoading });
