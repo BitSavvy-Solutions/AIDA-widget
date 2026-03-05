@@ -129,6 +129,7 @@ const AidaWidget = (props) => {
     
     const { isLoading, lastCost, liveReasoning, streamResponse, stopStreaming, apiError, clearApiError } = useChatAPI({ apiConfig, messages, setMessages, currentSessionId, updateCurrentSession, user, pageContext, customPrompt });
     
+
     const { 
         isRecording, isTranscribing, elapsedTime, 
         startRecording, stopRecording, cancelTranscription, 
@@ -137,6 +138,7 @@ const AidaWidget = (props) => {
         silenceCountdown,
         vadStatus,
         cancelSilenceCountdown,
+        voiceVolume, // ✅ GET VOLUME FROM HOOK
     } = useVoiceInput({ 
         transcriptionUrl: apiConfig.transcriptionUrl, 
         onTranscriptionComplete: (text) => { 
@@ -487,6 +489,7 @@ const AidaWidget = (props) => {
                             onAddImages={addImageAttachments}
                             contextLimit={contextLimit}
                             setContextLimit={setContextLimit}
+                            voiceVolume={voiceVolume} 
                         />
                     </div>
                 </div>

@@ -1,19 +1,10 @@
-// src/AidaWidget/hooks/useVoiceInput.js
+/* src/AidaWidget/hooks/useVoiceInput.js */
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useVAD } from './useVAD';
 
 const MAX_RECORDING_SECONDS = 600;
 const WARNING_THRESHOLD_SECONDS = 540;
 
-/**
- * Manages voice input, including recording state, timer, VAD-based auto-stop,
- * and transcription.
- *
- * @param {object} config
- * @param {string}   config.transcriptionUrl          - The URL for the transcription API.
- * @param {Function} config.onTranscriptionComplete   - Callback fired with the transcribed text.
- * @returns An object with voice input state and control functions.
- */
 export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => {
     const [isRecording, setIsRecording] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
@@ -21,6 +12,9 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
     const [transcriptionError, setTranscriptionError] = useState(null);
     const [failedAudioBlob, setFailedAudioBlob] = useState(null);
     const [isNearingTimeLimit, setIsNearingTimeLimit] = useState(false);
+    
+    // ✅ NEW: State for volume level (0 to 100)
+    const [voiceVolume, setVoiceVolume] = useState(0);
 
     const mediaRecorderRef = useRef(null);
     const streamRef = useRef(null);
@@ -29,27 +23,24 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
     const lastInputWasVoiceRef = useRef(false);
     const transcriptionAbortControllerRef = useRef(null);
     const autoStopTimerRef = useRef(null);
-
-    // ─── VAD integration ────────────────────────────────────────────────────────
-    // We only activate VAD while recording is active.
-    const handleVADSilenceTimeout = useCallback(() => {
-        // Called by VAD when silence countdown reaches zero — stop the recording.
-        if (mediaRecorderRef.current?.state === 'recording') {
-            stopRecording(); // defined below; safe because of hoisting via useCallback deps
-        }
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
-    // Note: stopRecording is defined after this; we use a ref trick below.
+    
+    // ✅ NEW: Refs for Audio Analysis
+    const audioContextRef = useRef(null);
+    const analyserRef = useRef(null);
+    const sourceRef = useRef(null);
+    const animationFrameRef = useRef(null);
 
     const stopRecordingRef = useRef(null);
 
+    // ... (VAD logic remains the same) ...
     const { silenceCountdown, vadStatus, cancelSilenceCountdown } = useVAD({
         isEnabled: isRecording,
         onSilenceTimeout: useCallback(() => {
             stopRecordingRef.current?.();
         }, []),
     });
-    // ────────────────────────────────────────────────────────────────────────────
 
+    // ... (transcribeAudioBlob remains the same) ...
     const transcribeAudioBlob = useCallback(async (audioBlob) => {
         if (audioBlob.size === 0) {
             console.warn('Audio blob is empty, skipping transcription.');
@@ -75,9 +66,7 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
             if (!response.ok) throw new Error(`Transcription failed: ${response.statusText}`);
 
             const result = await response.json();
-
-            const data =
-                typeof result._HttpResponse__body === 'string'
+            const data = typeof result._HttpResponse__body === 'string'
                     ? JSON.parse(result._HttpResponse__body)
                     : result;
 
@@ -100,10 +89,42 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
         }
     }, [transcriptionUrl, onTranscriptionComplete]);
 
+    // ✅ NEW: Function to analyze audio volume
+    const analyzeAudio = useCallback(() => {
+        if (!analyserRef.current) return;
+
+        const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+        analyserRef.current.getByteFrequencyData(dataArray);
+
+        // Calculate average volume
+        let sum = 0;
+        // We only check the lower half of frequencies where voice usually lives
+        const length = dataArray.length / 2; 
+        for (let i = 0; i < length; i++) {
+            sum += dataArray[i];
+        }
+        const average = sum / length;
+        
+        // Normalize to 0-100 range (approximate)
+        // 255 is max byte data, but average voice is usually lower
+        const volume = Math.min(100, Math.round((average / 60) * 100));
+        
+        setVoiceVolume(volume);
+        animationFrameRef.current = requestAnimationFrame(analyzeAudio);
+    }, []);
+
     const stopRecording = useCallback(() => {
         if (mediaRecorderRef.current?.state === 'recording') {
             mediaRecorderRef.current.stop();
         }
+        
+        // ✅ NEW: Cleanup Audio Context
+        if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+        if (sourceRef.current) { sourceRef.current.disconnect(); sourceRef.current = null; }
+        if (analyserRef.current) { analyserRef.current.disconnect(); analyserRef.current = null; }
+        if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
+        setVoiceVolume(0);
+
         if (streamRef.current) {
             streamRef.current.getTracks().forEach((track) => track.stop());
             streamRef.current = null;
@@ -117,7 +138,6 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
         setIsRecording(false);
     }, []);
 
-    // Keep the ref in sync so the VAD callback can always call the latest version
     useEffect(() => {
         stopRecordingRef.current = stopRecording;
     }, [stopRecording]);
@@ -128,6 +148,23 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             streamRef.current = stream;
+
+            // ✅ NEW: Setup Audio Context for visualization
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            const audioCtx = new AudioContext();
+            const analyser = audioCtx.createAnalyser();
+            const source = audioCtx.createMediaStreamSource(stream);
+            
+            analyser.fftSize = 256;
+            analyser.smoothingTimeConstant = 0.5; // Smooths out the animation
+            source.connect(analyser);
+            
+            audioContextRef.current = audioCtx;
+            analyserRef.current = analyser;
+            sourceRef.current = source;
+            
+            // Start analysis loop
+            analyzeAudio();
 
             const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
             mediaRecorderRef.current = recorder;
@@ -146,7 +183,6 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
                     1000
                 );
 
-                // Hard cap: auto-stop after MAX_RECORDING_SECONDS regardless of VAD
                 autoStopTimerRef.current = setTimeout(() => {
                     console.log('Recording time limit reached. Stopping automatically.');
                     stopRecordingRef.current?.();
@@ -160,12 +196,11 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
             recorder.start();
         } catch (err) {
             console.error('Microphone access error:', err);
-            alert(
-                'Could not access the microphone. Please check your browser permissions.'
-            );
+            alert('Could not access the microphone. Please check your browser permissions.');
         }
-    }, [transcribeAudioBlob]);
+    }, [transcriptionUrl, analyzeAudio, transcribeAudioBlob]); // Added analyzeAudio dependency
 
+    // ... (rest of the hook remains the same: cancelTranscription, retryTranscription, etc.) ...
     const cancelTranscription = useCallback(() => {
         if (transcriptionAbortControllerRef.current) {
             transcriptionAbortControllerRef.current.abort();
@@ -183,7 +218,6 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
         setFailedAudioBlob(null);
     }, []);
 
-    // Warning threshold effect
     useEffect(() => {
         if (isRecording && elapsedTime >= WARNING_THRESHOLD_SECONDS) {
             if (!isNearingTimeLimit) setIsNearingTimeLimit(true);
@@ -192,11 +226,11 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
         }
     }, [elapsedTime, isRecording, isNearingTimeLimit]);
 
-    // General cleanup
     useEffect(
         () => () => {
             if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
             if (autoStopTimerRef.current) clearTimeout(autoStopTimerRef.current);
+            if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current); // Cleanup animation
             if (streamRef.current) {
                 streamRef.current.getTracks().forEach((track) => track.stop());
             }
@@ -216,9 +250,9 @@ export const useVoiceInput = ({ transcriptionUrl, onTranscriptionComplete }) => 
         retryTranscription,
         clearFailedTranscription,
         isNearingTimeLimit,
-        // VAD-specific
         silenceCountdown,
         vadStatus,
         cancelSilenceCountdown,
+        voiceVolume, // ✅ EXPORTED
     };
 };

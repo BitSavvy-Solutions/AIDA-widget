@@ -6,6 +6,7 @@ import {
 } from 'react-icons/hi2';
 import AttachmentButton from './AttachmentButton';
 import ContextSelector from './ContextSelector';
+import VoiceVisualizer from './VoiceVisualizer';
 
 const ChatInput = ({
     currentMessage,
@@ -47,6 +48,8 @@ const ChatInput = ({
     // ── VAD props ──
     silenceCountdown,
     onCancelSilenceCountdown,
+    // ── Voice Visualization ──
+    voiceVolume = 0,
 }) => {
     const [isHoveringSend, setIsHoveringSend] = useState(false);
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
@@ -215,18 +218,13 @@ const ChatInput = ({
             const isCurrentlyTranscribing = isTranscribing;
             const isCancelHover = isCurrentlyTranscribing && isHoveringCancel;
 
-            // ── Silence countdown is active ──────────────────────────────────
             const hasSilenceCountdown = isCurrentlyRecording && silenceCountdown !== null;
 
-            // Pill background:
-            // • Silence countdown → amber/orange to signal "about to stop"
-            // • Normal recording  → red
-            // • Transcribing      → gray (or red on cancel hover)
             let pillBgColor;
             if (hasSilenceCountdown) {
                 pillBgColor = 'bg-amber-500 hover:bg-amber-600';
             } else if (isCurrentlyRecording) {
-                pillBgColor = `bg-red-600 hover:bg-red-700 ${isNearingTimeLimit ? 'animate-pulse' : ''}`;
+                pillBgColor = `bg-red-500 hover:bg-red-600 ${isNearingTimeLimit ? 'animate-pulse' : ''}`;
             } else if (isCancelHover) {
                 pillBgColor = 'bg-red-600 hover:bg-red-700';
             } else {
@@ -238,7 +236,6 @@ const ChatInput = ({
             const handlePillClick = () => {
                 if (isCurrentlyRecording) {
                     if (hasSilenceCountdown) {
-                        // Cancel the VAD countdown — keep recording
                         onCancelSilenceCountdown?.();
                     } else {
                         handleRecordButtonClick();
@@ -267,9 +264,7 @@ const ChatInput = ({
                     {isCurrentlyRecording ? (
                         <>
                             {hasSilenceCountdown ? (
-                                // Silence countdown display
                                 <>
-                                    {/* Animated ring around the countdown number */}
                                     <span className="relative flex items-center justify-center w-5 h-5 shrink-0">
                                         <svg
                                             className="absolute inset-0 w-full h-full -rotate-90"
@@ -296,16 +291,32 @@ const ChatInput = ({
                                             {silenceCountdown}
                                         </span>
                                     </span>
-                                    <span className="font-sans text-xs font-medium">
-                                        Tap to keep
-                                    </span>
+                                    
+                                    {/* ✅ MODIFIED: Show Visualizer in Orange state if volume > 2 */}
+                                    {voiceVolume > 2 ? (
+                                        <div className="mx-1">
+                                            <VoiceVisualizer volume={voiceVolume} theme={theme} />
+                                        </div>
+                                    ) : (
+                                        <span className="font-sans text-xs font-medium">
+                                            Tap to keep
+                                        </span>
+                                    )}
+
                                     <span className="font-mono text-sm font-medium tracking-wider opacity-70">
                                         {formatTime(elapsedTime)}
                                     </span>
                                 </>
                             ) : (
                                 <>
-                                    <HiStop className="h-5 w-5 flex-shrink-0" />
+                                    {/* ✅ MODIFIED: Lowered threshold to 2 for better responsiveness */}
+                                    <div className="flex items-center justify-center w-6">
+                                        {voiceVolume > 2 ? (
+                                            <VoiceVisualizer volume={voiceVolume} theme={theme} />
+                                        ) : (
+                                            <HiStop className="h-5 w-5 flex-shrink-0" />
+                                        )}
+                                    </div>
                                     <span className="font-mono text-sm font-medium tracking-wider">
                                         {formatTime(elapsedTime)}
                                     </span>
