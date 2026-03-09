@@ -5,13 +5,13 @@ import remarkGfm from 'remark-gfm';
 import { HiSpeakerWave, HiPlay, HiPause, HiPaperClip, HiChevronDown, HiChevronUp, HiClipboard, HiCheck, HiPencilSquare } from 'react-icons/hi2';
 import ReasoningDisplay from './ReasoningDisplay';
 import ShikiHighlighter, { isInlineCode } from 'react-shiki';
+import LinkPopover from './LinkPopover'; // ✅ NEW
 
 // --- 1. SIMPLIFIED HOOK: Handles the typing logic ---
 const useSmoothTyping = (targetText, isActive) => {
     const [displayedText, setDisplayedText] = useState('');
 
     useEffect(() => {
-        // If not active (streaming finished), snap to full text immediately
         if (!isActive) {
             setDisplayedText(targetText);
             return;
@@ -21,14 +21,9 @@ const useSmoothTyping = (targetText, isActive) => {
 
         const animate = () => {
             setDisplayedText((prev) => {
-                // If we caught up, stop updating
                 if (prev.length >= targetText.length) return prev;
-
-                // Dynamic Speed: If we are far behind, type faster. If close, type slower.
-                // This prevents the typing from lagging behind a fast API.
                 const distance = targetText.length - prev.length;
                 const speed = Math.max(1, Math.floor(distance / 10)); 
-                
                 return targetText.slice(0, prev.length + speed);
             });
             animationFrameId = requestAnimationFrame(animate);
@@ -41,7 +36,7 @@ const useSmoothTyping = (targetText, isActive) => {
     return displayedText;
 };
 
-// --- 2. Helper Component to apply the hook cleanly ---
+// --- 2. Helper Component ---
 const SmoothMessage = ({ text, isStreaming, components }) => {
     const typedText = useSmoothTyping(text, isStreaming);
     
@@ -93,9 +88,7 @@ const CodeBlock = ({ className, children, node, ...props }) => {
             await navigator.clipboard.writeText(code);
             setCopied(true);
             setTimeout(() => setCopied(false), 1200);
-        } catch (_) {
-            // ignore
-        }
+        } catch (_) {}
     };
     
     const rawFilename = className ? className.replace('language-', '') : '';
@@ -156,7 +149,7 @@ const CodeBlock = ({ className, children, node, ...props }) => {
                     language={language}
                     theme="github-dark"
                     addDefaultStyles={false}
-                    showLanguage = {false}
+                    showLanguage={false}
                     {...props}
                 >
                     {code}
@@ -216,7 +209,8 @@ const ChatDisplay = ({
     isLoading = false,
     liveReasoning,
     onViewAttachments,
-    contextLimit = 10
+    contextLimit = 10,
+    onScrapeUrl,  // ✅ NEW prop
 }) => {
     const [copiedId, setCopiedId] = useState(null);
     const containerRef = useRef(null);
@@ -232,17 +226,20 @@ const ChatDisplay = ({
 
     const speechApiSupported = useMemo(() => typeof window !== 'undefined' && 'speechSynthesis' in window, []);
 
-    // Define markdown components once
+    // ✅ UPDATED: markdownComponents now uses LinkPopover for all <a> tags.
+    // theme and onScrapeUrl are in the dependency array so the components
+    // update if either changes.
     const markdownComponents = useMemo(() => ({
         code: CodeBlock,
         a({ href, children }) {
+            if (!href) return <span>{children}</span>;
             return (
-                <a href={href} target="_blank" rel="noopener noreferrer" className="markdown-link">
+                <LinkPopover url={href} onScrape={onScrapeUrl} theme={theme}>
                     {children}
-                </a>
+                </LinkPopover>
             );
-        }
-    }), []);
+        },
+    }), [theme, onScrapeUrl]); // ✅ proper deps
 
     useEffect(() => {
         if (editingMessageId && editInputRef.current) {
@@ -515,7 +512,6 @@ const ChatDisplay = ({
                                     </div>
                                 ) : (
                                     trimmedText !== '' ? (
-                                        // ✅ MODIFIED: Use the simple wrapper component here
                                         isBotLoading ? (
                                             <SmoothMessage 
                                                 text={messageText} 
@@ -562,7 +558,7 @@ const ChatDisplay = ({
 
                             {!isBotLoading && !isEditing && (
                                 <div className="mt-3 flex items-center gap-2 select-none">
-                                    {/* 1. Copy Button */}
+                                    {/* Copy */}
                                     <button
                                         type="button"
                                         onClick={() => handleCopy(messageText, message.id)}
@@ -575,7 +571,7 @@ const ChatDisplay = ({
                                         </svg>
                                     </button>
 
-                                    {/* Speech Button */}
+                                    {/* Speech */}
                                     {speechApiSupported && trimmedText !== '' && (
                                         <button
                                             type="button"
@@ -600,7 +596,7 @@ const ChatDisplay = ({
                                         </button>
                                     )}
 
-                                    {/* Retry/Regenerate Buttons */}
+                                    {/* Retry / Regenerate */}
                                     {message.sender === 'user' && onRegenerateResponse && (
                                         <button
                                             type="button"
@@ -646,8 +642,8 @@ const ChatDisplay = ({
                                     {copiedId === message.id && (
                                         <span className="text-xs text-green-600">Copied</span>
                                     )}
-                                 </div>
-                             )}
+                                </div>
+                            )}
                         </div>
                     </div>
                 );
