@@ -1,48 +1,41 @@
 /* src/AidaWidget/LinkPopover.jsx */
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { HiArrowTopRightOnSquare, HiPaperClip } from 'react-icons/hi2';
+import { HiArrowTopRightOnSquare, HiPaperClip, HiEye } from 'react-icons/hi2'; // ✅ Added HiEye
 
-/**
- * Wraps any inline content (usually a URL label) and shows a small popover on
- * click with two choices:
- *   1. Open in a new browser tab.
- *   2. Fetch the page and add it as an attachment (same workflow as the URL
- *      input inside AttachmentModal).
- *
- * @param {string}   url       – The full URL string.
- * @param {Function} [onScrape] – Called with `url` when the user chooses "Fetch".
- *                                If omitted, that option is hidden.
- * @param {string}   [theme]   – 'dark' | 'light'
- * @param {*}        children  – The visible trigger content.
- */
-const LinkPopover = ({ url, onScrape, theme = 'dark', children }) => {
+const LinkPopover = ({ url, onScrape, onEmbed, theme = 'dark', children }) => { // ✅ Added onEmbed prop
     const [isOpen, setIsOpen] = useState(false);
     const [coords, setCoords] = useState({ top: 0, left: 0 });
     const triggerRef = useRef(null);
     const popoverRef = useRef(null);
     const isDark = theme === 'dark';
 
+    // ... (Keep existing computeCoords, handleClick, close, useEffect logic exactly the same) ...
     // ── Position ──────────────────────────────────────────────────────────────
     const computeCoords = useCallback(() => {
         const el = triggerRef.current;
         if (!el) return;
         const rect = el.getBoundingClientRect();
-        const PW = 244;                            // fixed popover width
-        const PH = onScrape ? 112 : 70;            // estimated height
+        const PW = 244;
+        // Calculate height based on available buttons
+        let estimatedHeight = 50; // Base for URL display
+        if (onEmbed) estimatedHeight += 40;
+        if (onScrape) estimatedHeight += 40;
+        estimatedHeight += 40; // Open in new tab
+
+        const PH = estimatedHeight; 
         const vw = window.innerWidth;
         const vh = window.innerHeight;
 
         const left = Math.max(8, Math.min(rect.left, vw - PW - 8));
         const top  =
             rect.bottom + PH + 10 > vh
-                ? Math.max(8, rect.top - PH - 6)  // open above
-                : rect.bottom + 6;                 // open below
+                ? Math.max(8, rect.top - PH - 6)
+                : rect.bottom + 6;
 
         setCoords({ top, left });
-    }, [onScrape]);
+    }, [onScrape, onEmbed]);
 
-    // ── Toggle ────────────────────────────────────────────────────────────────
     const handleClick = useCallback(
         (e) => {
             e.preventDefault();
@@ -55,7 +48,6 @@ const LinkPopover = ({ url, onScrape, theme = 'dark', children }) => {
 
     const close = useCallback(() => setIsOpen(false), []);
 
-    // ── Close on outside-click / Escape ───────────────────────────────────────
     useEffect(() => {
         if (!isOpen) return;
         const onDown = (e) => {
@@ -73,7 +65,7 @@ const LinkPopover = ({ url, onScrape, theme = 'dark', children }) => {
         };
     }, [isOpen, close]);
 
-    // ── Popover markup (portal → document.body) ───────────────────────────────
+    // ── Popover markup ───────────────────────────────
     const popoverNode = (
         <div
             ref={popoverRef}
@@ -99,7 +91,25 @@ const LinkPopover = ({ url, onScrape, theme = 'dark', children }) => {
                 {url}
             </div>
 
-            {/* ① Open in new tab */}
+            {/* ✅ NEW: Open Here (Embed) */}
+            {onEmbed && (
+                <button
+                    type="button"
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors ${
+                        isDark ? 'hover:bg-white/10' : 'hover:bg-gray-50'
+                    }`}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onEmbed(url);
+                        close();
+                    }}
+                >
+                    <HiEye className="w-4 h-4 flex-shrink-0 opacity-70" />
+                    <span>Open here</span>
+                </button>
+            )}
+
+            {/* Open in new tab */}
             <button
                 type="button"
                 className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors ${
@@ -115,7 +125,7 @@ const LinkPopover = ({ url, onScrape, theme = 'dark', children }) => {
                 <span>Open in new tab</span>
             </button>
 
-            {/* ② Fetch & attach */}
+            {/* Fetch & attach */}
             {onScrape && (
                 <button
                     type="button"

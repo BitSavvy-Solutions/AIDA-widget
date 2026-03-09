@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm';
 import { HiSpeakerWave, HiPlay, HiPause, HiPaperClip, HiChevronDown, HiChevronUp, HiClipboard, HiCheck, HiPencilSquare } from 'react-icons/hi2';
 import ReasoningDisplay from './ReasoningDisplay';
 import ShikiHighlighter, { isInlineCode } from 'react-shiki';
-import LinkPopover from './LinkPopover'; // ✅ NEW
+import LinkPopover from './LinkPopover'; 
 
 // --- 1. SIMPLIFIED HOOK: Handles the typing logic ---
 const useSmoothTyping = (targetText, isActive) => {
@@ -210,7 +210,8 @@ const ChatDisplay = ({
     liveReasoning,
     onViewAttachments,
     contextLimit = 10,
-    onScrapeUrl,  // ✅ NEW prop
+    onScrapeUrl,
+    onEmbedUrl, // ✅ NEW PROP
 }) => {
     const [copiedId, setCopiedId] = useState(null);
     const containerRef = useRef(null);
@@ -227,19 +228,22 @@ const ChatDisplay = ({
     const speechApiSupported = useMemo(() => typeof window !== 'undefined' && 'speechSynthesis' in window, []);
 
     // ✅ UPDATED: markdownComponents now uses LinkPopover for all <a> tags.
-    // theme and onScrapeUrl are in the dependency array so the components
-    // update if either changes.
     const markdownComponents = useMemo(() => ({
         code: CodeBlock,
         a({ href, children }) {
             if (!href) return <span>{children}</span>;
             return (
-                <LinkPopover url={href} onScrape={onScrapeUrl} theme={theme}>
+                <LinkPopover 
+                    url={href} 
+                    onScrape={onScrapeUrl} 
+                    onEmbed={onEmbedUrl} // ✅ Pass the handler
+                    theme={theme}
+                >
                     {children}
                 </LinkPopover>
             );
         },
-    }), [theme, onScrapeUrl]); // ✅ proper deps
+    }), [theme, onScrapeUrl, onEmbedUrl]); // ✅ Added onEmbedUrl to deps
 
     useEffect(() => {
         if (editingMessageId && editInputRef.current) {

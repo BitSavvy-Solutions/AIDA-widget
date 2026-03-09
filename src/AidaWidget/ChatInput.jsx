@@ -1,9 +1,9 @@
 /* src/AidaWidget/ChatInput.jsx */
-import React, { useState, useMemo } from 'react'; // ✅ added useMemo
+import React, { useState, useMemo } from 'react';
 import { 
     HiPaperAirplane, HiOutlineMicrophone, HiStop, HiArrowPath, HiXMark, 
     HiChevronDown, HiOutlineGlobeAlt, HiLightBulb, HiPhoto, HiChatBubbleLeftRight,
-    HiArrowTopRightOnSquare, HiPaperClip  // ✅ NEW icons
+    HiArrowTopRightOnSquare, HiPaperClip, HiEye // ✅ Added HiEye
 } from 'react-icons/hi2';
 import AttachmentButton from './AttachmentButton';
 import ContextSelector from './ContextSelector';
@@ -65,7 +65,8 @@ const ChatInput = ({
     onAddImages,
     contextLimit,
     setContextLimit,
-    onScrapeUrl,  // ✅ NEW — called with a URL string to fetch & attach
+    onScrapeUrl,
+    onEmbedUrl, // ✅ NEW PROP
 }) => {
     const [isHoveringSend, setIsHoveringSend] = useState(false);
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
@@ -324,6 +325,23 @@ const ChatInput = ({
                             <span className={`px-2 py-1 truncate max-w-[110px] ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
                                 {getHostname(url)}
                             </span>
+
+                            {/* ✅ NEW: Open Here (Embed) */}
+                            {onEmbedUrl && (
+                                <button
+                                    type="button"
+                                    onClick={() => onEmbedUrl(url)}
+                                    className={`px-1.5 py-1 border-l flex-shrink-0 transition-colors ${
+                                        isDark
+                                            ? 'border-gray-600 text-gray-400 hover:bg-gray-700 hover:text-gray-100'
+                                            : 'border-gray-300 text-gray-500 hover:bg-gray-200 hover:text-gray-900'
+                                    }`}
+                                    title="Open here"
+                                    aria-label={`Open ${url} here`}
+                                >
+                                    <HiEye className="w-3 h-3" />
+                                </button>
+                            )}
 
                             {/* Open in new tab */}
                             <button

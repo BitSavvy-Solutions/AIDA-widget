@@ -6,6 +6,7 @@ import ChatHistoryPanel from './ChatHistoryPanel';
 import ChatDisplay from './ChatDisplay';
 import AttachmentModal from './AttachmentModal';
 import ErrorModal from './ErrorModal';
+import EmbedModal from './EmbedModal'; // ✅ NEW IMPORT
 import './AidaWidget.css';
 import ChatInput from './ChatInput'; 
 
@@ -86,6 +87,8 @@ const AidaWidget = (props) => {
     const [promptDraft, setPromptDraft] = useState('');
     const [imagePreview, setImagePreview] = useState(null);
     const [viewingMessageAttachments, setViewingMessageAttachments] = useState(null);
+    const [embedUrl, setEmbedUrl] = useState(null); // ✅ NEW STATE for Embed Modal
+
     const inputRef = useRef(null);
     const messagesEndRef = useRef(null);
     const programmaticScrollRef = useRef(false);
@@ -180,6 +183,11 @@ const AidaWidget = (props) => {
         setEditingMessageId(null);
         setEditDraft('');
     }, [editingMessageId, editDraft, currentSessionId, updateCurrentSession, setMessages]);
+
+    // ✅ NEW: Handler to open the embed modal
+    const handleOpenEmbed = useCallback((url) => {
+        setEmbedUrl(url);
+    }, []);
 
     const shouldAutoScroll = isLoading ? !isAutoScrollPaused : isAtBottom;
     
@@ -376,6 +384,7 @@ const AidaWidget = (props) => {
                             onViewAttachments={handleViewAttachments}
                             contextLimit={contextLimit}
                             onScrapeUrl={addUrlAttachment}
+                            onEmbedUrl={handleOpenEmbed} // ✅ Pass handler
                         />
                         <ChatInput 
                             currentMessage={currentMessage}
@@ -420,6 +429,7 @@ const AidaWidget = (props) => {
                             contextLimit={contextLimit}
                             setContextLimit={setContextLimit}
                             onScrapeUrl={addUrlAttachment}
+                            onEmbedUrl={handleOpenEmbed} // ✅ Pass handler
                         />
                     </div>
                 </div>
@@ -482,6 +492,14 @@ const AidaWidget = (props) => {
                     </div>
                 </div>
             )}
+
+            {/* ✅ NEW: Embed Modal */}
+            <EmbedModal 
+                isOpen={!!embedUrl} 
+                url={embedUrl} 
+                onClose={() => setEmbedUrl(null)} 
+                theme={theme} 
+            />
 
             <ErrorModal isOpen={!!apiError} onClose={clearApiError} error={apiError} userEmail={user?.email} theme={theme} />
         </>
