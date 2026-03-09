@@ -1,16 +1,15 @@
 /* src/AidaWidget/LinkPopover.jsx */
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { HiArrowTopRightOnSquare, HiPaperClip, HiEye } from 'react-icons/hi2'; // ✅ Added HiEye
+import { HiArrowTopRightOnSquare, HiPaperClip, HiEye } from 'react-icons/hi2';
 
-const LinkPopover = ({ url, onScrape, onEmbed, theme = 'dark', children }) => { // ✅ Added onEmbed prop
+const LinkPopover = ({ url, onScrape, onEmbed, theme = 'dark', children }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [coords, setCoords] = useState({ top: 0, left: 0 });
     const triggerRef = useRef(null);
     const popoverRef = useRef(null);
     const isDark = theme === 'dark';
 
-    // ... (Keep existing computeCoords, handleClick, close, useEffect logic exactly the same) ...
     // ── Position ──────────────────────────────────────────────────────────────
     const computeCoords = useCallback(() => {
         const el = triggerRef.current;
@@ -71,7 +70,9 @@ const LinkPopover = ({ url, onScrape, onEmbed, theme = 'dark', children }) => { 
             ref={popoverRef}
             role="dialog"
             aria-label="Link options"
-            className={`fixed z-[300] w-60 rounded-xl overflow-hidden shadow-2xl border ${
+            // ✅ UPDATED: z-[99999] ensures it beats the App.jsx widget container (z-1000)
+            // and most host website headers/modals.
+            className={`fixed z-[99999] w-60 rounded-xl overflow-hidden shadow-2xl border ${
                 isDark
                     ? 'bg-gray-800 border-gray-700 text-gray-100'
                     : 'bg-white border-gray-200 text-gray-900'
@@ -91,7 +92,7 @@ const LinkPopover = ({ url, onScrape, onEmbed, theme = 'dark', children }) => { 
                 {url}
             </div>
 
-            {/* ✅ NEW: Open Here (Embed) */}
+            {/* Open Here (Embed) */}
             {onEmbed && (
                 <button
                     type="button"
@@ -166,6 +167,7 @@ const LinkPopover = ({ url, onScrape, onEmbed, theme = 'dark', children }) => { 
             </span>
             {isOpen &&
                 typeof document !== 'undefined' &&
+                document.body &&
                 createPortal(popoverNode, document.body)}
         </>
     );
