@@ -52,7 +52,6 @@ export const useChatAPI = ({
 
     const buildMessageHistoryPayload = useCallback((history = []) => {
         const messageHistory = [];
-        // System instructions are ALWAYS added first, regardless of history slicing
         if (pageContext && Object.keys(pageContext).length > 0) {
             messageHistory.push({ type: 'ai', content: `<PageContext>\n${JSON.stringify(pageContext, null, 2)}\n</PageContext>` });
         }
@@ -60,7 +59,6 @@ export const useChatAPI = ({
             messageHistory.push({ type: 'human', content: customPrompt.trim() });
         }
         
-        // Add the sliced history
         (history || []).forEach(m => {
             const messagePayload = {
                 type: m.sender === 'user' ? 'human' : 'ai',
@@ -78,13 +76,16 @@ export const useChatAPI = ({
         return messageHistory;
     }, [customPrompt, pageContext, formatMessageContent]);
 
-    // ✅ UPDATED: Added contextLimit parameter
     const streamResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit = 10 }) => {
         setIsLoading(true);
         setLastCost(0);
         setLiveReasoning({ text: '', botId: botMessageId, contentHasStarted: false });
         setApiError(null); 
         liveReasoningTextRef.current = '';
+
+        // ✅ NEW: Track per-response metadata locally
+        let localCost = 0;
+        let localTokenUsage = null;
 
         const abortController = new AbortController();
         streamAbortControllerRef.current = abortController;
@@ -95,9 +96,6 @@ export const useChatAPI = ({
         const imageAttachments = (userMessage.attachments || []).filter(att => att.type === 'image');
         const imageUrls = imageAttachments.map(img => img.src).filter(Boolean);
 
-        // ✅ NEW: Apply context limit logic
-        // If contextLimit is 'Infinity' or very large, it takes everything.
-        // We slice from the end (-limit).
         let limitedHistory = historyForPayload;
         if (typeof contextLimit === 'number' && contextLimit > 0) {
             limitedHistory = historyForPayload.slice(-contextLimit);
@@ -105,7 +103,6 @@ export const useChatAPI = ({
 
         try {
             const payload = {
-                // Pass the limited history to the builder
                 message_history: buildMessageHistoryPayload(limitedHistory),
                 user_id: user.id,
                 email: user.email,
@@ -207,20 +204,41 @@ export const useChatAPI = ({
                                 setLiveReasoning(prev => ({ ...prev, text: liveReasoningTextRef.current }));
                             }
 
-                            if (data.cost !== undefined) setLastCost(data.cost);
+                            // ✅ MODIFIED: Track cost and token usage locally
+                            if (data.cost !== undefined) {
+                                localCost = data.cost;
+                                setLastCost(data.cost);
+                            }
+                            if (data.token_usage) {
+                                localTokenUsage = data.token_usage;
+                            }
 
                         } catch (e) { console.error("Stream parse error:", part, e); }
                     }
                 }
             }
 
-            if (liveReasoningTextRef.current) {
-                setMessages(prev => prev.map(m =>
-                    m.id === botMessageId
-                        ? { ...m, reasoning: liveReasoningTextRef.current }
-                        : m
-                ));
-            }
+            // ✅ NEW: Build the metadata object from what we collected
+            const finalMeta = {
+                model: userMessage.model,
+                webSearchEnabled: userMessage.webSearchEnabled || false,
+                tokenUsage: localTokenUsage,
+                cost: localCost > 0 ? localCost : null,
+            };
+
+            // ✅ MODIFIED: Single setMessages call for both reasoning and meta
+            setMessages(prev => {
+                const updated = prev.map(m => {
+                    if (m.id !== botMessageId) return m;
+                    return {
+                        ...m,
+                        ...(liveReasoningTextRef.current ? { reasoning: liveReasoningTextRef.current } : {}),
+                        meta: finalMeta,
+                    };
+                });
+                finalMessages = updated;
+                return updated;
+            });
             
             const targetSessionId = sessionId || currentSessionId;
             if (targetSessionId && finalMessages) {

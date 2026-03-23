@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { HiSpeakerWave, HiPlay, HiPause, HiPaperClip, HiChevronDown, HiChevronUp, HiClipboard, HiCheck, HiPencilSquare } from 'react-icons/hi2';
+import { HiSpeakerWave, HiPlay, HiPause, HiPaperClip, HiChevronDown, HiChevronUp, HiClipboard, HiCheck, HiPencilSquare, HiInformationCircle } from 'react-icons/hi2';
 import ReasoningDisplay from './ReasoningDisplay';
 import ShikiHighlighter, { isInlineCode } from 'react-shiki';
 import LinkPopover from './LinkPopover'; 
@@ -187,6 +187,171 @@ const cleanTextForSpeech = (text) => {
     return text.replace(EMOJI_REGEX, '').replace(/\s+/g, ' ').trim();
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ✅ NEW: Response metadata info popover
+// ─────────────────────────────────────────────────────────────────────────────
+const formatCost = (cost) => {
+    if (!cost || cost <= 0) return null;
+    if (cost < 0.001) return `$${cost.toFixed(6)}`;
+    if (cost < 0.01)  return `$${cost.toFixed(5)}`;
+    return `$${cost.toFixed(4)}`;
+};
+
+const MessageInfoPopover = ({ meta, theme }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const containerRef = useRef(null);
+    const isDark = theme === 'dark';
+
+    // Close on outside click or Escape
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleClick = (e) => {
+            if (!containerRef.current?.contains(e.target)) setIsOpen(false);
+        };
+        const handleKey = (e) => { if (e.key === 'Escape') setIsOpen(false); };
+        document.addEventListener('mousedown', handleClick);
+        window.addEventListener('keydown', handleKey);
+        return () => {
+            document.removeEventListener('mousedown', handleClick);
+            window.removeEventListener('keydown', handleKey);
+        };
+    }, [isOpen]);
+
+    if (!meta) return null;
+
+    // ── Derive display values ──────────────────────────────────────────────
+    const rawModel = meta.model || '';
+    // Strip :online suffix and provider prefix  e.g. "openai/gpt-4o:online" → "gpt-4o"
+    const modelDisplay = rawModel.replace(':online', '').split('/').pop() || null;
+    const isWebSearch = meta.webSearchEnabled || rawModel.includes(':online');
+
+    const tu = meta.tokenUsage;
+    const hasTokens = tu && ((tu.total_tokens ?? 0) > 0 || (tu.input_tokens ?? 0) > 0);
+    const reasoningTokens = tu?.output_token_details?.reasoning ?? 0;
+    const costDisplay = formatCost(meta.cost);
+
+    // Only render the button when there is at least some info worth showing
+    const hasAnything = modelDisplay || hasTokens || costDisplay;
+    if (!hasAnything) return null;
+
+    return (
+        <div className="relative" ref={containerRef}>
+            <button
+                type="button"
+                onClick={() => setIsOpen(p => !p)}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+                title="Response info"
+                aria-label="View response metadata"
+                aria-expanded={isOpen}
+            >
+                <HiInformationCircle className="w-4 h-4" />
+            </button>
+
+            {isOpen && (
+                <div
+                    className={`absolute z-50 bottom-full mb-2 left-0 min-w-[210px] rounded-xl shadow-2xl border p-3 text-xs ${
+                        isDark
+                            ? 'bg-gray-800 border-gray-700 text-gray-200'
+                            : 'bg-white border-gray-200 text-gray-700'
+                    }`}
+                    role="tooltip"
+                    aria-label="Response metadata"
+                >
+                    {/* Section label */}
+                    <p className={`text-[10px] uppercase tracking-wider font-semibold mb-2.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                        Response Info
+                    </p>
+
+                    {/* Model */}
+                    {modelDisplay && (
+                        <div className="flex items-center justify-between gap-3 mb-1.5">
+                            <span className="opacity-60 shrink-0">Model</span>
+                            <span
+                                className="font-mono font-medium truncate text-right max-w-[130px]"
+                                title={rawModel.replace(':online', '')}
+                            >
+                                {modelDisplay}
+                            </span>
+                        </div>
+                    )}
+
+                    {/* Web Search */}
+                    <div className="flex items-center justify-between gap-3">
+                        <span className="opacity-60">Web Search</span>
+                        <span className={`font-medium ${
+                            isWebSearch
+                                ? 'text-blue-400'
+                                : (isDark ? 'text-gray-500' : 'text-gray-400')
+                        }`}>
+                            {isWebSearch ? '● On' : '○ Off'}
+                        </span>
+                    </div>
+
+                    {/* Token usage */}
+                    {hasTokens && (
+                        <>
+                            <div className={`my-2.5 border-t ${isDark ? 'border-gray-700' : 'border-gray-100'}`} />
+
+                            {tu.input_tokens !== undefined && (
+                                <div className="flex items-center justify-between gap-3 mb-1.5">
+                                    <span className="opacity-60">Input</span>
+                                    <span className="font-mono">
+                                        {tu.input_tokens.toLocaleString()}
+                                        <span className="opacity-40"> tok</span>
+                                    </span>
+                                </div>
+                            )}
+
+                            {tu.output_tokens !== undefined && (
+                                <div className="flex items-center justify-between gap-3 mb-1">
+                                    <span className="opacity-60">Output</span>
+                                    <span className="font-mono">
+                                        {tu.output_tokens.toLocaleString()}
+                                        <span className="opacity-40"> tok</span>
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* Reasoning sub-row */}
+                            {reasoningTokens > 0 && (
+                                <div className="flex items-center justify-between gap-3 mb-1.5 pl-3">
+                                    <span className="opacity-50 text-[10px]">↳ Reasoning</span>
+                                    <span className="font-mono text-purple-400">
+                                        {reasoningTokens.toLocaleString()}
+                                        <span className="opacity-40"> tok</span>
+                                    </span>
+                                </div>
+                            )}
+
+                            {tu.total_tokens !== undefined && (
+                                <div className={`flex items-center justify-between gap-3 font-semibold pt-1.5 border-t ${isDark ? 'border-gray-700' : 'border-gray-100'}`}>
+                                    <span className="opacity-80">Total</span>
+                                    <span className="font-mono">
+                                        {tu.total_tokens.toLocaleString()}
+                                        <span className="opacity-40 font-normal"> tok</span>
+                                    </span>
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {/* Cost */}
+                    {costDisplay && (
+                        <>
+                            <div className={`my-2.5 border-t ${isDark ? 'border-gray-700' : 'border-gray-100'}`} />
+                            <div className="flex items-center justify-between gap-3">
+                                <span className="opacity-60">Cost</span>
+                                <span className="font-mono text-green-400">{costDisplay}</span>
+                            </div>
+                        </>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
 
 const ChatDisplay = ({
     messages,
@@ -211,7 +376,7 @@ const ChatDisplay = ({
     onViewAttachments,
     contextLimit = 10,
     onScrapeUrl,
-    onEmbedUrl, // ✅ NEW PROP
+    onEmbedUrl,
 }) => {
     const [copiedId, setCopiedId] = useState(null);
     const containerRef = useRef(null);
@@ -227,7 +392,6 @@ const ChatDisplay = ({
 
     const speechApiSupported = useMemo(() => typeof window !== 'undefined' && 'speechSynthesis' in window, []);
 
-    // ✅ UPDATED: markdownComponents now uses LinkPopover for all <a> tags.
     const markdownComponents = useMemo(() => ({
         code: CodeBlock,
         a({ href, children }) {
@@ -236,14 +400,14 @@ const ChatDisplay = ({
                 <LinkPopover 
                     url={href} 
                     onScrape={onScrapeUrl} 
-                    onEmbed={onEmbedUrl} // ✅ Pass the handler
+                    onEmbed={onEmbedUrl}
                     theme={theme}
                 >
                     {children}
                 </LinkPopover>
             );
         },
-    }), [theme, onScrapeUrl, onEmbedUrl]); // ✅ Added onEmbedUrl to deps
+    }), [theme, onScrapeUrl, onEmbedUrl]);
 
     useEffect(() => {
         if (editingMessageId && editInputRef.current) {
@@ -600,7 +764,7 @@ const ChatDisplay = ({
                                         </button>
                                     )}
 
-                                    {/* Retry / Regenerate */}
+                                    {/* Retry / Regenerate (user messages) */}
                                     {message.sender === 'user' && onRegenerateResponse && (
                                         <button
                                             type="button"
@@ -616,6 +780,7 @@ const ChatDisplay = ({
                                         </button>
                                     )}
 
+                                    {/* Retry (bot messages) */}
                                     {message.sender === 'bot' && onRetryBotMessage && canRetry && (
                                         <button
                                             type="button"
@@ -631,6 +796,7 @@ const ChatDisplay = ({
                                         </button>
                                     )}
 
+                                    {/* Edit */}
                                     {onStartEdit && (
                                         <button
                                             type="button"
@@ -641,6 +807,11 @@ const ChatDisplay = ({
                                         >
                                             <HiPencilSquare className="w-4 h-4" />
                                         </button>
+                                    )}
+
+                                    {/* ✅ NEW: Response metadata info (bot messages only) */}
+                                    {message.sender === 'bot' && message.meta && (
+                                        <MessageInfoPopover meta={message.meta} theme={theme} />
                                     )}
 
                                     {copiedId === message.id && (
