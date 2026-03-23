@@ -1,5 +1,3 @@
-// src/AidaWidget/ChatDisplay.jsx
-/* src/AidaWidget/ChatDisplay.jsx */
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -219,10 +217,8 @@ const MessageInfoPopover = ({ meta, theme }) => {
 
     if (!meta) return null;
 
-    // ── Derive display values ──────────────────────────────────────────────
     const rawModel = meta.model || '';
     const modelDisplay = rawModel.replace(':online', '').split('/').pop() || null;
-    // ✅ CHANGE 1: Derive isWebSearch early so it can color the button
     const isWebSearch = meta.webSearchEnabled || rawModel.includes(':online');
 
     const tu = meta.tokenUsage;
@@ -230,13 +226,11 @@ const MessageInfoPopover = ({ meta, theme }) => {
     const reasoningTokens = tu?.output_token_details?.reasoning ?? 0;
     const costDisplay = formatCost(meta.cost);
 
-    // ✅ CHANGE 1: Include isWebSearch so the button always shows when web was used
     const hasAnything = modelDisplay || hasTokens || costDisplay || isWebSearch;
     if (!hasAnything) return null;
 
     return (
         <div className="relative" ref={containerRef}>
-            {/* ✅ CHANGE 1: Button turns blue when web search was used */}
             <button
                 type="button"
                 onClick={() => setIsOpen(p => !p)}
@@ -376,12 +370,35 @@ const ChatDisplay = ({
     contextLimit = 10,
     onScrapeUrl,
     onEmbedUrl,
-    onDeleteMessage, // ✅ CHANGE 2: New prop
+    onDeleteMessage,
 }) => {
     const [copiedId, setCopiedId] = useState(null);
     const containerRef = useRef(null);
     const messageBodyRefs = useRef(new Map());
     const editInputRef = useRef(null);
+
+    // ── Two-click delete confirmation ─────────────────────────────────────────
+    const [pendingDeleteId, setPendingDeleteId] = useState(null);
+
+    // Auto-reset pending state after 3 seconds of inactivity
+    useEffect(() => {
+        if (!pendingDeleteId) return;
+        const t = setTimeout(() => setPendingDeleteId(null), 3000);
+        return () => clearTimeout(t);
+    }, [pendingDeleteId]);
+
+    // Reset pending delete when the user clicks anywhere outside the message list
+    useEffect(() => {
+        if (!pendingDeleteId) return;
+        const handlePointerDown = (e) => {
+            if (!containerRef.current?.contains(e.target)) {
+                setPendingDeleteId(null);
+            }
+        };
+        document.addEventListener('pointerdown', handlePointerDown);
+        return () => document.removeEventListener('pointerdown', handlePointerDown);
+    }, [pendingDeleteId]);
+    // ─────────────────────────────────────────────────────────────────────────
 
     const [speakingMessageId, setSpeakingMessageId] = useState(null);
     const [speechStatus, setSpeechStatus] = useState('idle');
@@ -597,6 +614,9 @@ const ChatDisplay = ({
 
                 if (hideBotMessage) return null;
 
+                // ── Delete button state for this message ───────────────────
+                const isPendingDelete = pendingDeleteId === message.id;
+
                 return (
                     <div key={message.id} className={`flex ${message.sender === 'user' ? 'justify-end pl-10' : 'justify-start'} ${opacityClass}`}>
                         <div className={`flex flex-col w-full ${message.sender === 'user' ? 'items-end' : 'items-start'}`}>
@@ -809,19 +829,33 @@ const ChatDisplay = ({
                                         </button>
                                     )}
 
-                                    {/* ✅ CHANGE 2: Delete message button */}
+                                    {/* ── Delete: two-click confirmation ───────────────── */}
                                     {onDeleteMessage && (
                                         <button
                                             type="button"
-                                            onClick={() => onDeleteMessage(message.id)}
+                                            onClick={() => {
+                                                if (isPendingDelete) {
+                                                    // Second click → actually delete
+                                                    onDeleteMessage(message.id);
+                                                    setPendingDeleteId(null);
+                                                } else {
+                                                    // First click → arm the button
+                                                    setPendingDeleteId(message.id);
+                                                }
+                                            }}
                                             disabled={isLoading}
-                                            className="text-gray-400 hover:text-red-500 transition-colors p-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            aria-label="Delete message"
-                                            title="Delete message"
+                                            className={`transition-all p-1 rounded disabled:opacity-50 disabled:cursor-not-allowed ${
+                                                isPendingDelete
+                                                    ? 'text-red-500 bg-red-500/15 ring-1 ring-red-500/40 scale-110'
+                                                    : 'text-gray-400 hover:text-red-400'
+                                            }`}
+                                            aria-label={isPendingDelete ? 'Click again to confirm delete' : 'Delete message'}
+                                            title={isPendingDelete ? 'Click again to confirm delete' : 'Delete message'}
                                         >
                                             <HiTrash className="w-4 h-4" />
                                         </button>
                                     )}
+                                    {/* ─────────────────────────────────────────────────── */}
 
                                     {/* Response metadata info (bot messages only) */}
                                     {message.sender === 'bot' && message.meta && (
