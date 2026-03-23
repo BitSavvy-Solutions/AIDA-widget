@@ -6,7 +6,7 @@ import ChatHistoryPanel from './ChatHistoryPanel';
 import ChatDisplay from './ChatDisplay';
 import AttachmentModal from './AttachmentModal';
 import ErrorModal from './ErrorModal';
-import EmbedModal from './EmbedModal'; // ✅ NEW IMPORT
+import EmbedModal from './EmbedModal';
 import './AidaWidget.css';
 import ChatInput from './ChatInput'; 
 
@@ -87,7 +87,7 @@ const AidaWidget = (props) => {
     const [promptDraft, setPromptDraft] = useState('');
     const [imagePreview, setImagePreview] = useState(null);
     const [viewingMessageAttachments, setViewingMessageAttachments] = useState(null);
-    const [embedUrl, setEmbedUrl] = useState(null); // ✅ NEW STATE for Embed Modal
+    const [embedUrl, setEmbedUrl] = useState(null);
 
     const inputRef = useRef(null);
     const messagesEndRef = useRef(null);
@@ -184,7 +184,15 @@ const AidaWidget = (props) => {
         setEditDraft('');
     }, [editingMessageId, editDraft, currentSessionId, updateCurrentSession, setMessages]);
 
-    // ✅ NEW: Handler to open the embed modal
+    // ✅ CHANGE 2: Delete a single message from the current conversation
+    const handleDeleteMessage = useCallback((messageId) => {
+        setMessages(prevMessages => {
+            const updatedMessages = prevMessages.filter(msg => msg.id !== messageId);
+            if (currentSessionId) updateCurrentSession(updatedMessages);
+            return updatedMessages;
+        });
+    }, [setMessages, currentSessionId, updateCurrentSession]);
+
     const handleOpenEmbed = useCallback((url) => {
         setEmbedUrl(url);
     }, []);
@@ -384,7 +392,8 @@ const AidaWidget = (props) => {
                             onViewAttachments={handleViewAttachments}
                             contextLimit={contextLimit}
                             onScrapeUrl={addUrlAttachment}
-                            onEmbedUrl={handleOpenEmbed} // ✅ Pass handler
+                            onEmbedUrl={handleOpenEmbed}
+                            onDeleteMessage={handleDeleteMessage}
                         />
                         <ChatInput 
                             currentMessage={currentMessage}
@@ -429,7 +438,7 @@ const AidaWidget = (props) => {
                             contextLimit={contextLimit}
                             setContextLimit={setContextLimit}
                             onScrapeUrl={addUrlAttachment}
-                            onEmbedUrl={handleOpenEmbed} // ✅ Pass handler
+                            onEmbedUrl={handleOpenEmbed}
                         />
                     </div>
                 </div>
@@ -493,7 +502,6 @@ const AidaWidget = (props) => {
                 </div>
             )}
 
-            {/* ✅ NEW: Embed Modal */}
             <EmbedModal 
                 isOpen={!!embedUrl} 
                 url={embedUrl} 

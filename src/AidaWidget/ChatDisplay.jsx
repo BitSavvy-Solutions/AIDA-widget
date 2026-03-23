@@ -1,8 +1,9 @@
+// src/AidaWidget/ChatDisplay.jsx
 /* src/AidaWidget/ChatDisplay.jsx */
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { HiSpeakerWave, HiPlay, HiPause, HiPaperClip, HiChevronDown, HiChevronUp, HiClipboard, HiCheck, HiPencilSquare, HiInformationCircle } from 'react-icons/hi2';
+import { HiSpeakerWave, HiPlay, HiPause, HiPaperClip, HiChevronDown, HiChevronUp, HiClipboard, HiCheck, HiPencilSquare, HiInformationCircle, HiTrash } from 'react-icons/hi2';
 import ReasoningDisplay from './ReasoningDisplay';
 import ShikiHighlighter, { isInlineCode } from 'react-shiki';
 import LinkPopover from './LinkPopover'; 
@@ -188,7 +189,7 @@ const cleanTextForSpeech = (text) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ✅ NEW: Response metadata info popover
+// Response metadata info popover
 // ─────────────────────────────────────────────────────────────────────────────
 const formatCost = (cost) => {
     if (!cost || cost <= 0) return null;
@@ -202,7 +203,6 @@ const MessageInfoPopover = ({ meta, theme }) => {
     const containerRef = useRef(null);
     const isDark = theme === 'dark';
 
-    // Close on outside click or Escape
     useEffect(() => {
         if (!isOpen) return;
         const handleClick = (e) => {
@@ -221,8 +221,8 @@ const MessageInfoPopover = ({ meta, theme }) => {
 
     // ── Derive display values ──────────────────────────────────────────────
     const rawModel = meta.model || '';
-    // Strip :online suffix and provider prefix  e.g. "openai/gpt-4o:online" → "gpt-4o"
     const modelDisplay = rawModel.replace(':online', '').split('/').pop() || null;
+    // ✅ CHANGE 1: Derive isWebSearch early so it can color the button
     const isWebSearch = meta.webSearchEnabled || rawModel.includes(':online');
 
     const tu = meta.tokenUsage;
@@ -230,17 +230,22 @@ const MessageInfoPopover = ({ meta, theme }) => {
     const reasoningTokens = tu?.output_token_details?.reasoning ?? 0;
     const costDisplay = formatCost(meta.cost);
 
-    // Only render the button when there is at least some info worth showing
-    const hasAnything = modelDisplay || hasTokens || costDisplay;
+    // ✅ CHANGE 1: Include isWebSearch so the button always shows when web was used
+    const hasAnything = modelDisplay || hasTokens || costDisplay || isWebSearch;
     if (!hasAnything) return null;
 
     return (
         <div className="relative" ref={containerRef}>
+            {/* ✅ CHANGE 1: Button turns blue when web search was used */}
             <button
                 type="button"
                 onClick={() => setIsOpen(p => !p)}
-                className="text-gray-400 hover:text-gray-600 transition-colors p-1"
-                title="Response info"
+                className={`transition-colors p-1 ${
+                    isWebSearch
+                        ? 'text-blue-400 hover:text-blue-300'
+                        : 'text-gray-400 hover:text-gray-600'
+                }`}
+                title={isWebSearch ? 'Response info (web search used)' : 'Response info'}
                 aria-label="View response metadata"
                 aria-expanded={isOpen}
             >
@@ -257,12 +262,10 @@ const MessageInfoPopover = ({ meta, theme }) => {
                     role="tooltip"
                     aria-label="Response metadata"
                 >
-                    {/* Section label */}
                     <p className={`text-[10px] uppercase tracking-wider font-semibold mb-2.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                         Response Info
                     </p>
 
-                    {/* Model */}
                     {modelDisplay && (
                         <div className="flex items-center justify-between gap-3 mb-1.5">
                             <span className="opacity-60 shrink-0">Model</span>
@@ -275,7 +278,6 @@ const MessageInfoPopover = ({ meta, theme }) => {
                         </div>
                     )}
 
-                    {/* Web Search */}
                     <div className="flex items-center justify-between gap-3">
                         <span className="opacity-60">Web Search</span>
                         <span className={`font-medium ${
@@ -287,7 +289,6 @@ const MessageInfoPopover = ({ meta, theme }) => {
                         </span>
                     </div>
 
-                    {/* Token usage */}
                     {hasTokens && (
                         <>
                             <div className={`my-2.5 border-t ${isDark ? 'border-gray-700' : 'border-gray-100'}`} />
@@ -312,7 +313,6 @@ const MessageInfoPopover = ({ meta, theme }) => {
                                 </div>
                             )}
 
-                            {/* Reasoning sub-row */}
                             {reasoningTokens > 0 && (
                                 <div className="flex items-center justify-between gap-3 mb-1.5 pl-3">
                                     <span className="opacity-50 text-[10px]">↳ Reasoning</span>
@@ -335,7 +335,6 @@ const MessageInfoPopover = ({ meta, theme }) => {
                         </>
                     )}
 
-                    {/* Cost */}
                     {costDisplay && (
                         <>
                             <div className={`my-2.5 border-t ${isDark ? 'border-gray-700' : 'border-gray-100'}`} />
@@ -377,6 +376,7 @@ const ChatDisplay = ({
     contextLimit = 10,
     onScrapeUrl,
     onEmbedUrl,
+    onDeleteMessage, // ✅ CHANGE 2: New prop
 }) => {
     const [copiedId, setCopiedId] = useState(null);
     const containerRef = useRef(null);
@@ -809,7 +809,21 @@ const ChatDisplay = ({
                                         </button>
                                     )}
 
-                                    {/* ✅ NEW: Response metadata info (bot messages only) */}
+                                    {/* ✅ CHANGE 2: Delete message button */}
+                                    {onDeleteMessage && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onDeleteMessage(message.id)}
+                                            disabled={isLoading}
+                                            className="text-gray-400 hover:text-red-500 transition-colors p-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            aria-label="Delete message"
+                                            title="Delete message"
+                                        >
+                                            <HiTrash className="w-4 h-4" />
+                                        </button>
+                                    )}
+
+                                    {/* Response metadata info (bot messages only) */}
                                     {message.sender === 'bot' && message.meta && (
                                         <MessageInfoPopover meta={message.meta} theme={theme} />
                                     )}
