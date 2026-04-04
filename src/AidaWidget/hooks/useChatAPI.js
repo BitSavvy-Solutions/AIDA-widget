@@ -83,7 +83,6 @@ export const useChatAPI = ({
         setApiError(null); 
         liveReasoningTextRef.current = '';
 
-        // ✅ NEW: Track per-response metadata locally
         let localCost = 0;
         let localTokenUsage = null;
 
@@ -101,22 +100,40 @@ export const useChatAPI = ({
             limitedHistory = historyForPayload.slice(-contextLimit);
         }
 
+        // Resolve auth token: prefer the token passed in the user prop (set at login),
+        // then check localStorage directly as a safety net.
+        // If neither is available, fall back to user_id so the widget still works
+        // when embedded on external sites where users have not logged in via the portal.
+        const apiToken = user?.apiToken || localStorage.getItem('aidaToken') || null;
+
+        const requestHeaders = { 'Content-Type': 'application/json' };
+        if (apiToken) {
+            requestHeaders['Authorization'] = `Bearer ${apiToken}`;
+        }
+
         try {
             const payload = {
                 message_history: buildMessageHistoryPayload(limitedHistory),
-                user_id: user.id,
                 email: user.email,
                 page_path: window.location.pathname,
                 language: detectedLanguageCode,
                 model: userMessage.model,
             };
+
+            // Only include user_id in the payload when no API token is available.
+            // When a token is present the backend identifies the caller from the token,
+            // so sending a raw user_id is redundant and creates a trust conflict.
+            if (!apiToken) {
+                payload.user_id = user.id;
+            }
+
             if (imageUrls.length > 0) {
                 payload.image_data_urls = imageUrls;
             }
 
             const response = await fetch(apiConfig.chatUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: requestHeaders,
                 body: JSON.stringify(payload),
                 signal: abortController.signal,
             });
@@ -204,7 +221,6 @@ export const useChatAPI = ({
                                 setLiveReasoning(prev => ({ ...prev, text: liveReasoningTextRef.current }));
                             }
 
-                            // ✅ MODIFIED: Track cost and token usage locally
                             if (data.cost !== undefined) {
                                 localCost = data.cost;
                                 setLastCost(data.cost);
@@ -218,7 +234,6 @@ export const useChatAPI = ({
                 }
             }
 
-            // ✅ NEW: Build the metadata object from what we collected
             const finalMeta = {
                 model: userMessage.model,
                 webSearchEnabled: userMessage.webSearchEnabled || false,
@@ -226,7 +241,6 @@ export const useChatAPI = ({
                 cost: localCost > 0 ? localCost : null,
             };
 
-            // ✅ MODIFIED: Single setMessages call for both reasoning and meta
             setMessages(prev => {
                 const updated = prev.map(m => {
                     if (m.id !== botMessageId) return m;
