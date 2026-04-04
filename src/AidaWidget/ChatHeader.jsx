@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useMemo, useLayoutEffect } from 're
 import { 
     HiPlus, HiOutlineSun, HiOutlineMoon, HiClock, HiEllipsisVertical, 
     HiMinusSmall, HiOutlineArrowsPointingOut, HiPencilSquare, HiCheck, 
-    HiOutlineTag, HiOutlineCog6Tooth 
+    HiOutlineTag, HiOutlineCog6Tooth, HiOutlineShare
 } from 'react-icons/hi2';
 import { LuHandHeart } from 'react-icons/lu';
 import SevenSegmentDisplay from './SevenSegmentDisplay';
@@ -38,7 +38,8 @@ const ChatHeader = ({
     onCreateProject,
     onAssignChatToProject,
     onRemoveChatFromProject,
-    onUpdateProjectAppearance
+    onUpdateProjectAppearance,
+    onShare,
 }) => {
     const headerColors = 'bg-[#0f172a] text-white backdrop-blur-md border-b border-white/10';
     const hoverColor = theme === 'dark' ? 'hover:bg-white/10' : 'hover:bg-slate-200/70';
@@ -65,7 +66,6 @@ const ChatHeader = ({
     const tagsContainerRef = useRef(null);
     const hiddenMeasureRef = useRef(null);
 
-    // Check if the title is the default one
     const isDefaultTitle = sessionTitle === 'New Chat' || !sessionTitle || sessionTitle.trim() === '';
 
     useEffect(() => {
@@ -98,13 +98,10 @@ const ChatHeader = ({
         return () => observer.disconnect();
     }, []);
 
-    // When editing starts, focus the input
     useEffect(() => {
         if (isEditingTitle && titleInputRef.current) {
             titleInputRef.current.focus();
-            if (!isDefaultTitle) {
-                titleInputRef.current.select();
-            }
+            if (!isDefaultTitle) titleInputRef.current.select();
         }
     }, [isEditingTitle, isDefaultTitle]);
 
@@ -113,7 +110,6 @@ const ChatHeader = ({
         return projects.filter(p => p.chatIds.includes(currentSessionId));
     }, [projects, currentSessionId]);
 
-    // ✅ NEW: Dynamic calculation logic
     useLayoutEffect(() => {
         if (!tagsContainerRef.current || !hiddenMeasureRef.current || assignedProjects.length === 0) {
             setVisibleTagCount(assignedProjects.length);
@@ -123,26 +119,17 @@ const ChatHeader = ({
         const calculateVisibleTags = () => {
             const containerWidth = tagsContainerRef.current.offsetWidth;
             const tagNodes = hiddenMeasureRef.current.children;
-            const gap = 4; // gap-1 is 0.25rem = 4px
-            const badgeWidthApprox = 28; // Approximate width of the "+N" badge including gap
-            
+            const gap = 4;
+            const badgeWidthApprox = 28;
             let currentWidth = 0;
             let count = 0;
 
             for (let i = 0; i < tagNodes.length; i++) {
                 const tagWidth = tagNodes[i].offsetWidth;
-                
-                // Calculate width if we add this tag
-                // If it's not the first tag, add the gap
                 const nextWidth = currentWidth + tagWidth + (i > 0 ? gap : 0);
-
-                // Check if this is the last item
                 if (i === tagNodes.length - 1) {
-                    if (nextWidth <= containerWidth) {
-                        count++;
-                    }
+                    if (nextWidth <= containerWidth) count++;
                 } else {
-                    // If not the last item, we must reserve space for the badge
                     if (nextWidth + gap + badgeWidthApprox <= containerWidth) {
                         currentWidth = nextWidth;
                         count++;
@@ -156,22 +143,15 @@ const ChatHeader = ({
 
         const observer = new ResizeObserver(calculateVisibleTags);
         observer.observe(tagsContainerRef.current);
-        
-        // Initial calculation
         calculateVisibleTags();
-
         return () => observer.disconnect();
-    }, [assignedProjects, isNarrow]); // Recalculate when projects change or header width changes
+    }, [assignedProjects, isNarrow]);
 
     const closeMenu = () => setIsMenuOpen(false);
 
     const handleStartEdit = () => {
         if (!isSessionActive) return;
-        if (isDefaultTitle) {
-            setTitleDraft('');
-        } else {
-            setTitleDraft(sessionTitle);
-        }
+        setTitleDraft(isDefaultTitle ? '' : sessionTitle);
         setIsEditingTitle(true);
     };
 
@@ -206,28 +186,24 @@ const ChatHeader = ({
     const handleCreateTag = () => {
         if (!newTagDraft.trim() || !onCreateProject || !currentSessionId) return;
         const newProjectId = onCreateProject(newTagDraft.trim(), currentSessionId);
-        if (newProjectId) {
-            setNewTagDraft('');
-        }
+        if (newProjectId) setNewTagDraft('');
     };
 
     const visibleTags = assignedProjects.slice(0, visibleTagCount);
     const hiddenTagCount = assignedProjects.length - visibleTagCount;
 
-    // Helper to render a tag (used for both visible and hidden measurement)
-    const renderTag = (p, isHidden = false) => {
+    const renderTag = (p) => {
         const Icon = PROJECT_ICON_OPTIONS.find(opt => opt.key === p.iconKey)?.Icon || NotebookIcon;
         const color = p.iconColor || DEFAULT_PROJECT_ICON_COLOR;
         const bg = hexToRgba(color, 0.15);
-        
         return (
-            <div 
-                key={p.id} 
+            <div
+                key={p.id}
                 className="flex items-center gap-0.5 px-1 py-0.5 rounded-md border border-white/5 shrink-0"
                 style={{ backgroundColor: bg, borderColor: hexToRgba(color, 0.3) }}
             >
-                <Icon className="w-3 h-3 shrink-0" style={{ color: color }} />
-                <span className="text-[10px] font-medium leading-none whitespace-nowrap" style={{ color: color }}>
+                <Icon className="w-3 h-3 shrink-0" style={{ color }} />
+                <span className="text-[10px] font-medium leading-none whitespace-nowrap" style={{ color }}>
                     {p.name}
                 </span>
             </div>
@@ -239,7 +215,11 @@ const ChatHeader = ({
             <div className="flex items-center gap-1 flex-1 min-w-0 mr-2">
                 {/* LCD Display */}
                 {onDisplayClick ? (
-                    <button type="button" onClick={onDisplayClick} className="p-0 bg-transparent border-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 rounded-md shrink-0">
+                    <button
+                        type="button"
+                        onClick={onDisplayClick}
+                        className="p-0 bg-transparent border-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 rounded-md shrink-0"
+                    >
                         <SevenSegmentDisplay text={displayText} />
                     </button>
                 ) : (
@@ -264,13 +244,13 @@ const ChatHeader = ({
                                 />
                             </div>
                         ) : (
-                            <button 
+                            <button
                                 onClick={handleStartEdit}
                                 disabled={!isSessionActive}
                                 className={`
                                     group flex items-center gap-2 px-2 py-1 rounded-md transition-all duration-200 border max-w-full text-left
-                                    ${isDefaultTitle 
-                                        ? 'bg-black/20 border-white/5 text-gray-400 hover:bg-black/40 hover:text-gray-200 hover:border-white/10' 
+                                    ${isDefaultTitle
+                                        ? 'bg-black/20 border-white/5 text-gray-400 hover:bg-black/40 hover:text-gray-200 hover:border-white/10'
                                         : 'bg-transparent border-transparent hover:bg-white/5 text-white'
                                     }
                                     ${!isSessionActive ? 'opacity-50 cursor-default' : 'cursor-pointer'}
@@ -287,7 +267,7 @@ const ChatHeader = ({
                         )}
                     </div>
 
-                    {/* Tags Row (Below Title) */}
+                    {/* Tags Row */}
                     {isSessionActive && (
                         <div className="relative flex items-center mt-1 ml-0.5 w-full" ref={tagMenuRef}>
                             <button
@@ -297,20 +277,16 @@ const ChatHeader = ({
                             >
                                 {assignedProjects.length > 0 ? (
                                     <div className="w-full relative">
-                                        {/* 1. Visible Container: Shows calculated tags */}
                                         <div ref={tagsContainerRef} className="flex items-center gap-1 w-full overflow-hidden">
                                             {visibleTags.map(p => renderTag(p))}
-                                            
                                             {hiddenTagCount > 0 && (
                                                 <div className="flex items-center justify-center px-1.5 py-0.5 rounded-md border border-white/10 bg-white/5 text-[10px] font-medium text-gray-400 shrink-0">
                                                     +{hiddenTagCount}
                                                 </div>
                                             )}
                                         </div>
-
-                                        {/* 2. Hidden Measurement Container: Renders ALL tags to calculate widths */}
-                                        <div 
-                                            ref={hiddenMeasureRef} 
+                                        <div
+                                            ref={hiddenMeasureRef}
                                             className="flex items-center gap-1 absolute top-0 left-0 opacity-0 pointer-events-none invisible"
                                             aria-hidden="true"
                                         >
@@ -325,11 +301,11 @@ const ChatHeader = ({
                                 )}
                             </button>
 
-                            {/* Dropdown Menu */}
+                            {/* Tag dropdown */}
                             {isTagMenuOpen && (
                                 <div className="absolute top-full left-0 mt-2 w-64 rounded-lg bg-slate-800/95 text-sm shadow-xl border border-white/10 z-50 flex flex-col overflow-hidden">
                                     {editingProjectId ? (
-                                        <ProjectIconPicker 
+                                        <ProjectIconPicker
                                             project={projects.find(p => p.id === editingProjectId)}
                                             onUpdate={onUpdateProjectAppearance}
                                             onBack={() => setEditingProjectId(null)}
@@ -349,7 +325,6 @@ const ChatHeader = ({
                                                     const isSelected = project.chatIds.includes(currentSessionId);
                                                     const Icon = PROJECT_ICON_OPTIONS.find(opt => opt.key === project.iconKey)?.Icon || NotebookIcon;
                                                     const color = project.iconColor || DEFAULT_PROJECT_ICON_COLOR;
-                                                    
                                                     return (
                                                         <div key={project.id} className="flex items-center gap-1 group rounded hover:bg-white/5 pr-1">
                                                             <button
@@ -381,7 +356,7 @@ const ChatHeader = ({
                                                         type="text"
                                                         value={newTagDraft}
                                                         onChange={(e) => setNewTagDraft(e.target.value)}
-                                                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCreateTag(); } }}
+                                                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCreateTag(); }}}
                                                         placeholder="Create new tag..."
                                                         className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-brand-coral/50 placeholder-gray-500"
                                                     />
@@ -424,7 +399,12 @@ const ChatHeader = ({
 
             <div className="flex items-center space-x-2 pr-1 shrink-0 ml-2 border-l border-white/10 pl-2">
                 {showFullscreenToggle && typeof toggleFullscreen === 'function' && (
-                    <button onClick={toggleFullscreen} className={`p-1 rounded-full ${hoverColor} transition-colors`} style={{ color: accentColor }} title="Toggle fullscreen">
+                    <button
+                        onClick={toggleFullscreen}
+                        className={`p-1 rounded-full ${hoverColor} transition-colors`}
+                        style={{ color: accentColor }}
+                        title="Toggle fullscreen"
+                    >
                         <HiOutlineArrowsPointingOut className="w-5 h-5" />
                     </button>
                 )}
@@ -437,26 +417,55 @@ const ChatHeader = ({
                     </button>
                 )}
                 <div className="relative" ref={menuRef}>
-                    <button onClick={() => setIsMenuOpen((open) => !open)} className={`p-1 rounded-full ${hoverColor}`} aria-haspopup="menu" aria-expanded={isMenuOpen}>
+                    <button
+                        onClick={() => setIsMenuOpen(p => !p)}
+                        className={`p-1 rounded-full ${hoverColor}`}
+                        aria-haspopup="menu"
+                        aria-expanded={isMenuOpen}
+                    >
                         <HiEllipsisVertical className="w-5 h-5" />
                     </button>
                     {isMenuOpen && (
                         <div className="absolute right-0 mt-2 w-40 rounded-lg bg-slate-800/95 text-sm shadow-lg border border-white/10 py-1 z-50">
-                                {!isMobileViewport && (
-                                    <button onClick={() => { resetChat(); closeMenu(); }} className="w-full px-3 py-2 text-left hover:bg-white/10 flex items-center gap-2">
-                                        <HiPlus className="w-4 h-4" /> <span>New chat</span>
-                                    </button>
-                                )}
-                                {onToggleHistory && (
-                                    <button onClick={() => { onToggleHistory(); closeMenu(); }} className="w-full px-3 py-2 text-left hover:bg-white/10 flex items-center gap-2">
-                                        <HiClock className="w-4 h-4" /> <span>Chat history</span>
-                                    </button>
-                                )}
-                                {onToggleTheme && (
-                                    <button onClick={() => { onToggleTheme(); closeMenu(); }} className="w-full px-3 py-2 text-left hover:bg-white/10 flex items-center gap-2">
-                                        {theme === 'dark' ? <HiOutlineMoon className="w-4 h-4" /> : <HiOutlineSun className="w-4 h-4" />} <span>Toggle theme</span>
-                                    </button>
-                                )}
+                            {!isMobileViewport && (
+                                <button
+                                    onClick={() => { resetChat(); closeMenu(); }}
+                                    className="w-full px-3 py-2 text-left hover:bg-white/10 flex items-center gap-2"
+                                >
+                                    <HiPlus className="w-4 h-4" />
+                                    <span>New chat</span>
+                                </button>
+                            )}
+                            {onShare && (
+                                <button
+                                    onClick={() => { onShare(); closeMenu(); }}
+                                    className="w-full px-3 py-2 text-left hover:bg-white/10 flex items-center gap-2"
+                                >
+                                    <HiOutlineShare className="w-4 h-4" />
+                                    <span>Share</span>
+                                </button>
+                            )}
+                            {onToggleHistory && (
+                                <button
+                                    onClick={() => { onToggleHistory(); closeMenu(); }}
+                                    className="w-full px-3 py-2 text-left hover:bg-white/10 flex items-center gap-2"
+                                >
+                                    <HiClock className="w-4 h-4" />
+                                    <span>Chat history</span>
+                                </button>
+                            )}
+                            {onToggleTheme && (
+                                <button
+                                    onClick={() => { onToggleTheme(); closeMenu(); }}
+                                    className="w-full px-3 py-2 text-left hover:bg-white/10 flex items-center gap-2"
+                                >
+                                    {theme === 'dark'
+                                        ? <HiOutlineMoon className="w-4 h-4" />
+                                        : <HiOutlineSun className="w-4 h-4" />
+                                    }
+                                    <span>Toggle theme</span>
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>

@@ -7,6 +7,7 @@ import ChatDisplay from './ChatDisplay';
 import AttachmentModal from './AttachmentModal';
 import ErrorModal from './ErrorModal';
 import EmbedModal from './EmbedModal';
+import ShareModal from './ShareModal';
 import './AidaWidget.css';
 import ChatInput from './ChatInput'; 
 
@@ -101,6 +102,7 @@ const AidaWidget = (props) => {
     const { messages, setMessages, getSanitizedMessages, loadMessagesForSession } = useChatMessages();
     const { isPanelOpen, openPanel, closePanel, historyItems, projects, currentSessionId, setCurrentSessionId, createNewSession, updateCurrentSession, saveCurrentChatToHistory, historyHandlers } = useChatHistory(getSanitizedMessages);
     const { isOpen: isPromptModalOpen, open: openPromptModal, close: closePromptModal } = useModal();
+    const { isOpen: isShareModalOpen, open: openShareModal, close: closeShareModal } = useModal();
     const { 
         attachments, setAttachments, addImageAttachments, addTextAttachment, addFolderAttachments,
         addUrlAttachment, 
@@ -184,7 +186,6 @@ const AidaWidget = (props) => {
         setEditDraft('');
     }, [editingMessageId, editDraft, currentSessionId, updateCurrentSession, setMessages]);
 
-    // ✅ CHANGE 2: Delete a single message from the current conversation
     const handleDeleteMessage = useCallback((messageId) => {
         setMessages(prevMessages => {
             const updatedMessages = prevMessages.filter(msg => msg.id !== messageId);
@@ -349,7 +350,8 @@ const AidaWidget = (props) => {
                             toggleChat={toggleChat} 
                             theme={theme} 
                             onToggleTheme={() => setTheme(p => p === 'dark' ? 'light' : 'dark')} 
-                            onToggleHistory={openPanel} 
+                            onToggleHistory={openPanel}
+                            onShare={messages.length > 0 ? openShareModal : undefined}
                             onDisplayClick={features.customInstructions ? openPromptModal : undefined}
                             sessionTitle={currentSessionTitle}
                             onRenameSession={handleRenameCurrentSession}
@@ -502,11 +504,19 @@ const AidaWidget = (props) => {
                 </div>
             )}
 
-            <EmbedModal 
-                isOpen={!!embedUrl} 
-                url={embedUrl} 
-                onClose={() => setEmbedUrl(null)} 
-                theme={theme} 
+            <EmbedModal
+                isOpen={!!embedUrl}
+                url={embedUrl}
+                onClose={() => setEmbedUrl(null)}
+                theme={theme}
+            />
+
+            <ShareModal
+                isOpen={isShareModalOpen}
+                onClose={closeShareModal}
+                messages={messages}
+                sessionTitle={currentSessionTitle}
+                theme={theme}
             />
 
             <ErrorModal isOpen={!!apiError} onClose={clearApiError} error={apiError} userEmail={user?.email} theme={theme} />
