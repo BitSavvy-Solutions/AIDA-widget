@@ -78,14 +78,27 @@ const ChatInput = ({
     const isPillMode = autoRecordCountdown !== null || transcriptionError || isRecording || isTranscribing;
 
     const filteredModels = useMemo(() => {
+        // Fix Bug 2: deduplicate by value before doing anything else
+        const seen = new Set();
+        const unique = availableModels.filter((m) => {
+            if (seen.has(m.value)) return false;
+            seen.add(m.value);
+            return true;
+        });
+    
         const q = modelSearchQuery.trim().toLowerCase();
-        if (!q) return availableModels;
-        return availableModels.filter(
-            (m) =>
-                m.label.toLowerCase().includes(q) ||
-                (m.category || '').toLowerCase().includes(q) ||
-                m.value.toLowerCase().includes(q)
-        );
+        if (!q) return unique;
+    
+        // Split into individual words so "gemini pro" means
+        // must contain "gemini" AND "pro", not the literal phrase
+        const words = q.split(/\s+/).filter(Boolean);
+    
+        return unique.filter((m) => {
+            // Fix Bug 1: only search fields the user can actually see
+            // Drop m.value entirely since it is an internal API identifier
+            const searchable = `${m.label} ${m.category || ''}`.toLowerCase();
+            return words.every((word) => searchable.includes(word));
+        });
     }, [availableModels, modelSearchQuery]);
 
     const openModelMenu = useCallback(() => {
