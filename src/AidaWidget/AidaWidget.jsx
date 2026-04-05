@@ -89,6 +89,7 @@ const AidaWidget = (props) => {
     const [imagePreview, setImagePreview] = useState(null);
     const [viewingMessageAttachments, setViewingMessageAttachments] = useState(null);
     const [embedUrl, setEmbedUrl] = useState(null);
+    const [sessionToShare, setSessionToShare] = useState(null); // ✅ NEW: Track which session to share
 
     const inputRef = useRef(null);
     const messagesEndRef = useRef(null);
@@ -351,7 +352,10 @@ const AidaWidget = (props) => {
                             theme={theme} 
                             onToggleTheme={() => setTheme(p => p === 'dark' ? 'light' : 'dark')} 
                             onToggleHistory={openPanel}
-                            onShare={messages.length > 0 ? openShareModal : undefined}
+                            onShare={messages.length > 0 ? () => {
+                                setSessionToShare({ messages, title: currentSessionTitle });
+                                openShareModal();
+                            } : undefined}
                             onDisplayClick={features.customInstructions ? openPromptModal : undefined}
                             sessionTitle={currentSessionTitle}
                             onRenameSession={handleRenameCurrentSession}
@@ -369,6 +373,10 @@ const AidaWidget = (props) => {
                                 sessions={historyItems} projects={projects}
                                 onSelect={handleHistorySelect} currentSessionId={currentSessionId}
                                 {...historyHandlers}
+                                onShare={(session) => {
+                                    setSessionToShare({ messages: session.messages, title: session.title });
+                                    openShareModal();
+                                }}
                             />
                         )}
                         <ChatDisplay
@@ -513,9 +521,12 @@ const AidaWidget = (props) => {
 
             <ShareModal
                 isOpen={isShareModalOpen}
-                onClose={closeShareModal}
-                messages={messages}
-                sessionTitle={currentSessionTitle}
+                onClose={() => {
+                    closeShareModal();
+                    setTimeout(() => setSessionToShare(null), 300);
+                }}
+                messages={sessionToShare ? sessionToShare.messages : messages}
+                sessionTitle={sessionToShare ? sessionToShare.title : currentSessionTitle}
                 theme={theme}
             />
 

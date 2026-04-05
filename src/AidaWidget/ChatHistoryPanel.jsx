@@ -62,7 +62,7 @@ const ChatHistoryPanel = ({
   onRemoveChatFromProject,
   onDeleteProject,
   onUpdateProjectAppearance,
-  currentSessionId, // ✅ NEW: Prop for highlighting
+  currentSessionId,
 }) => {
   const isDark = theme === 'dark';
   const [query, setQuery] = useState('');
@@ -78,7 +78,6 @@ const ChatHistoryPanel = ({
   const projectEditInputRef = useRef(null);
   const [draggingChatId, setDraggingChatId] = useState(null);
   const [draggingOverProjectId, setDraggingOverProjectId] = useState(null);
-  const [copiedSession, setCopiedSession] = useState(null);
   const [iconMenuProjectId, setIconMenuProjectId] = useState(null);
   const iconMenuRef = useRef(null);
   const iconAnchorRef = useRef(null);
@@ -205,12 +204,6 @@ const ChatHistoryPanel = ({
       resetIconMenuPosition();
     }
   }, [iconMenuProjectId, resetIconMenuPosition]);
-
-  useEffect(() => {
-    if (!copiedSession) return;
-    const timeout = setTimeout(() => setCopiedSession(null), 1200);
-    return () => clearTimeout(timeout);
-  }, [copiedSession]);
 
   useLayoutEffect(() => {
     if (!iconMenuProjectId || !iconAnchorRef.current || !iconMenuRef.current) {
@@ -801,7 +794,6 @@ const ChatHistoryPanel = ({
                             <div className="mt-2 space-y-1">
                               {assignedChats.map((chat) => {
                                 const chatMatchesQuery = isMatch(chat);
-                                // ✅ NEW: Highlight active chat inside project
                                 const isCurrent = chat.id === currentSessionId;
                                 return (
                                   <div
@@ -863,27 +855,15 @@ const ChatHistoryPanel = ({
             const isEditing = editingId === session.id;
             const displayTitle = (session.title || '').trim() || 'Untitled chat';
             const allowDrag = !isEditing && !!onAssignChatToProject;
-            const isCopied = copiedSession?.id === session.id;
-            // ✅ NEW: Highlight active chat in unassigned list
             const isCurrent = session.id === currentSessionId;
 
-            const baseShareClass = isDark
-              ? 'hover:bg-gray-800 text-gray-300'
-              : 'hover:bg-gray-100 text-gray-600';
-            const copiedShareClass = isDark
-              ? 'text-green-300 hover:bg-gray-800/80'
-              : 'text-green-600 hover:bg-gray-100/70';
-            const shareButtonClass = `p-1 rounded ${baseShareClass} ${
-              isCopied ? copiedShareClass : ''
-            }`;
+            const baseButtonClass = `p-1 rounded ${isDark ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100 text-gray-600'}`;
             const deleteButtonClass = `inline-flex items-center justify-center rounded border p-0 transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 ${
               isDark
                 ? 'border-red-500/60 text-red-400 hover:bg-red-500/10 focus-visible:ring-red-500/60 focus-visible:ring-offset-slate-900'
                 : 'border-red-400 text-red-500 hover:bg-red-100 focus-visible:ring-red-500/60 focus-visible:ring-offset-white'
             }`;
-            const editButtonClass = `p-1 rounded ${
-              isDark ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100 text-gray-600'
-            }`;
+            
             return (
               <div
                 key={session.id}
@@ -970,32 +950,21 @@ const ChatHistoryPanel = ({
                           {onShare && (
                             <button
                               type="button"
-                              className={shareButtonClass}
-                              onClick={async (event) => {
+                              className={baseButtonClass}
+                              onClick={(event) => {
                                 event.stopPropagation();
-                                try {
-                                  const success = await onShare?.(session);
-                                  if (success) {
-                                    setCopiedSession({ id: session.id, timestamp: Date.now() });
-                                  }
-                                } catch (error) {
-                                  // ignore copy failures in UI
-                                }
+                                onShare(session);
                               }}
-                              aria-label={isCopied ? 'Chat copied to clipboard' : 'Copy chat transcript'}
-                              title={isCopied ? 'Copied' : 'Copy chat transcript'}
+                              aria-label="Share chat"
+                              title="Share chat"
                             >
-                              {isCopied ? (
-                                <HiCheck className="w-4 h-4" />
-                              ) : (
-                                <HiOutlineShare className="w-4 h-4" />
-                              )}
+                              <HiOutlineShare className="w-4 h-4" />
                             </button>
                           )}
                           {onRename && (
                             <button
                               type="button"
-                              className={editButtonClass}
+                              className={baseButtonClass}
                               onClick={(event) => {
                                 event.stopPropagation();
                                 startEditing(session);

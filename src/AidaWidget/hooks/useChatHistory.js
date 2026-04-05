@@ -17,13 +17,9 @@ const ensureProjectDefaults = (project = {}) => {
     return { ...project, iconKey, iconColor };
 };
 
-// We can be less aggressive with sanitization now that we have IndexedDB capacity,
-// but it's still good practice to strip derived state if not needed.
 const sanitizeForHistory = (msgs) => {
     if (!Array.isArray(msgs)) return [];
     return msgs.map(msg => {
-        // We keep attachments/images now! IndexedDB can handle blobs/base64 better.
-        // We might strip 'reasoning' if it's huge and not needed for history.
         const { ...safeMessage } = msg; 
         return safeMessage;
     });
@@ -32,24 +28,20 @@ const sanitizeForHistory = (msgs) => {
 export const useChatHistory = (getSanitizedMessages) => {
     const [isPanelOpen, setIsPanelOpen] = useState(false);
 
-    // Run migration once on mount
     useEffect(() => {
         migrateFromLocalStorage();
     }, []);
 
-    // ✅ DEXIE: Automatically keeps 'historyItems' in sync with DB
     const historyItems = useLiveQuery(
         () => db.chats.orderBy('createdAt').reverse().toArray(),
         []
     ) || [];
 
-    // ✅ DEXIE: Automatically keeps 'projects' in sync with DB
     const projects = useLiveQuery(
         () => db.projects.toArray(),
         []
     ) || [];
 
-    // Initialize from Session Storage. 
     const [currentSessionId, _setCurrentSessionIdState] = useState(() => {
         if (typeof window === 'undefined') return null;
         return sessionStorage.getItem(CURRENT_SESSION_KEY) || null;
@@ -104,7 +96,6 @@ export const useChatHistory = (getSanitizedMessages) => {
             const existing = await db.chats.get(targetId);
             
             if (!existing) {
-                // If it doesn't exist (edge case), create it
                 await db.chats.put({
                     id: targetId,
                     title: autoTitle,
@@ -113,7 +104,6 @@ export const useChatHistory = (getSanitizedMessages) => {
                     customTitle: false
                 });
             } else {
-                // Update existing
                 const finalTitle = existing.customTitle ? existing.title : autoTitle;
                 await db.chats.update(targetId, {
                     title: finalTitle,
@@ -140,7 +130,6 @@ export const useChatHistory = (getSanitizedMessages) => {
         onDelete: async (chatId) => {
             try {
                 await db.chats.delete(chatId);
-                // Also remove this chat ID from any projects
                 const projectsToUpdate = projects.filter(p => (p.chatIds || []).includes(chatId));
                 for (const p of projectsToUpdate) {
                     const newChatIds = p.chatIds.filter(id => id !== chatId);
@@ -163,7 +152,6 @@ export const useChatHistory = (getSanitizedMessages) => {
             const trimmed = projectName.trim();
             if (!trimmed) return null;
             
-            // Check for duplicates (simple check)
             const exists = projects.some(p => p.name.toLowerCase() === trimmed.toLowerCase());
             if (exists) return null;
 
@@ -207,17 +195,8 @@ export const useChatHistory = (getSanitizedMessages) => {
         onUpdateProjectAppearance: async (projectId, updates = {}) => {
             if (!projectId || !updates) return;
             try { await db.projects.update(projectId, updates); } catch (e) { console.error(e); }
-        },
-        onShare: async (session) => {
-            const lines = [(session.title || 'Untitled Chat'), ''];
-            (session.messages || []).forEach(m => {
-                lines.push(`${m.sender === 'bot' ? 'Aida' : 'User'}: ${m.text || ''}\n`);
-            });
-            try {
-                await navigator.clipboard.writeText(lines.join('\n'));
-                return true;
-            } catch { return false; }
         }
+        // Removed onShare from here, it's now handled by the modal in AidaWidget.jsx
     }), [projects, currentSessionId, setCurrentSessionId]);
 
     return {
