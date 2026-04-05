@@ -1,6 +1,7 @@
 /* src/AidaWidget/ShareModal.jsx */
 import React, { useState } from 'react';
 import { HiXMark, HiClipboard, HiCheck, HiArrowDownTray, HiOutlineShare } from 'react-icons/hi2';
+import { marked } from 'marked';
 
 /**
  * Modal for sharing or exporting the current conversation.
@@ -45,7 +46,6 @@ const ShareModal = ({ isOpen, onClose, messages = [], sessionTitle = 'Chat', the
                 lines.push('***');
                 lines.push('***');
             } else {
-                // AI message (no label)
                 if ((m.text || '').trim()) lines.push(m.text.trim());
                 if ((m.images || []).length > 0) lines.push(`[${m.images.length} image(s) attached]`);
             }
@@ -86,7 +86,6 @@ const ShareModal = ({ isOpen, onClose, messages = [], sessionTitle = 'Chat', the
                 lines.push('***');
                 lines.push('***');
             } else {
-                // AI message (no label)
                 if ((m.text || '').trim()) lines.push(m.text.trim());
                 if ((m.images || []).length > 0) lines.push(`\n*[${m.images.length} image(s) attached]*`);
             }
@@ -102,28 +101,15 @@ const ShareModal = ({ isOpen, onClose, messages = [], sessionTitle = 'Chat', the
         const esc = (str) =>
             (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-        const blocksHtml = filteredMessages.map(m => {
-            const isUser = m.sender === 'user';
-            const bodyHtml = esc((m.text || '').trim()).replace(/\n/g, '  \n');
-            const imagesNote = (m.images || []).length > 0
-                ? `<p class="note">[${m.images.length} image(s) attached]</p>` : '';
+        // Configure marked to break on newlines
+        marked.setOptions({
+            breaks: true,
+            gfm: true
+        });
 
-            if (isUser) {
-                return `
-<div class="block block-user">
-  <hr>
-  <p class="sender">Human::</p>
-  <div class="body">${bodyHtml}${imagesNote}</div>
-  <hr>
-  <hr>
-</div>`;
-            } else {
-                return `
-<div class="block block-bot">
-  <div class="body">${bodyHtml}${imagesNote}</div>
-</div>`;
-            }
-        }).join('  \n\n');
+        // Generate the exact markdown string and parse it into HTML
+        const markdownText = buildMarkdown();
+        const bodyHtml = marked.parse(markdownText);
 
         return `<!DOCTYPE html>
 <html lang="en">
@@ -133,30 +119,72 @@ const ShareModal = ({ isOpen, onClose, messages = [], sessionTitle = 'Chat', the
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+    font-family: system-ui, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
     max-width: 720px;
     margin: 0 auto;
     padding: 48px 32px;
     color: #1a1a1a;
-    line-height: 1.7;
+    line-height: 1.6;
     font-size: 15px;
   }
   h1 { font-size: 22px; font-weight: 800; margin-bottom: 6px; }
-  .meta { font-size: 12px; color: #999; margin-bottom: 40px; }
-  hr { border: none; border-top: 1px solid #ebebeb; margin: 16px 0; }
-  .block { padding: 8px 0; }
-  .sender { font-weight: bold; margin-bottom: 8px; }
-  .body { white-space: pre-wrap; }
-  .note { font-style: italic; color: #999; font-size: 13px; margin-top: 6px; }
+  hr { border: none; border-top: 1px solid #ebebeb; margin: 24px 0; }
+  
+  /* Markdown Elements Styling */
+  p { margin-bottom: 12px; }
+  p:last-child { margin-bottom: 0; }
+  
+  ul, ol { margin-bottom: 12px; padding-left: 24px; }
+  li { margin-bottom: 4px; }
+  
+  /* User message blockquote styling */
+  blockquote {
+    border-left: 4px solid #d1d5db;
+    background-color: #f9fafb;
+    padding: 16px;
+    border-radius: 0 8px 8px 0;
+    color: #374151;
+    margin: 12px 0;
+  }
+
+  /* Code block styling */
+  pre {
+    background-color: #1e1e1e;
+    color: #f8f8f2;
+    padding: 16px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 16px 0;
+    font-family: 'Fira Code', Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+    font-size: 13px;
+  }
+  code {
+    font-family: 'Fira Code', Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+    background-color: #f1f5f9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #db2777;
+  }
+  pre code {
+    padding: 0;
+    background-color: transparent;
+    color: inherit;
+  }
+
+  /* Tables */
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+  th, td { border: 1px solid #e2e8f0; padding: 8px 12px; text-align: left; }
+  th { background-color: #f8fafc; font-weight: 600; }
+
   @media print {
     body { padding: 20px 16px; }
+    pre { white-space: pre-wrap; word-wrap: break-word; }
   }
 </style>
 </head>
 <body>
-  <h1>${esc(title)}</h1>
-  <p class="meta">Exported on ${esc(exportDate)}</p>
-  ${blocksHtml}
+  ${bodyHtml}
 </body>
 </html>`;
     };
@@ -184,7 +212,7 @@ const ShareModal = ({ isOpen, onClose, messages = [], sessionTitle = 'Chat', the
         setTimeout(() => w.print(), 600);
     };
 
-    // Inline toggle switch to avoid prop-drilling into a separate file
+    // Inline toggle switch to avoid prop drilling into a separate file
     const Toggle = ({ checked, onChange, label }) => (
         <div className="flex items-center gap-3">
             <button
