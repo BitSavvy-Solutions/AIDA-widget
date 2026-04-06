@@ -60,7 +60,7 @@ const defaultProps = {
 };
 
 const AidaWidget = (props) => {
-    const { apiConfig, user, language, translations, pageContext, features, models, extensionMode = false } = { ...defaultProps, ...props }; 
+    const { apiConfig, user, language, translations, pageContext, features, models, extensionMode = false } = { ...defaultProps, ...props };
     const attachmentsEnabled = Boolean(features?.imageUpload);
 
     const availableModels = (models && models.length > 0) ? models : DEFAULT_MODELS;
@@ -141,10 +141,10 @@ const AidaWidget = (props) => {
         try {
             const tab = await chrome.tabs.get(tabId).catch(() => null);
             if (!tab?.url) return;
-            
+
             if (['chrome://', 'chrome-extension://', 'about:', 'edge://']
                 .some(prefix => tab.url.startsWith(prefix))) return;
-    
+
             const results = await chrome.scripting.executeScript({
                 target: { tabId },
                 func: () => ({
@@ -153,13 +153,13 @@ const AidaWidget = (props) => {
                     content: document.body.innerText
                 })
             });
-    
+
             const result = results?.[0]?.result;
             if (!result) return;
-    
+
             const { title, url, content } = result;
             const markdownContent = `# ${title}\n\n**Source URL:** ${url}\n\n---\n\n${content}`;
-    
+
             const autoAttachment = {
                 id: 'auto-page-context',
                 type: 'text',
@@ -168,7 +168,7 @@ const AidaWidget = (props) => {
                 size: new Blob([markdownContent]).size,
                 _autoPage: true,
             };
-    
+
             autoPageAttachmentRef.current = autoAttachment;
             setAttachments(prev => [...prev.filter(a => !a._autoPage), autoAttachment]);
         } catch (err) {
@@ -178,31 +178,31 @@ const AidaWidget = (props) => {
 
     useEffect(() => {
         if (!extensionMode || typeof chrome === 'undefined' || !chrome.tabs) return;
-    
+
         if (!isAutoAttachEnabled) {
             autoPageAttachmentRef.current = null;
             setAttachments(prev => prev.filter(a => !a._autoPage));
             return;
         }
-    
+
         const handleTabUpdated = (tabId, changeInfo) => {
             if (changeInfo.status !== 'complete') return;
             chrome.tabs.query({ active: true, currentWindow: true }, ([activeTab]) => {
                 if (activeTab?.id === tabId) scrapeAndAutoAttach(tabId);
             });
         };
-    
+
         const handleTabActivated = ({ tabId }) => {
             scrapeAndAutoAttach(tabId);
         };
-    
+
         chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
             if (tab?.id) scrapeAndAutoAttach(tab.id);
         });
-    
+
         chrome.tabs.onUpdated.addListener(handleTabUpdated);
         chrome.tabs.onActivated.addListener(handleTabActivated);
-    
+
         return () => {
             chrome.tabs.onUpdated.removeListener(handleTabUpdated);
             chrome.tabs.onActivated.removeListener(handleTabActivated);
@@ -296,7 +296,7 @@ const AidaWidget = (props) => {
             if (typeof window !== 'undefined' && window.speechSynthesis) {
                 window.speechSynthesis.cancel();
             }
-            window.close(); 
+            window.close();
             return;
         }
         if (isOpen) {
@@ -321,14 +321,14 @@ const AidaWidget = (props) => {
         cancelAutoSendTimer, cancelAutoRecordTimer,
     ]);
 
-    const resetChat = () => { 
-        saveCurrentChatToHistory(); 
-        setMessages([]); 
-        setCurrentSessionId(null); 
+    const resetChat = () => {
+        saveCurrentChatToHistory();
+        setMessages([]);
+        setCurrentSessionId(null);
         if (isAutoAttachEnabled && autoPageAttachmentRef.current) {
             setAttachments([autoPageAttachmentRef.current]);
         } else {
-            clearAttachments(); 
+            clearAttachments();
         }
     };
 
@@ -363,19 +363,13 @@ const AidaWidget = (props) => {
         }
 
         setCurrentMessage('');
-        
-        if (isAutoAttachEnabled && autoPageAttachmentRef.current) {
-            setAttachments([autoPageAttachmentRef.current]);
-        } else {
-            clearAttachments();
-        }
-        
+        clearAttachments(); // always clear after send, page context only attaches once per chat
         setEditingMessageId(null);
         if (isWebSearchEnabled) setIsWebSearchEnabled(false);
 
         const historyForPayload = nextMessages.slice(0, -1);
         await streamResponse({ userMessage, botMessageId, historyForPayload, sessionId: activeSessionId, contextLimit });
-    }, [currentMessage, attachments, isLoading, selectedModel, isWebSearchEnabled, messages, currentSessionId, streamResponse, setMessages, createNewSession, updateCurrentSession, cancelAutoSendTimer, cancelAutoRecordTimer, clearAttachments, contextLimit, isAutoAttachEnabled, setAttachments]);
+    }, [currentMessage, attachments, isLoading, selectedModel, isWebSearchEnabled, messages, currentSessionId, streamResponse, setMessages, createNewSession, updateCurrentSession, cancelAutoSendTimer, cancelAutoRecordTimer, clearAttachments, contextLimit]);
 
     const handleRetry = useCallback(async (botMessageId) => {
         if (isLoading) return;
@@ -443,7 +437,7 @@ const AidaWidget = (props) => {
             text: getLocalizedGreeting(siteLanguage),
             sender: 'bot',
         }]);
-    }, []); 
+    }, []);
 
     const containerClasses = `flex flex-col relative aida-widget-shell ${isClosing ? 'animate-collapse-chat' : 'animate-expand-chat'} ${isResizing ? 'aida-widget-shell--active' : ''} ${theme === 'dark' ? 'bg-gray-900 text-gray-100 border-l border-gray-800' : 'bg-white text-gray-900 border-l border-gray-200'} ${isFullscreen ? 'w-full h-full aida-widget-shell--fullscreen' : 'h-full aida-widget-shell--docked'}`;
 
@@ -463,7 +457,7 @@ const AidaWidget = (props) => {
                     return {
                         title: document.title,
                         url: window.location.href,
-                        content: document.body.innerText 
+                        content: document.body.innerText
                     };
                 }
             });
@@ -477,7 +471,7 @@ const AidaWidget = (props) => {
                 const file = new File([markdownContent], `${safeTitle}.md`, { type: 'text/markdown' });
 
                 addTextAttachment(file);
-                closeAttachmentModal(); 
+                closeAttachmentModal();
             }
         } catch (err) {
             console.error("Failed to scrape page:", err);
