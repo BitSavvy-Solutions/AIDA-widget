@@ -78,3 +78,5 @@ Thumbs.db
 .github/copilot-instructions.md
 
 .vscode
+
+build-extension/
