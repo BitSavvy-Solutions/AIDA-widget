@@ -60,7 +60,8 @@ const defaultProps = {
 };
 
 const AidaWidget = (props) => {
-    const { apiConfig, user, language, translations, pageContext, features, models, extensionMode = false } = { ...defaultProps, ...props }; const attachmentsEnabled = Boolean(features?.imageUpload);
+    const { apiConfig, user, language, translations, pageContext, features, models, extensionMode = false } = { ...defaultProps, ...props }; 
+    const attachmentsEnabled = Boolean(features?.imageUpload);
 
     const availableModels = (models && models.length > 0) ? models : DEFAULT_MODELS;
 
@@ -88,7 +89,18 @@ const AidaWidget = (props) => {
     const [imagePreview, setImagePreview] = useState(null);
     const [viewingMessageAttachments, setViewingMessageAttachments] = useState(null);
     const [embedUrl, setEmbedUrl] = useState(null);
-    const [sessionToShare, setSessionToShare] = useState(null); // ✅ NEW: Track which session to share
+    const [sessionToShare, setSessionToShare] = useState(null);
+
+    const [isAutoAttachEnabled, setIsAutoAttachEnabled] = useState(() => {
+        if (typeof window === 'undefined' || !extensionMode) return false;
+        return localStorage.getItem('aida-auto-attach-page') === 'true';
+    });
+    const autoPageAttachmentRef = useRef(null);
+
+    useEffect(() => {
+        if (!extensionMode) return;
+        localStorage.setItem('aida-auto-attach-page', String(isAutoAttachEnabled));
+    }, [extensionMode, isAutoAttachEnabled]);
 
     const inputRef = useRef(null);
     const messagesEndRef = useRef(null);
@@ -123,6 +135,79 @@ const AidaWidget = (props) => {
     const { countdown: autoSendCountdown, start: startAutoSendTimer, cancel: cancelAutoSendTimer, setIsPaused: setIsSendTimerPaused } = useCountdown(() => stableHandleSendMessage(), 3);
     const { countdown: autoRecordCountdown, start: startAutoRecordTimer, cancel: cancelAutoRecordTimer, setIsPaused: setIsRecordTimerPaused } = useCountdown(startRecording, 3);
     const displayText = useDisplayAnimation({ isOpen, isLoading });
+
+    const scrapeAndAutoAttach = useCallback(async (tabId) => {
+        if (typeof chrome === 'undefined' || !chrome.scripting) return;
+        try {
+            const tab = await chrome.tabs.get(tabId).catch(() => null);
+            if (!tab?.url) return;
+            
+            if (['chrome://', 'chrome-extension://', 'about:', 'edge://']
+                .some(prefix => tab.url.startsWith(prefix))) return;
+    
+            const results = await chrome.scripting.executeScript({
+                target: { tabId },
+                func: () => ({
+                    title: document.title,
+                    url: window.location.href,
+                    content: document.body.innerText
+                })
+            });
+    
+            const result = results?.[0]?.result;
+            if (!result) return;
+    
+            const { title, url, content } = result;
+            const markdownContent = `# ${title}\n\n**Source URL:** ${url}\n\n---\n\n${content}`;
+    
+            const autoAttachment = {
+                id: 'auto-page-context',
+                type: 'text',
+                content: markdownContent,
+                name: `Page: ${title || url}`,
+                size: new Blob([markdownContent]).size,
+                _autoPage: true,
+            };
+    
+            autoPageAttachmentRef.current = autoAttachment;
+            setAttachments(prev => [...prev.filter(a => !a._autoPage), autoAttachment]);
+        } catch (err) {
+            console.warn('Auto-attach page failed:', err.message);
+        }
+    }, [setAttachments]);
+
+    useEffect(() => {
+        if (!extensionMode || typeof chrome === 'undefined' || !chrome.tabs) return;
+    
+        if (!isAutoAttachEnabled) {
+            autoPageAttachmentRef.current = null;
+            setAttachments(prev => prev.filter(a => !a._autoPage));
+            return;
+        }
+    
+        const handleTabUpdated = (tabId, changeInfo) => {
+            if (changeInfo.status !== 'complete') return;
+            chrome.tabs.query({ active: true, currentWindow: true }, ([activeTab]) => {
+                if (activeTab?.id === tabId) scrapeAndAutoAttach(tabId);
+            });
+        };
+    
+        const handleTabActivated = ({ tabId }) => {
+            scrapeAndAutoAttach(tabId);
+        };
+    
+        chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+            if (tab?.id) scrapeAndAutoAttach(tab.id);
+        });
+    
+        chrome.tabs.onUpdated.addListener(handleTabUpdated);
+        chrome.tabs.onActivated.addListener(handleTabActivated);
+    
+        return () => {
+            chrome.tabs.onUpdated.removeListener(handleTabUpdated);
+            chrome.tabs.onActivated.removeListener(handleTabActivated);
+        };
+    }, [extensionMode, isAutoAttachEnabled, scrapeAndAutoAttach, setAttachments]);
 
     useEffect(() => {
         if (loadMessagesForSession) loadMessagesForSession(currentSessionId);
@@ -202,10 +287,8 @@ const AidaWidget = (props) => {
 
     const getLocalizedGreeting = (lang) => ({ 'ar': "✨ مرحبًا! أنا آيدا، مساعدتك الرقمية الذكية 🤖💖 كيف يمكنني مساعدتك اليوم؟ 😊", 'fr': "👋 Coucou ! Moi c'est Aida, ta super assistante numérique ✨💻 Comment puis-je t'aider aujourd'hui ? 😄" }[lang] || "Hey hey! 👋 I'm Aida, your sparkly smart digital assistant 🤖💖 How can I help you today? 😄");
 
-    // Find the existing toggleChat definition and replace it entirely:
     const toggleChat = useCallback(() => {
         if (extensionMode) {
-            // Clean up any in-flight work before closing the side panel.
             cancelAutoSendTimer();
             cancelAutoRecordTimer();
             if (isRecording) stopRecording();
@@ -213,7 +296,7 @@ const AidaWidget = (props) => {
             if (typeof window !== 'undefined' && window.speechSynthesis) {
                 window.speechSynthesis.cancel();
             }
-            window.close(); // closes the Chrome side panel
+            window.close(); 
             return;
         }
         if (isOpen) {
@@ -238,7 +321,17 @@ const AidaWidget = (props) => {
         cancelAutoSendTimer, cancelAutoRecordTimer,
     ]);
 
-    const resetChat = () => { saveCurrentChatToHistory(); setMessages([]); setCurrentSessionId(null); clearAttachments(); };
+    const resetChat = () => { 
+        saveCurrentChatToHistory(); 
+        setMessages([]); 
+        setCurrentSessionId(null); 
+        if (isAutoAttachEnabled && autoPageAttachmentRef.current) {
+            setAttachments([autoPageAttachmentRef.current]);
+        } else {
+            clearAttachments(); 
+        }
+    };
+
     const handleRecordButtonClick = useCallback(() => { if (isLoading || isTranscribing) return; cancelAutoRecordTimer(); isRecording ? stopRecording() : startRecording(); }, [isRecording, isLoading, isTranscribing, stopRecording, startRecording, cancelAutoRecordTimer]);
 
     const stableHandleSendMessage = useCallback(async (messageTextOverride = null) => {
@@ -270,13 +363,19 @@ const AidaWidget = (props) => {
         }
 
         setCurrentMessage('');
-        clearAttachments();
+        
+        if (isAutoAttachEnabled && autoPageAttachmentRef.current) {
+            setAttachments([autoPageAttachmentRef.current]);
+        } else {
+            clearAttachments();
+        }
+        
         setEditingMessageId(null);
         if (isWebSearchEnabled) setIsWebSearchEnabled(false);
 
         const historyForPayload = nextMessages.slice(0, -1);
         await streamResponse({ userMessage, botMessageId, historyForPayload, sessionId: activeSessionId, contextLimit });
-    }, [currentMessage, attachments, isLoading, selectedModel, isWebSearchEnabled, messages, currentSessionId, streamResponse, setMessages, createNewSession, updateCurrentSession, cancelAutoSendTimer, cancelAutoRecordTimer, clearAttachments, contextLimit]);
+    }, [currentMessage, attachments, isLoading, selectedModel, isWebSearchEnabled, messages, currentSessionId, streamResponse, setMessages, createNewSession, updateCurrentSession, cancelAutoSendTimer, cancelAutoRecordTimer, clearAttachments, contextLimit, isAutoAttachEnabled, setAttachments]);
 
     const handleRetry = useCallback(async (botMessageId) => {
         if (isLoading) return;
@@ -337,8 +436,6 @@ const AidaWidget = (props) => {
     useEffect(() => { if (inputRef.current) { inputRef.current.style.height = 'auto'; inputRef.current.style.height = `${inputRef.current.scrollHeight}px`; } }, [currentMessage]);
     useEffect(() => { const handleResize = () => setIsMobileViewport(window.innerWidth <= 768); window.addEventListener('resize', handleResize); return () => window.removeEventListener('resize', handleResize); }, []);
 
-    // Show the greeting as soon as the extension panel opens.
-    // Normal widget mode handles this inside toggleChat instead.
     useEffect(() => {
         if (!extensionMode || messages.length > 0) return;
         setMessages([{
@@ -346,13 +443,10 @@ const AidaWidget = (props) => {
             text: getLocalizedGreeting(siteLanguage),
             sender: 'bot',
         }]);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []); // intentionally runs once on mount
+    }, []); 
 
     const containerClasses = `flex flex-col relative aida-widget-shell ${isClosing ? 'animate-collapse-chat' : 'animate-expand-chat'} ${isResizing ? 'aida-widget-shell--active' : ''} ${theme === 'dark' ? 'bg-gray-900 text-gray-100 border-l border-gray-800' : 'bg-white text-gray-900 border-l border-gray-200'} ${isFullscreen ? 'w-full h-full aida-widget-shell--fullscreen' : 'h-full aida-widget-shell--docked'}`;
 
-
-    // --- NEW: Extension Page Scraper ---
     const handleAttachCurrentPage = async () => {
         if (typeof chrome === 'undefined' || !chrome.tabs || !chrome.scripting) {
             alert("This feature is only available in the browser extension.");
@@ -360,18 +454,16 @@ const AidaWidget = (props) => {
         }
 
         try {
-            // Get the currently active tab
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
             if (!tab) return;
 
-            // Inject a script to read the page's visible text
             const results = await chrome.scripting.executeScript({
                 target: { tabId: tab.id },
                 func: () => {
                     return {
                         title: document.title,
                         url: window.location.href,
-                        content: document.body.innerText // Grabs visible text, ignoring raw HTML/scripts
+                        content: document.body.innerText 
                     };
                 }
             });
@@ -379,15 +471,13 @@ const AidaWidget = (props) => {
             if (results && results[0] && results[0].result) {
                 const { title, url, content } = results[0].result;
 
-                // Format it nicely for the AI
                 const markdownContent = `# ${title}\n\n**Source URL:** ${url}\n\n---\n\n${content}`;
 
-                // Create a File object so we can reuse your existing text attachment logic
                 const safeTitle = (title || 'Page Content').replace(/[^a-z0-9]/gi, '_').toLowerCase();
                 const file = new File([markdownContent], `${safeTitle}.md`, { type: 'text/markdown' });
 
                 addTextAttachment(file);
-                closeAttachmentModal(); // Close modal so user sees it was attached
+                closeAttachmentModal(); 
             }
         } catch (err) {
             console.error("Failed to scrape page:", err);
@@ -406,8 +496,6 @@ const AidaWidget = (props) => {
                     </button>
                 </div>
             )}
-            {/* Extension mode fills the side panel directly with no viewport wrapper.
-    Normal mode wraps in the viewport div for proper docked positioning. */}
             {(extensionMode || isOpen) && (() => {
                 const panelInner = (
                     <div
@@ -424,7 +512,6 @@ const AidaWidget = (props) => {
                         }
                         {...dropZoneProps}
                     >
-                        {/* Resize handle: hidden in extension mode via features.resizable = false */}
                         {features.resizable && !isFullscreen && !isMobileViewport && (
                             <div {...resizeHandleProps} />
                         )}
@@ -602,6 +689,8 @@ const AidaWidget = (props) => {
                 theme={theme}
                 extensionMode={extensionMode}
                 onAttachCurrentPage={handleAttachCurrentPage}
+                isAutoAttachEnabled={isAutoAttachEnabled}
+                onToggleAutoAttach={setIsAutoAttachEnabled}
             />
 
             <AttachmentModal

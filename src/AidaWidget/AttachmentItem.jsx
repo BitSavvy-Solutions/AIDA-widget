@@ -10,7 +10,6 @@ const AttachmentItem = ({ attachment, onRemove, onPreview, theme = 'dark' }) => 
     };
 
     const renderIcon = () => {
-        // ✅ ADDED: Handle scraping and error states
         if (attachment.status === 'scraping') {
             return <HiArrowPath className="w-5 h-5 text-blue-400 animate-spin" />;
         }
@@ -24,7 +23,6 @@ const AttachmentItem = ({ attachment, onRemove, onPreview, theme = 'dark' }) => 
             case 'text':
                 return <HiDocumentText className="w-5 h-5 text-green-400" />;
             case 'url':
-                 // This case should now only be hit for a brief moment
                 return <HiGlobeAlt className="w-5 h-5 text-purple-400" />;
             default:
                 return <HiDocumentText className="w-5 h-5 text-gray-400" />;
@@ -53,7 +51,6 @@ const AttachmentItem = ({ attachment, onRemove, onPreview, theme = 'dark' }) => 
             );
         }
 
-        // Render non-clickable preview for loading/error states
         return (
             <div className={`w-12 h-12 rounded flex items-center justify-center ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'}`}>
                 {renderIcon()}
@@ -63,16 +60,30 @@ const AttachmentItem = ({ attachment, onRemove, onPreview, theme = 'dark' }) => 
 
     return (
         <div className={`flex items-center gap-3 p-2 rounded-lg border ${
-            theme === 'dark' 
-                ? 'bg-gray-800 border-gray-700' 
-                : 'bg-gray-50 border-gray-200'
+            attachment._autoPage
+                ? (theme === 'dark'
+                    ? 'bg-blue-900/20 border-blue-700/40'
+                    : 'bg-blue-50 border-blue-200')
+                : (theme === 'dark'
+                    ? 'bg-gray-800 border-gray-700'
+                    : 'bg-gray-50 border-gray-200')
         }`}>
             {renderPreview()}
             <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate" title={attachment.name}>
-                    {attachment.name}
-                </p>
-                {/* ✅ ADDED: Display status text for scraping/error */}
+                <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-medium truncate" title={attachment.name}>
+                        {attachment.name}
+                    </p>
+                    {attachment._autoPage && (
+                        <span className={`shrink-0 text-[9px] font-bold uppercase px-1 py-0.5 rounded ${
+                            theme === 'dark'
+                                ? 'bg-blue-500/20 text-blue-400'
+                                : 'bg-blue-100 text-blue-600'
+                        }`}>
+                            auto
+                        </span>
+                    )}
+                </div>
                 {attachment.status === 'scraping' && (
                     <p className={`text-xs ${theme === 'dark' ? 'text-blue-400' : 'text-blue-500'}`}>Scraping...</p>
                 )}
@@ -88,7 +99,6 @@ const AttachmentItem = ({ attachment, onRemove, onPreview, theme = 'dark' }) => 
                     </p>
                 )}
             </div>
-            {/* ✅ MODIFIED: Only show remove button if onRemove is provided */}
             {onRemove && (
                 <button
                     type="button"

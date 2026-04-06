@@ -18,7 +18,9 @@ const AttachmentModal = ({
     theme = 'dark',
     isReadOnly = false,
     extensionMode = false, 
-    onAttachCurrentPage   
+    onAttachCurrentPage,
+    isAutoAttachEnabled = false,
+    onToggleAutoAttach
 }) => {
     const imageInputRef = useRef(null);
     const textInputRef = useRef(null);
@@ -27,13 +29,11 @@ const AttachmentModal = ({
     const [activeTab, setActiveTab] = useState('all');
     const [previewingAttachment, setPreviewingAttachment] = useState(null);
 
-    // A derived state to check if any URL is currently being scraped.
     const isScraping = attachments.some(att => att.status === 'scraping');
 
     if (!isOpen) return null;
 
     const handleAddUrl = () => {
-        // Prevent adding new URL while one is already scraping.
         if (urlInput.trim() && !isScraping) {
             onAddUrl(urlInput);
             setUrlInput('');
@@ -53,7 +53,6 @@ const AttachmentModal = ({
         : attachments.filter(att => {
             if (activeTab === 'images') return att.type === 'image';
             if (activeTab === 'text') return att.type === 'text';
-            // Also show scraped URLs in the 'text' tab after success
             if (activeTab === 'urls') return att.type === 'url';
             return true;
         });
@@ -124,7 +123,7 @@ const AttachmentModal = ({
                                     <AttachmentItem
                                         key={attachment.id}
                                         attachment={attachment}
-                                        onRemove={onRemove} // ✅ MODIFIED: Pass onRemove directly. The parent now controls if removal is possible.
+                                        onRemove={onRemove} 
                                         onPreview={handlePreview}
                                         theme={theme}
                                     />
@@ -135,7 +134,6 @@ const AttachmentModal = ({
                         {!isReadOnly && (
                             <div className={`p-4 border-t space-y-3 ${borderClasses}`}>
                                 
-                                {/* Hidden file inputs */}
                                 <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files || []); if (files.length) onAddImages(files); e.target.value = ''; }}/>
                                 <input ref={textInputRef} type="file" accept="text/*,.md,.json,.yml,.yaml,.ini,.log,.env,.py,.js,.jsx,.ts,.tsx,.html,.css,.scss,.sh,.bat,.ps1,.xml,.csv,.java,.c,.cpp,.h,.cs,.go,.rb,.php,.sql" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) onAddText(file); e.target.value = ''; }}/>
                                 
@@ -155,18 +153,60 @@ const AttachmentModal = ({
                                             }));
                                             onAddFolder(filesWithPaths);
                                         }
-                                        e.target.value = ''; // Clear input for re-selection
+                                        e.target.value = ''; 
                                     }}
                                 />
                                 
-                                {/* Action buttons */}
-                                <div className={`grid gap-3 ${extensionMode ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
-                                    {extensionMode && (
-                                        <button type="button" onClick={onAttachCurrentPage} className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg border transition-colors ${isDark ? 'border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400' : 'border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-600'}`} title="Read Current Page">
-                                            <HiGlobeAlt className="w-6 h-6" />
+                                {extensionMode && (
+                                    <div className="grid grid-cols-2 gap-3 mb-3">
+                                        <div className={`flex items-center justify-between px-3 py-2.5 rounded-lg border ${
+                                            isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+                                        }`}>
+                                            <div className="flex items-center gap-2">
+                                                <HiGlobeAlt className={`w-4 h-4 ${isAutoAttachEnabled
+                                                    ? (isDark ? 'text-blue-400' : 'text-blue-600')
+                                                    : (isDark ? 'text-gray-500' : 'text-gray-400')
+                                                }`} />
+                                                <span className={`text-xs font-medium ${
+                                                    isAutoAttachEnabled
+                                                        ? (isDark ? 'text-blue-300' : 'text-blue-700')
+                                                        : (isDark ? 'text-gray-300' : 'text-gray-700')
+                                                }`}>
+                                                    Auto-attach page
+                                                </span>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                role="switch"
+                                                aria-checked={isAutoAttachEnabled}
+                                                onClick={() => onToggleAutoAttach?.(!isAutoAttachEnabled)}
+                                                className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${
+                                                    isAutoAttachEnabled ? 'bg-blue-500' : (isDark ? 'bg-gray-700' : 'bg-gray-300')
+                                                }`}
+                                            >
+                                                <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
+                                                    isAutoAttachEnabled ? 'translate-x-4' : 'translate-x-0'
+                                                }`} />
+                                            </button>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            onClick={onAttachCurrentPage}
+                                            className={`flex flex-col items-center justify-center gap-1.5 py-2 rounded-lg border transition-colors ${
+                                                isDark
+                                                    ? 'border-gray-700 bg-gray-800/50 hover:bg-gray-800'
+                                                    : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
+                                            }`}
+                                            title="Attach current page once"
+                                        >
+                                            <HiGlobeAlt className="w-5 h-5" />
                                             <span className="text-xs font-medium">This Page</span>
                                         </button>
-                                    )}
+                                    </div>
+                                )}
+
+                                <div className="grid gap-3 grid-cols-3">
                                     <button type="button" onClick={() => imageInputRef.current?.click()} className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg border transition-colors ${isDark ? 'border-gray-700 bg-gray-800/50 hover:bg-gray-800' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}`} title="Add Images">
                                         <HiPhoto className="w-6 h-6" />
                                         <span className="text-xs font-medium">Images</span>
@@ -181,7 +221,6 @@ const AttachmentModal = ({
                                     </button>
                                 </div>
 
-                                {/* URL input */}
                                 <div className="relative flex items-center">
                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
                                         { isScraping 
