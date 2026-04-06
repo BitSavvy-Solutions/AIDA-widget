@@ -3,8 +3,9 @@
     "name": "AIDA Chat Assistant",
     "version": "1.0.0",
     "description": "Your personal AI assistant, always at your side",
-    "permissions": ["sidePanel", "storage", "tabs"],
+    "permissions": ["sidePanel", "storage", "tabs", "activeTab", "scripting"],
     "host_permissions": [
+      "<all_urls>",
       "https://aida-agentbackend-prod.graydune-dda4d1ba.canadaeast.azurecontainerapps.io/*",
       "https://aida-agentbackend-dev.graydune-dda4d1ba.canadaeast.azurecontainerapps.io/*",
       "https://aitutfunc.azurewebsites.net/*"

@@ -16,7 +16,9 @@ const AttachmentModal = ({
     onClearAll,
     onImagePreview,
     theme = 'dark',
-    isReadOnly = false
+    isReadOnly = false,
+    extensionMode = false, 
+    onAttachCurrentPage   
 }) => {
     const imageInputRef = useRef(null);
     const textInputRef = useRef(null);
@@ -158,7 +160,13 @@ const AttachmentModal = ({
                                 />
                                 
                                 {/* Action buttons */}
-                                <div className="grid grid-cols-3 gap-3">
+                                <div className={`grid gap-3 ${extensionMode ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
+                                    {extensionMode && (
+                                        <button type="button" onClick={onAttachCurrentPage} className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg border transition-colors ${isDark ? 'border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400' : 'border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-600'}`} title="Read Current Page">
+                                            <HiGlobeAlt className="w-6 h-6" />
+                                            <span className="text-xs font-medium">This Page</span>
+                                        </button>
+                                    )}
                                     <button type="button" onClick={() => imageInputRef.current?.click()} className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg border transition-colors ${isDark ? 'border-gray-700 bg-gray-800/50 hover:bg-gray-800' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}`} title="Add Images">
                                         <HiPhoto className="w-6 h-6" />
                                         <span className="text-xs font-medium">Images</span>

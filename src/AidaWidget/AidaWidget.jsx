@@ -351,6 +351,50 @@ const AidaWidget = (props) => {
 
     const containerClasses = `flex flex-col relative aida-widget-shell ${isClosing ? 'animate-collapse-chat' : 'animate-expand-chat'} ${isResizing ? 'aida-widget-shell--active' : ''} ${theme === 'dark' ? 'bg-gray-900 text-gray-100 border-l border-gray-800' : 'bg-white text-gray-900 border-l border-gray-200'} ${isFullscreen ? 'w-full h-full aida-widget-shell--fullscreen' : 'h-full aida-widget-shell--docked'}`;
 
+
+    // --- NEW: Extension Page Scraper ---
+    const handleAttachCurrentPage = async () => {
+        if (typeof chrome === 'undefined' || !chrome.tabs || !chrome.scripting) {
+            alert("This feature is only available in the browser extension.");
+            return;
+        }
+
+        try {
+            // Get the currently active tab
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (!tab) return;
+
+            // Inject a script to read the page's visible text
+            const results = await chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                func: () => {
+                    return {
+                        title: document.title,
+                        url: window.location.href,
+                        content: document.body.innerText // Grabs visible text, ignoring raw HTML/scripts
+                    };
+                }
+            });
+
+            if (results && results[0] && results[0].result) {
+                const { title, url, content } = results[0].result;
+
+                // Format it nicely for the AI
+                const markdownContent = `# ${title}\n\n**Source URL:** ${url}\n\n---\n\n${content}`;
+
+                // Create a File object so we can reuse your existing text attachment logic
+                const safeTitle = (title || 'Page Content').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                const file = new File([markdownContent], `${safeTitle}.md`, { type: 'text/markdown' });
+
+                addTextAttachment(file);
+                closeAttachmentModal(); // Close modal so user sees it was attached
+            }
+        } catch (err) {
+            console.error("Failed to scrape page:", err);
+            alert("Could not read the current page. It might be a restricted browser page (like the settings or new tab page).");
+        }
+    };
+
     return (
         <>
             {!extensionMode && !isOpen && (
@@ -556,6 +600,8 @@ const AidaWidget = (props) => {
                 onAddUrl={addUrlAttachment} onRemove={removeAttachment}
                 onClearAll={clearAttachments} onImagePreview={setImagePreview}
                 theme={theme}
+                extensionMode={extensionMode}
+                onAttachCurrentPage={handleAttachCurrentPage}
             />
 
             <AttachmentModal
