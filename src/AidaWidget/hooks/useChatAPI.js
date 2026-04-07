@@ -100,10 +100,6 @@ export const useChatAPI = ({
             limitedHistory = historyForPayload.slice(-contextLimit);
         }
 
-        // Resolve auth token: prefer the token passed in the user prop (set at login),
-        // then check localStorage directly as a safety net.
-        // If neither is available, fall back to user_id so the widget still works
-        // when embedded on external sites where users have not logged in via the portal.
         const apiToken = user?.apiToken || localStorage.getItem('aidaToken') || null;
 
         const requestHeaders = { 'Content-Type': 'application/json' };
@@ -120,9 +116,6 @@ export const useChatAPI = ({
                 model: userMessage.model,
             };
 
-            // Only include user_id in the payload when no API token is available.
-            // When a token is present the backend identifies the caller from the token,
-            // so sending a raw user_id is redundant and creates a trust conflict.
             if (!apiToken) {
                 payload.user_id = user.id;
             }
@@ -145,12 +138,14 @@ export const useChatAPI = ({
                     if (errorData._HttpResponse__body) {
                         try {
                             const nestedBody = JSON.parse(errorData._HttpResponse__body);
-                            errorMessage = nestedBody.error || nestedBody.message || errorMessage;
+                            // Added .detail to the fallback chain
+                            errorMessage = nestedBody.error || nestedBody.message || nestedBody.detail || errorMessage;
                         } catch (e) {
                             errorMessage = errorData._HttpResponse__body;
                         }
                     } else {
-                        errorMessage = errorData.error || errorData.message || errorMessage;
+                        // Added .detail to the fallback chain
+                        errorMessage = errorData.error || errorData.message || errorData.detail || errorMessage;
                     }
                 } catch (e) {
                     console.warn("Could not parse error response JSON", e);
