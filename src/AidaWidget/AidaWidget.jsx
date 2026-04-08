@@ -147,11 +147,31 @@ const AidaWidget = (props) => {
 
             const results = await chrome.scripting.executeScript({
                 target: { tabId },
-                func: () => ({
-                    title: document.title,
-                    url: window.location.href,
-                    content: document.body.innerText
-                })
+                func: () => {
+                    const getPageText = () => {
+                        // Target common main content wrappers first
+                        const mainElement = document.querySelector('.mainAnimatedPages') ||
+                            document.querySelector('.mainContent') ||
+                            document.querySelector('.page:not(.hide)') || 
+                            document.querySelector('main') ||
+                            document.body;
+
+                        const clone = mainElement.cloneNode(true);
+        
+                        // Strip out scripts, styles, and noscript tags from the clone
+                        const badTags = clone.querySelectorAll('script, style, noscript');
+                        badTags.forEach(el => el.remove());
+                        
+                        text = clone.textContent;
+                        return text;
+                    };
+
+                    return {
+                        title: document.title,
+                        url: window.location.href,
+                        content: getPageText()
+                    };
+                }
             });
 
             const result = results?.[0]?.result;
@@ -186,18 +206,24 @@ const AidaWidget = (props) => {
         }
 
         const handleTabUpdated = (tabId, changeInfo) => {
-            if (changeInfo.status !== 'complete') return;
-            chrome.tabs.query({ active: true, currentWindow: true }, ([activeTab]) => {
-                if (activeTab?.id === tabId) scrapeAndAutoAttach(tabId);
-            });
+            // ✅ FIX: Listen for URL changes (SPA navigation) OR complete status (Hard reload)
+            if (changeInfo.status === 'complete' || changeInfo.url) {
+                chrome.tabs.query({ active: true, currentWindow: true }, ([activeTab]) => {
+                    if (activeTab?.id === tabId) {
+                        // ✅ FIX: Add a small delay to let the SPA render the new DOM
+                        setTimeout(() => scrapeAndAutoAttach(tabId), 1000);
+                    }
+                });
+            }
         };
 
         const handleTabActivated = ({ tabId }) => {
-            scrapeAndAutoAttach(tabId);
+            // Also delay on tab switch just in case the page was paused/throttled
+            setTimeout(() => scrapeAndAutoAttach(tabId), 500);
         };
 
         chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-            if (tab?.id) scrapeAndAutoAttach(tab.id);
+            if (tab?.id) setTimeout(() => scrapeAndAutoAttach(tab.id), 500);
         });
 
         chrome.tabs.onUpdated.addListener(handleTabUpdated);
@@ -454,10 +480,24 @@ const AidaWidget = (props) => {
             const results = await chrome.scripting.executeScript({
                 target: { tabId: tab.id },
                 func: () => {
+                    const getPageText = () => {
+                        const mainElement = document.querySelector('.mainAnimatedPages') || 
+                                            document.querySelector('.mainContent') || 
+                                            document.querySelector('main') || 
+                                            document.body;
+                        
+                        let text = mainElement.innerText;
+                        
+                        if (!text || text.length < 300) {
+                            text = mainElement.textContent.replace(/\s+/g, ' ').trim();
+                        }
+                        return text;
+                    };
+            
                     return {
                         title: document.title,
                         url: window.location.href,
-                        content: document.body.innerText
+                        content: getPageText()
                     };
                 }
             });
