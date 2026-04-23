@@ -33,7 +33,7 @@ const DEFAULT_MODELS = [
     { value: 'openai/gpt-5.1', label: 'GPT-5.1', category: 'reasoning' },
     { value: 'google/gemini-3.1-pro-preview', label: 'Gemini Pro 3 (Reasoner)', category: 'reasoning' },
     { value: 'google/gemini-3.1-flash-lite-preview', label: 'Gemini Flash 3 Pre', category: 'chat' },
-    { value: 'anthropic/claude-sonnet-4.6', label: 'Claude Sonnet 4.6', category: 'reasoning' },
+    { value: 'anthropic/claude-3.7-sonnet', label: 'Claude Sonnet 4.7', category: 'reasoning' },
     { value: 'google/gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image', category: 'vision' },
     { value: 'openai/gpt-5.1', label: 'GPT-5.1', category: 'chat' },
     { value: 'perplexity/sonar', label: 'Perplexity Sonar', category: 'chat'}
