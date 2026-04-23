@@ -448,15 +448,20 @@ const ChatInput = ({
         );
     };
 
+    
     return (
         <div
             className="relative p-2 rounded-none transition-colors border-t"
             style={{ backgroundColor: 'var(--aida-body-bg)', borderColor: 'var(--aida-card-border)', color: 'var(--aida-body-text)' }}
         >
+            {/* ✅ UPDATED: Input container now uses user message background and text colors */}
             <div
-                className={`flex items-end rounded-lg px-3 py-1 mb-2 transition-colors ${
-                    isDark ? 'border border-gray-700 bg-gray-800' : 'border border-gray-300 bg-gray-50'
-                }`}
+                className="flex items-end rounded-lg px-3 py-1 mb-2 transition-colors border"
+                style={{
+                    backgroundColor: 'var(--aida-user-msg-bg)',
+                    color: 'var(--aida-user-msg-text)',
+                    borderColor: 'var(--aida-card-border)'
+                }}
             >
                 <textarea
                     ref={inputRef}
@@ -467,10 +472,8 @@ const ChatInput = ({
                     placeholder={translations.inputPlaceholder || 'Type your message...'}
                     dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'}
                     rows={1}
-                    className={`aida-input-textarea flex-1 bg-transparent px-0 py-1 resize-none focus:outline-none custom-scrollbar overflow-y-auto whitespace-pre-wrap leading-tight ${
-                        isDark ? 'text-gray-100 placeholder-gray-400' : ''
-                    } min-h-[32px] max-h-[200px]`}
-                    style={{ overflowY: 'auto', overflowX: 'hidden' }}
+                    className="aida-input-textarea flex-1 bg-transparent px-0 py-1 resize-none focus:outline-none custom-scrollbar overflow-y-auto whitespace-pre-wrap leading-tight min-h-[32px] max-h-[200px]"
+                    style={{ overflowY: 'auto', overflowX: 'hidden', color: 'inherit' }}
                 />
             </div>
 

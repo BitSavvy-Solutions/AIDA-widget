@@ -811,9 +811,23 @@ textarea.auto-expand {
   color: var(--aida-bot-msg-text);
 }
 
-/* Chat input container */
-.aida-scope .bg-gray-800 {
-  background-color: var(--aida-input-container);
+/* Theme-specific overrides for card elements */
+.aida-scope .rounded-lg.border {
+  border-color: var(--aida-card-border) !important;
+}
+
+/* Dropdown Menu Items */
+.aida-scope .aida-menu-item {
+  transition: background-color 0.2s ease;
+}
+.aida-scope .aida-menu-item:hover {
+  background-color: var(--aida-code-inline-bg);
+}
+
+/* ✅ UPDATED: Chat input container placeholder color */
+.aida-scope .aida-input-textarea::placeholder {
+color: var(--aida-user-msg-text);
+opacity: 0.7;
 }
 
 /* Theme-specific code block styles */
