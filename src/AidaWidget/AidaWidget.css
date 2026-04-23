@@ -776,3 +776,89 @@ textarea.auto-expand {
     margin-top: 0.5rem;
   }
 }
+
+/* Add to AidaWidget.css */
+/* Theme-based styling for key elements */
+.aida-scope {
+  /* Ensure base background and text color apply throughout */
+  background-color: var(--aida-body-bg);
+  color: var(--aida-body-text);
+}
+
+/* Glass header effect with theme colors */
+.aida-scope .glass-header {
+  background-color: var(--aida-header-bg);
+  color: var(--aida-header-text);
+  border-color: var(--aida-header-border);
+}
+
+.aida-scope .glass-header::before {
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.12),
+    rgba(255, 255, 255, 0.03)
+  );
+}
+
+/* User message with theme colors */
+.aida-scope .user-message {
+  background-color: var(--aida-user-msg-bg);
+  color: var(--aida-user-msg-text);
+}
+
+/* Bot message with theme colors */
+.aida-scope .bot-message {
+  color: var(--aida-bot-msg-text);
+}
+
+/* Chat input container */
+.aida-scope .bg-gray-800 {
+  background-color: var(--aida-input-container);
+}
+
+/* Theme-specific code block styles */
+.aida-scope pre {
+  background-color: var(--aida-code-bg);
+  color: var(--aida-code-text);
+}
+
+.aida-scope :not(pre) > code {
+  background-color: var(--aida-code-inline-bg);
+  color: var(--aida-code-text);
+}
+
+/* Enhanced styles for sepia theme */
+.aida-scope[data-theme="sepia"] .bot-message {
+  background-color: transparent;
+}
+
+.aida-scope[data-theme="sepia"] .thinking-dots {
+  color: var(--aida-body-text);
+  opacity: 0.6;
+}
+
+.aida-scope[data-theme="sepia"] .glass-header {
+  box-shadow: 0 1px 2px rgba(113, 63, 18, 0.1);
+}
+
+/* Enhanced styles for light theme */
+.aida-scope[data-theme="light"] .bot-message {
+  background-color: transparent;
+}
+
+.aida-scope[data-theme="light"] .glass-header {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* Theme-specific overrides for card elements */
+.aida-scope .rounded-lg.border {
+    border-color: var(--aida-card-border) !important;
+}
+
+/* Dropdown Menu Items */
+.aida-scope .aida-menu-item {
+    transition: background-color 0.2s ease;
+}
+.aida-scope .aida-menu-item:hover {
+    background-color: var(--aida-code-inline-bg);
+}

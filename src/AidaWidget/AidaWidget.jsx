@@ -341,20 +341,107 @@ const AidaWidget = (props) => {
     return (
         <div className="aida-scope">
             {/* ✅ Inject dynamic CSS variables and overrides for the selected theme */}
+            // In AidaWidget.jsx - Add this CSS injection to apply the theme variables
             <style>{`
                 .aida-scope {
+                    /* Base theme variables */
                     --aida-primary: ${selectedThemeObj.primary};
                     --aida-accent: ${selectedThemeObj.accent};
+                    
+                    /* Header */
+                    --aida-header-bg: ${selectedThemeObj.header.background};
+                    --aida-header-text: ${selectedThemeObj.header.text};
+                    --aida-header-border: ${selectedThemeObj.header.border};
+                    
+                    /* Body */
+                    --aida-body-bg: ${selectedThemeObj.body.background};
+                    --aida-body-text: ${selectedThemeObj.body.text};
+                    
+                    /* Chat area */
+                    --aida-chat-bg: ${selectedThemeObj.chatArea.background};
+                    --aida-user-msg-bg: ${selectedThemeObj.chatArea.userMessage.background};
+                    --aida-user-msg-text: ${selectedThemeObj.chatArea.userMessage.text};
+                    --aida-bot-msg-bg: ${selectedThemeObj.chatArea.botMessage.background};
+                    --aida-bot-msg-text: ${selectedThemeObj.chatArea.botMessage.text};
+                    
+                    /* Input area */
+                    --aida-input-container: ${selectedThemeObj.inputArea.container};
+                    --aida-input-bg: ${selectedThemeObj.inputArea.background};
+                    --aida-input-border: ${selectedThemeObj.inputArea.border};
+                    --aida-input-text: ${selectedThemeObj.inputArea.text};
+                    --aida-input-placeholder: ${selectedThemeObj.inputArea.placeholder};
+                    
+                    /* Card elements */
+                    --aida-card-bg: ${selectedThemeObj.card.background};
+                    --aida-card-border: ${selectedThemeObj.card.border};
+                    
+                    /* Code blocks */
+                    --aida-code-bg: ${selectedThemeObj.code.background};
+                    --aida-code-inline-bg: ${selectedThemeObj.code.inline};
+                    --aida-code-text: ${selectedThemeObj.code.text};
                 }
+                
+                /* Core style overrides */
                 .aida-scope .bg-brand-coral { background-color: var(--aida-primary) !important; }
                 .aida-scope .text-brand-coral { color: var(--aida-primary) !important; }
                 .aida-scope .border-brand-coral { border-color: var(--aida-primary) !important; }
                 .aida-scope .ring-brand-coral { --tw-ring-color: var(--aida-primary) !important; }
                 .aida-scope .ring-brand-coral\\/50 { --tw-ring-color: color-mix(in srgb, var(--aida-primary) 50%, transparent) !important; }
-                ${theme === 'sepia' ? `
-                .aida-scope .bg-white { background-color: ${selectedThemeObj.background} !important; }
-                .aida-scope .bg-gray-50 { background-color: ${selectedThemeObj.surface} !important; }
-                ` : ''}
+                
+                /* Main containers */
+                .aida-scope .glass-header {
+                    background-color: var(--aida-header-bg) !important;
+                    color: var(--aida-header-text) !important;
+                    border-color: var(--aida-header-border) !important;
+                }
+                
+                .aida-scope .aida-widget-shell[data-theme="${theme}"] {
+                    background-color: var(--aida-body-bg) !important;
+                    color: var(--aida-body-text) !important;
+                }
+                
+                /* Chat messages */
+                .aida-scope .user-message {
+                    background-color: var(--aida-user-msg-bg) !important;
+                    color: var(--aida-user-msg-text) !important;
+                }
+                
+                .aida-scope .bot-message {
+                    background-color: var(--aida-bot-msg-bg) !important;
+                    color: var(--aida-bot-msg-text) !important;
+                }
+                
+                /* Input area */
+                .aida-scope .bg-gray-800 {
+                    background-color: var(--aida-input-container) !important;
+                }
+                
+                .aida-scope .bg-gray-900 {
+                    background-color: var(--aida-body-bg) !important;
+                }
+                
+                .aida-scope .aida-input-textarea {
+                    color: var(--aida-input-text) !important;
+                }
+                
+                .aida-scope .aida-input-textarea::placeholder {
+                    color: var(--aida-input-placeholder) !important;
+                }
+                
+                /* Code blocks */
+                .aida-scope pre {
+                    background-color: var(--aida-code-bg) !important;
+                }
+                
+                .aida-scope :not(pre) > code {
+                    background-color: var(--aida-code-inline-bg) !important;
+                    color: var(--aida-code-text) !important;
+                }
+                
+                /* Theme-specific overrides for card elements */
+                .aida-scope .rounded-lg.border {
+                    border-color: var(--aida-card-border) !important;
+                }
             `}</style>
 
             {!isOpen && (
@@ -389,7 +476,7 @@ const AidaWidget = (props) => {
                             isMobileViewport={isMobileViewport}
                             toggleChat={toggleChat}
                             theme={baseTheme}
-                            onOpenAppearance={() => setIsAppearanceModalOpen(true)} 
+                            onOpenAppearance={() => setIsAppearanceModalOpen(true)}
                             onToggleHistory={openPanel}
                             onShare={messages.length > 0 ? () => {
                                 setSessionToShare({ messages, title: currentSessionTitle });

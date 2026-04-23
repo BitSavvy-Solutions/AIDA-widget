@@ -42,9 +42,9 @@ const ChatHeader = ({
     onUpdateProjectAppearance,
     onShare,
 }) => {
-    const headerColors = 'bg-[#0f172a] text-white backdrop-blur-md border-b border-white/10';
-    const hoverColor = theme === 'dark' ? 'hover:bg-white/10' : 'hover:bg-slate-200/70';
-    const accentColor = '#ffffff';
+    const headerColors = 'glass-header text-white border-b';
+    const hoverColor = 'aida-menu-item';
+    const accentColor = 'inherit';
 
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const menuRef = useRef(null);
@@ -212,7 +212,7 @@ const ChatHeader = ({
     };
 
     return (
-        <div ref={headerRef} className={`${headerColors} glass-header pl-0.5 pr-1 py-0.5 flex justify-between items-center rounded-none relative`}>
+        <div ref={headerRef} className={`${headerColors} pl-0.5 pr-1 py-0.5 flex justify-between items-center rounded-none relative`}>
             <div className="flex items-center gap-1 flex-1 min-w-0 mr-2">
                 {/* LCD Display */}
                 {onDisplayClick ? (
@@ -241,7 +241,12 @@ const ChatHeader = ({
                                     onKeyDown={handleKeyDown}
                                     onBlur={handleSaveTitle}
                                     placeholder="Enter chat title..."
-                                    className="w-full bg-black/40 border border-white/20 rounded-md px-0.5 py-0.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-coral/50 focus:border-brand-coral/50 transition-all"
+                                    className="w-full border rounded-md px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-coral/50 focus:border-brand-coral/50 transition-all"
+                                    style={{
+                                        backgroundColor: 'rgba(0,0,0,0.1)',
+                                        borderColor: 'var(--aida-header-border)',
+                                        color: 'var(--aida-header-text)'
+                                    }}
                                 />
                             </div>
                         ) : (
@@ -249,20 +254,21 @@ const ChatHeader = ({
                                 onClick={handleStartEdit}
                                 disabled={!isSessionActive}
                                 className={`
-                                    group flex items-center gap-2 px-2 py-1 rounded-md transition-all duration-200 border max-w-full text-left
-                                    ${isDefaultTitle
-                                        ? 'bg-black/20 border-white/5 text-gray-400 hover:bg-black/40 hover:text-gray-200 hover:border-white/10'
-                                        : 'bg-transparent border-transparent hover:bg-white/5 text-white'
-                                    }
+                                    group flex items-center gap-2 px-2 py-1 rounded-md transition-all duration-200 border max-w-full text-left aida-menu-item
                                     ${!isSessionActive ? 'opacity-50 cursor-default' : 'cursor-pointer'}
                                 `}
+                                style={{
+                                    backgroundColor: isDefaultTitle ? 'rgba(0,0,0,0.1)' : 'transparent',
+                                    borderColor: isDefaultTitle ? 'var(--aida-header-border)' : 'transparent',
+                                    color: 'var(--aida-header-text)'
+                                }}
                                 title={isSessionActive ? "Click to rename" : "Start a chat to rename"}
                             >
-                                <span className={`text-sm font-semibold truncate ${isDefaultTitle ? 'italic font-normal' : ''}`}>
+                                <span className={`text-sm font-semibold truncate ${isDefaultTitle ? 'italic font-normal opacity-70' : ''}`}>
                                     {isDefaultTitle ? 'Set Chat Title...' : sessionTitle}
                                 </span>
                                 {isSessionActive && (
-                                    <HiPencilSquare className={`w-3.5 h-3.5 shrink-0 transition-opacity ${isDefaultTitle ? 'text-gray-500 group-hover:text-gray-300' : 'text-gray-500 opacity-0 group-hover:opacity-100'}`} />
+                                    <HiPencilSquare className={`w-3.5 h-3.5 shrink-0 transition-opacity ${isDefaultTitle ? 'opacity-50 group-hover:opacity-80' : 'opacity-0 group-hover:opacity-100'}`} />
                                 )}
                             </button>
                         )}
@@ -273,7 +279,7 @@ const ChatHeader = ({
                         <div className="relative flex items-center mt-1 ml-0.5 w-full" ref={tagMenuRef}>
                             <button
                                 onClick={() => setIsTagMenuOpen(!isTagMenuOpen)}
-                                className={`flex items-center text-left rounded transition-colors w-full ${isTagMenuOpen ? 'bg-white/5' : 'hover:bg-white/5'}`}
+                                className="flex items-center text-left rounded transition-colors w-full aida-menu-item"
                                 title="Manage Tags"
                             >
                                 {assignedProjects.length > 0 ? (
@@ -295,7 +301,7 @@ const ChatHeader = ({
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="flex items-center gap-1 text-gray-500 hover:text-gray-400 transition-colors px-1">
+                                    <div className="flex items-center gap-1 opacity-70 hover:opacity-100 transition-opacity px-1">
                                         <HiOutlineTag className="w-3 h-3" />
                                         <span className="text-[10px]">Add tag</span>
                                     </div>
@@ -304,45 +310,48 @@ const ChatHeader = ({
 
                             {/* Tag dropdown */}
                             {isTagMenuOpen && (
-                                <div className="absolute top-full left-0 mt-2 w-64 rounded-lg bg-slate-800/95 text-sm shadow-xl border border-white/10 z-50 flex flex-col overflow-hidden">
+                                <div 
+                                    className="absolute top-full left-0 mt-2 w-64 rounded-lg text-sm shadow-xl border z-50 flex flex-col overflow-hidden"
+                                    style={{ backgroundColor: 'var(--aida-card-bg)', borderColor: 'var(--aida-card-border)', color: 'var(--aida-body-text)' }}
+                                >
                                     {editingProjectId ? (
                                         <ProjectIconPicker
                                             project={projects.find(p => p.id === editingProjectId)}
                                             onUpdate={onUpdateProjectAppearance}
                                             onBack={() => setEditingProjectId(null)}
                                             onClose={() => setEditingProjectId(null)}
-                                            theme="dark"
+                                            theme={theme}
                                         />
                                     ) : (
                                         <>
-                                            <div className="px-3 py-2 border-b border-white/10 bg-slate-900/50">
-                                                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Tags</span>
+                                            <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--aida-card-border)', backgroundColor: 'var(--aida-input-bg)' }}>
+                                                <span className="text-xs font-semibold uppercase tracking-wider opacity-70">Tags</span>
                                             </div>
                                             <div className="max-h-56 overflow-y-auto custom-scrollbar p-1 space-y-0.5">
                                                 {projects.length === 0 && (
-                                                    <div className="px-3 py-4 text-xs text-gray-500 italic text-center">No tags created yet</div>
+                                                    <div className="px-3 py-4 text-xs italic text-center opacity-60">No tags created yet</div>
                                                 )}
                                                 {projects.map(project => {
                                                     const isSelected = project.chatIds.includes(currentSessionId);
                                                     const Icon = PROJECT_ICON_OPTIONS.find(opt => opt.key === project.iconKey)?.Icon || NotebookIcon;
                                                     const color = project.iconColor || DEFAULT_PROJECT_ICON_COLOR;
                                                     return (
-                                                        <div key={project.id} className="flex items-center gap-1 group rounded hover:bg-white/5 pr-1">
+                                                        <div key={project.id} className="flex items-center gap-1 group rounded pr-1 aida-menu-item">
                                                             <button
                                                                 onClick={() => handleToggleTag(project.id)}
                                                                 className="flex-1 px-2 py-1.5 text-left flex items-center gap-2 min-w-0"
                                                             >
-                                                                <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${isSelected ? 'bg-brand-coral border-brand-coral' : 'border-gray-600 group-hover:border-gray-400'}`}>
+                                                                <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${isSelected ? 'bg-brand-coral border-brand-coral' : 'border-gray-400 group-hover:border-gray-500'}`}>
                                                                     {isSelected && <HiCheck className="w-3 h-3 text-white" />}
                                                                 </div>
                                                                 <div className="flex items-center gap-2 min-w-0">
                                                                     <Icon className="w-4 h-4 shrink-0" style={{ color }} />
-                                                                    <span className={`truncate text-xs ${isSelected ? 'text-white font-medium' : 'text-gray-300'}`}>{project.name}</span>
+                                                                    <span className={`truncate text-xs ${isSelected ? 'font-medium' : ''}`}>{project.name}</span>
                                                                 </div>
                                                             </button>
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); setEditingProjectId(project.id); }}
-                                                                className="p-1.5 rounded text-gray-500 hover:text-white hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all"
+                                                                className="p-1.5 rounded opacity-0 group-hover:opacity-100 transition-all aida-menu-item"
                                                                 title="Customize Tag"
                                                             >
                                                                 <HiOutlineCog6Tooth className="w-3.5 h-3.5" />
@@ -351,7 +360,7 @@ const ChatHeader = ({
                                                     );
                                                 })}
                                             </div>
-                                            <div className="p-2 border-t border-white/10 bg-slate-900/30">
+                                            <div className="p-2 border-t" style={{ borderColor: 'var(--aida-card-border)', backgroundColor: 'var(--aida-input-bg)' }}>
                                                 <div className="flex items-center gap-1">
                                                     <input
                                                         type="text"
@@ -359,12 +368,13 @@ const ChatHeader = ({
                                                         onChange={(e) => setNewTagDraft(e.target.value)}
                                                         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCreateTag(); } }}
                                                         placeholder="Create new tag..."
-                                                        className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-brand-coral/50 placeholder-gray-500"
+                                                        className="flex-1 border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-brand-coral/50"
+                                                        style={{ backgroundColor: 'var(--aida-input-container)', borderColor: 'var(--aida-input-border)', color: 'var(--aida-input-text)' }}
                                                     />
                                                     <button
                                                         onClick={handleCreateTag}
                                                         disabled={!newTagDraft.trim()}
-                                                        className="p-1.5 rounded bg-white/10 hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed text-white transition-colors"
+                                                        className="p-1.5 rounded disabled:opacity-30 disabled:cursor-not-allowed transition-colors aida-menu-item"
                                                         title="Add Tag"
                                                     >
                                                         <HiPlus className="w-4 h-4" />
@@ -427,11 +437,14 @@ const ChatHeader = ({
                         <HiEllipsisVertical className="w-5 h-5" />
                     </button>
                     {isMenuOpen && (
-                        <div className="absolute right-0 mt-2 w-40 rounded-lg bg-slate-800/95 text-sm shadow-lg border border-white/10 py-1 z-50">
+                        <div 
+                            className="absolute right-0 mt-2 w-40 rounded-lg text-sm shadow-lg border py-1 z-50"
+                            style={{ backgroundColor: 'var(--aida-card-bg)', borderColor: 'var(--aida-card-border)', color: 'var(--aida-body-text)' }}
+                        >
                             {!isMobileViewport && (
                                 <button
                                     onClick={() => { resetChat(); closeMenu(); }}
-                                    className="w-full px-3 py-2 text-left hover:bg-white/10 flex items-center gap-2"
+                                    className="w-full px-3 py-2 text-left flex items-center gap-2 aida-menu-item"
                                 >
                                     <HiPlus className="w-4 h-4" />
                                     <span>New chat</span>
@@ -440,7 +453,7 @@ const ChatHeader = ({
                             {onShare && (
                                 <button
                                     onClick={() => { onShare(); closeMenu(); }}
-                                    className="w-full px-3 py-2 text-left hover:bg-white/10 flex items-center gap-2"
+                                    className="w-full px-3 py-2 text-left flex items-center gap-2 aida-menu-item"
                                 >
                                     <HiOutlineShare className="w-4 h-4" />
                                     <span>Share</span>
@@ -449,7 +462,7 @@ const ChatHeader = ({
                             {onToggleHistory && (
                                 <button
                                     onClick={() => { onToggleHistory(); closeMenu(); }}
-                                    className="w-full px-3 py-2 text-left hover:bg-white/10 flex items-center gap-2"
+                                    className="w-full px-3 py-2 text-left flex items-center gap-2 aida-menu-item"
                                 >
                                     <HiClock className="w-4 h-4" />
                                     <span>Chat history</span>
@@ -457,8 +470,8 @@ const ChatHeader = ({
                             )}
                             {onOpenAppearance && (
                                 <button
-                                    onClick={() => { onOpenAppearance(); closeMenu(); }} // <--- USE PROP HERE
-                                    className="w-full px-3 py-2 text-left hover:bg-white/10 flex items-center gap-2"
+                                    onClick={() => { onOpenAppearance(); closeMenu(); }}
+                                    className="w-full px-3 py-2 text-left flex items-center gap-2 aida-menu-item"
                                 >
                                     <HiOutlineAdjustmentsHorizontal className="w-4 h-4" />
                                     <span>Appearance</span>
