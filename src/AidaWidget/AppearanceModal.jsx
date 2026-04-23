@@ -1,6 +1,6 @@
 /* src/AidaWidget/AppearanceModal.jsx */
 import React, { useState, useEffect } from 'react';
-import { HiXMark, HiCheck } from 'react-icons/hi2';
+import { HiXMark, HiCheck, HiClipboard, HiArrowDownTray } from 'react-icons/hi2';
 
 const hexToRgb = (hex) => {
   let c = (hex || '').replace('#', '');
@@ -357,6 +357,10 @@ const AppearanceModal = ({ isOpen, onClose, currentTheme, onSelectTheme, textSiz
     };
   });
 
+  const [copySuccess, setCopySuccess] = useState(false);
+  const [pasteSuccess, setPasteSuccess] = useState(false);
+  const [pasteError, setPasteError] = useState(false);
+
   useEffect(() => {
     const derivedDarkBg = deriveDarkColor(customThemeSettings.bodyBg);
     const adjustedHeaderText = adjustColorForContrast(customThemeSettings.bodyText, derivedDarkBg);
@@ -392,6 +396,42 @@ const AppearanceModal = ({ isOpen, onClose, currentTheme, onSelectTheme, textSiz
       onSelectTheme('custom');
     }
   }, [customThemeSettings, currentTheme, onSelectTheme]);
+
+  const handleCopyTheme = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(customThemeSettings, null, 2));
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy theme', err);
+    }
+  };
+
+  const handlePasteTheme = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      const parsed = JSON.parse(text);
+      
+      if (parsed && typeof parsed === 'object') {
+        const newSettings = { ...customThemeSettings };
+        if (parsed.primary) newSettings.primary = parsed.primary;
+        if (parsed.accent) newSettings.accent = parsed.accent;
+        if (parsed.bodyBg) newSettings.bodyBg = parsed.bodyBg;
+        if (parsed.bodyText) newSettings.bodyText = parsed.bodyText;
+        if (parsed.userMsgBg) newSettings.userMsgBg = parsed.userMsgBg;
+        
+        setCustomThemeSettings(newSettings);
+        setPasteSuccess(true);
+        setTimeout(() => setPasteSuccess(false), 2000);
+      } else {
+        throw new Error('Invalid theme format');
+      }
+    } catch (err) {
+      console.error('Failed to paste theme', err);
+      setPasteError(true);
+      setTimeout(() => setPasteError(false), 2000);
+    }
+  };
 
   if (!isOpen) return null;
   
@@ -435,7 +475,25 @@ const AppearanceModal = ({ isOpen, onClose, currentTheme, onSelectTheme, textSiz
           <div className={`mt-6 p-4 rounded-lg border ${
             isDark ? 'border-gray-700 bg-gray-900/50' : 'border-gray-200 bg-gray-50'
           }`}>
-            <h3 className="text-sm font-medium mb-3">Customize Colors</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-medium">Customize Colors</h3>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={handleCopyTheme}
+                  className={`p-1.5 rounded-md transition-colors ${isDark ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500'}`}
+                  title="Copy Theme"
+                >
+                  {copySuccess ? <HiCheck className="w-4 h-4 text-green-500" /> : <HiClipboard className="w-4 h-4" />}
+                </button>
+                <button
+                  onClick={handlePasteTheme}
+                  className={`p-1.5 rounded-md transition-colors ${isDark ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500'}`}
+                  title="Paste Theme"
+                >
+                  {pasteError ? <HiXMark className="w-4 h-4 text-red-500" /> : pasteSuccess ? <HiCheck className="w-4 h-4 text-green-500" /> : <HiArrowDownTray className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
             
             <ColorPicker 
               label="Primary Brand" 
