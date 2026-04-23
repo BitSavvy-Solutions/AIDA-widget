@@ -362,13 +362,12 @@ const AidaWidget = (props) => {
     useEffect(() => { if (inputRef.current) { inputRef.current.style.height = 'auto'; inputRef.current.style.height = `${inputRef.current.scrollHeight}px`; } }, [currentMessage]);
     useEffect(() => { const handleResize = () => setIsMobileViewport(window.innerWidth <= 768); window.addEventListener('resize', handleResize); return () => window.removeEventListener('resize', handleResize); }, []);
 
-    // ✅ Use baseTheme for Tailwind classes
-    const containerClasses = `flex flex-col relative aida-widget-shell ${isClosing ? 'animate-collapse-chat' : 'animate-expand-chat'} ${isResizing ? 'aida-widget-shell--active' : ''} ${baseTheme === 'dark' ? 'bg-gray-900 text-gray-100 border-l border-gray-800' : 'bg-white text-gray-900 border-l border-gray-200'} ${isFullscreen ? 'w-full h-full aida-widget-shell--fullscreen' : 'h-full aida-widget-shell--docked'}`;
+    // ✅ REMOVED hardcoded bg-gray-900/bg-white classes so the CSS variables can take effect
+    const containerClasses = `flex flex-col relative aida-widget-shell ${isClosing ? 'animate-collapse-chat' : 'animate-expand-chat'} ${isResizing ? 'aida-widget-shell--active' : ''} border-l ${isFullscreen ? 'w-full h-full aida-widget-shell--fullscreen' : 'h-full aida-widget-shell--docked'}`;
 
     return (
         <div className="aida-scope">
             {/* ✅ Inject dynamic CSS variables and overrides for the selected theme */}
-            // In AidaWidget.jsx - Add this CSS injection to apply the theme variables
             <style>{`
                 .aida-scope {
                     /* Base theme variables */
@@ -418,7 +417,8 @@ const AidaWidget = (props) => {
             )}
             {isOpen && (
                 <div className={`aida-widget-viewport z-50 ${isFullscreen ? 'aida-widget-viewport--fullscreen' : 'aida-widget-viewport--docked'}`}>
-                    <div ref={sidebarRef} data-theme={baseTheme} style={sidebarInlineStyle} className={containerClasses} {...dropZoneProps}>
+                    {/* ✅ ADDED inline styles to enforce the theme variables on the main container */}
+                    <div ref={sidebarRef} data-theme={baseTheme} style={{ ...sidebarInlineStyle, backgroundColor: 'var(--aida-body-bg)', color: 'var(--aida-body-text)', borderColor: 'var(--aida-card-border)' }} className={containerClasses} {...dropZoneProps}>
                         {features.resizable && !isFullscreen && !isMobileViewport && <div {...resizeHandleProps} />}
                         {attachmentsEnabled && isDragOverWidget && (
                             <div className="absolute inset-0 z-[55] pointer-events-none flex items-center justify-center px-4">

@@ -575,7 +575,7 @@ const ChatDisplay = ({
     const activeStartIndex = Math.max(0, messages.length - contextLimit);
 
     return (
-        <div ref={containerRef} className={`relative flex-1 overflow-y-auto p-4 space-y-4 ${isDark ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
+        <div ref={containerRef} className="relative flex-1 overflow-y-auto p-4 space-y-4" style={{ backgroundColor: 'var(--aida-body-bg)', color: 'var(--aida-body-text)' }}>
             {messages.map((message, index) => {
                 const messageText = typeof message.text === 'string' ? message.text : '';
                 const trimmedText = messageText.trim();

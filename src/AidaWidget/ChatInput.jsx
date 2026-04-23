@@ -450,11 +450,8 @@ const ChatInput = ({
 
     return (
         <div
-            className={`relative p-2 rounded-none transition-colors ${
-                isDark
-                    ? 'border-t border-gray-800 bg-gray-900 text-gray-100'
-                    : 'border-t border-gray-200 bg-white text-gray-900'
-            }`}
+            className="relative p-2 rounded-none transition-colors border-t"
+            style={{ backgroundColor: 'var(--aida-body-bg)', borderColor: 'var(--aida-card-border)', color: 'var(--aida-body-text)' }}
         >
             <div
                 className={`flex items-end rounded-lg px-3 py-1 mb-2 transition-colors ${
