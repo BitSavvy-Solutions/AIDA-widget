@@ -98,6 +98,8 @@ const AidaWidget = (props) => {
         localStorage.setItem('aida-text-size', textSize.toString());
     }, [textSize]);
 
+
+
     const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false);
     const [editingMessageId, setEditingMessageId] = useState(null);
     const [editDraft, setEditDraft] = useState('');
@@ -142,9 +144,34 @@ const AidaWidget = (props) => {
     const { countdown: autoRecordCountdown, start: startAutoRecordTimer, cancel: cancelAutoRecordTimer, setIsPaused: setIsRecordTimerPaused } = useCountdown(startRecording, 3);
     const displayText = useDisplayAnimation({ isOpen, isLoading });
 
-    // ✅ Map the selected theme to a base Tailwind mode (dark or light)
-    const baseTheme = ['dark', 'azure'].includes(theme) ? 'dark' : 'light';
+    // Load custom theme from localStorage when component mounts
+    useEffect(() => {
+        if (theme === 'custom') {
+            try {
+                const customTheme = JSON.parse(localStorage.getItem('aida-custom-theme'));
+                if (customTheme) {
+                    // Update the THEMES.custom object with saved values
+                    THEMES.custom.primary = customTheme.primary || THEMES.custom.primary;
+                    THEMES.custom.accent = customTheme.accent || THEMES.custom.accent;
+                    THEMES.custom.header.background = customTheme.headerBg || THEMES.custom.header.background;
+                    THEMES.custom.body.background = customTheme.bodyBg || THEMES.custom.body.background;
+                    THEMES.custom.body.text = customTheme.bodyText || THEMES.custom.body.text;
+                    THEMES.custom.chatArea.userMessage.background = customTheme.userMsgBg || THEMES.custom.chatArea.userMessage.background;
+                }
+            } catch (e) {
+                console.warn('Error loading custom theme', e);
+            }
+        }
+    }, [theme]);
+
+    // Get the appropriate theme object
     const selectedThemeObj = Object.values(THEMES).find(t => t.id === theme) || THEMES.coral;
+
+    // Determine if we should use dark or light base styling
+    const baseTheme = ['dark', 'azure'].includes(theme) ||
+        (theme === 'custom' && selectedThemeObj.body.background.match(/#([0-9a-f]{2}){1,2}/i) &&
+            parseInt(selectedThemeObj.body.background.slice(1), 16) < 0x808080)
+        ? 'dark' : 'light';
 
     useEffect(() => {
         if (loadMessagesForSession) loadMessagesForSession(currentSessionId);
@@ -379,68 +406,6 @@ const AidaWidget = (props) => {
                     --aida-code-bg: ${selectedThemeObj.code.background};
                     --aida-code-inline-bg: ${selectedThemeObj.code.inline};
                     --aida-code-text: ${selectedThemeObj.code.text};
-                }
-                
-                /* Core style overrides */
-                .aida-scope .bg-brand-coral { background-color: var(--aida-primary) !important; }
-                .aida-scope .text-brand-coral { color: var(--aida-primary) !important; }
-                .aida-scope .border-brand-coral { border-color: var(--aida-primary) !important; }
-                .aida-scope .ring-brand-coral { --tw-ring-color: var(--aida-primary) !important; }
-                .aida-scope .ring-brand-coral\\/50 { --tw-ring-color: color-mix(in srgb, var(--aida-primary) 50%, transparent) !important; }
-                
-                /* Main containers */
-                .aida-scope .glass-header {
-                    background-color: var(--aida-header-bg) !important;
-                    color: var(--aida-header-text) !important;
-                    border-color: var(--aida-header-border) !important;
-                }
-                
-                .aida-scope .aida-widget-shell[data-theme="${theme}"] {
-                    background-color: var(--aida-body-bg) !important;
-                    color: var(--aida-body-text) !important;
-                }
-                
-                /* Chat messages */
-                .aida-scope .user-message {
-                    background-color: var(--aida-user-msg-bg) !important;
-                    color: var(--aida-user-msg-text) !important;
-                }
-                
-                .aida-scope .bot-message {
-                    background-color: var(--aida-bot-msg-bg) !important;
-                    color: var(--aida-bot-msg-text) !important;
-                }
-                
-                /* Input area */
-                .aida-scope .bg-gray-800 {
-                    background-color: var(--aida-input-container) !important;
-                }
-                
-                .aida-scope .bg-gray-900 {
-                    background-color: var(--aida-body-bg) !important;
-                }
-                
-                .aida-scope .aida-input-textarea {
-                    color: var(--aida-input-text) !important;
-                }
-                
-                .aida-scope .aida-input-textarea::placeholder {
-                    color: var(--aida-input-placeholder) !important;
-                }
-                
-                /* Code blocks */
-                .aida-scope pre {
-                    background-color: var(--aida-code-bg) !important;
-                }
-                
-                .aida-scope :not(pre) > code {
-                    background-color: var(--aida-code-inline-bg) !important;
-                    color: var(--aida-code-text) !important;
-                }
-                
-                /* Theme-specific overrides for card elements */
-                .aida-scope .rounded-lg.border {
-                    border-color: var(--aida-card-border) !important;
                 }
             `}</style>
 

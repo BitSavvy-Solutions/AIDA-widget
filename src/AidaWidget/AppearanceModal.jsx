@@ -1,5 +1,5 @@
 /* src/AidaWidget/AppearanceModal.jsx */
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { HiXMark, HiCheck } from 'react-icons/hi2';
 
 // Expanded theme definitions with comprehensive styling properties
@@ -38,7 +38,6 @@ export const THEMES = {
       text: '#f8fafc',
       placeholder: 'rgba(248, 250, 252, 0.5)'
     },
-    // Additional elements
     card: {
       background: '#1e293b',
       border: '#334155'
@@ -177,104 +176,131 @@ export const THEMES = {
       inline: 'rgba(15, 23, 42, 0.05)',
       text: '#0f172a'
     }
+  },
+  custom: {
+    id: 'custom',
+    name: 'Custom Theme',
+    primary: '#FF5F90',
+    accent: '#ff87b0',
+    header: {
+      background: '#0f172a',
+      text: '#ffffff',
+      border: 'rgba(255, 255, 255, 0.1)'
+    },
+    body: {
+      background: '#0f172a',
+      text: '#f8fafc'
+    },
+    chatArea: {
+      background: '#0f172a',
+      userMessage: {
+        background: '#FF5F90',
+        text: '#ffffff'
+      },
+      botMessage: {
+        background: 'transparent',
+        text: '#f8fafc'
+      }
+    },
+    inputArea: {
+      container: '#1e293b',
+      background: '#1e293b',
+      border: 'rgba(255, 255, 255, 0.1)',
+      text: '#f8fafc',
+      placeholder: 'rgba(248, 250, 252, 0.5)'
+    },
+    card: {
+      background: '#1e293b',
+      border: '#334155'
+    },
+    code: {
+      background: '#1e1e1e',
+      inline: 'rgba(255, 255, 255, 0.1)',
+      text: '#f8f8f2'
+    }
   }
 };
 
-// Enhanced theme card preview that better showcases theme differences
+// Theme card component for theme selection
 const ThemeCard = ({ theme, isSelected, onSelect }) => {
   return (
     <button
       onClick={() => onSelect(theme.id)}
-      className={`relative overflow-hidden rounded-xl border transition-all p-4 w-full ${
-        isSelected 
-          ? 'ring-2 shadow-md scale-[1.02]' 
-          : 'hover:border-gray-400 dark:hover:border-gray-600'
+      className={`w-full p-3 rounded-lg border transition-all hover:scale-105 ${
+        isSelected ? 'border-brand-coral ring-2 ring-brand-coral ring-opacity-50' : 'border-gray-200 dark:border-gray-700'
       }`}
-      style={{
-        backgroundColor: theme.body.background,
-        borderColor: isSelected ? theme.primary : 'rgba(156, 163, 175, 0.2)',
-        boxShadow: isSelected ? `0 0 0 2px ${theme.primary}40` : 'none',
-      }}
-      aria-pressed={isSelected}
     >
-      {/* Theme preview elements */}
-      <div className="flex flex-col h-36">
-        {/* Header preview */}
-        <div 
-          className="h-6 mb-3 rounded-t flex items-center px-2"
-          style={{ 
-            backgroundColor: theme.header.background,
-            borderBottom: `1px solid ${theme.header.border}`,
-            color: theme.header.text
-          }}
-        >
-          <div className="w-12 h-3 rounded-sm opacity-60" style={{ backgroundColor: theme.header.text }}></div>
-        </div>
-        
-        {/* Chat area */}
-        <div className="flex-grow flex flex-col gap-2 px-1">
-          {/* Bot message preview */}
-          <div className="flex justify-start">
-            <div 
-              className="w-24 h-5 rounded-lg"
-              style={{ 
-                backgroundColor: theme.chatArea.botMessage.background,
-                border: `1px solid ${theme.card.border}`,
-                color: theme.chatArea.botMessage.text
-              }}
-            ></div>
-          </div>
-          
-          {/* User message preview */}
-          <div className="flex justify-end">
-            <div 
-              className="w-16 h-5 rounded-md"
-              style={{ 
-                backgroundColor: theme.chatArea.userMessage.background,
-                color: theme.chatArea.userMessage.text
-              }}
-            ></div>
-          </div>
-          
-          {/* Input area preview */}
-          <div className="mt-auto">
-            <div 
-              className="w-full h-6 rounded-lg"
-              style={{ 
-                backgroundColor: theme.inputArea.background,
-                border: `1px solid ${theme.inputArea.border}`,
-                color: theme.inputArea.text
-              }}
-            ></div>
-          </div>
-        </div>
+      <div className="flex items-center justify-between mb-2">
+        <span className="font-medium text-sm">{theme.name}</span>
+        {isSelected && <HiCheck className="w-4 h-4 text-brand-coral" />}
       </div>
-      
-      {/* Theme name */}
-      <div 
-        className="mt-3 text-xs font-medium text-center truncate"
-        style={{ color: theme.body.text }}
-      >
-        {theme.name}
-      </div>
-
-      {/* Selected indicator */}
-      {isSelected && (
-        <div 
-          className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center"
-          style={{ backgroundColor: theme.primary }}
-        >
-          <HiCheck className="w-3 h-3 text-white" />
-        </div>
-      )}
+      <div className="h-6 rounded-full" style={{ background: theme.primary }}></div>
     </button>
   );
 };
 
+// Color picker component
+const ColorPicker = ({ label, value, onChange }) => {
+  return (
+    <div className="flex items-center justify-between mb-3">
+      <span className="text-sm">{label}</span>
+      <div className="flex items-center">
+        <input
+          type="color"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-8 h-8 rounded cursor-pointer border"
+        />
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="ml-2 w-20 px-2 py-1 text-xs rounded border"
+        />
+      </div>
+    </div>
+  );
+};
+
 const AppearanceModal = ({ isOpen, onClose, currentTheme, onSelectTheme, textSize, onChangeTextSize }) => {
+  // Load saved custom theme settings
+  const [customThemeSettings, setCustomThemeSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aida-custom-theme');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return {
+      primary: THEMES.custom.primary,
+      accent: THEMES.custom.accent,
+      headerBg: THEMES.custom.header.background,
+      bodyBg: THEMES.custom.body.background,
+      bodyText: THEMES.custom.body.text,
+      userMsgBg: THEMES.custom.chatArea.userMessage.background
+    };
+  });
+
+  // Update the THEMES.custom object when settings change
+  useEffect(() => {
+    THEMES.custom.primary = customThemeSettings.primary;
+    THEMES.custom.accent = customThemeSettings.accent;
+    THEMES.custom.header.background = customThemeSettings.headerBg;
+    THEMES.custom.body.background = customThemeSettings.bodyBg;
+    THEMES.custom.body.text = customThemeSettings.bodyText;
+    THEMES.custom.chatArea.userMessage.background = customThemeSettings.userMsgBg;
+    
+    // Save to localStorage
+    localStorage.setItem('aida-custom-theme', JSON.stringify(customThemeSettings));
+    
+    // If currently using custom theme, trigger refresh
+    if (currentTheme === 'custom') {
+      onSelectTheme('custom');
+    }
+  }, [customThemeSettings, currentTheme, onSelectTheme]);
+
   if (!isOpen) return null;
   
-  const isDark = currentTheme === 'dark' || currentTheme === 'azure';
+  const isDark = currentTheme === 'dark' || currentTheme === 'azure' || 
+    (currentTheme === 'custom' && customThemeSettings.bodyBg.match(/#([0-9a-f]{2}){1,2}/i) && parseInt(customThemeSettings.bodyBg.slice(1), 16) < 0x808080);
   
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
@@ -310,8 +336,41 @@ const AppearanceModal = ({ isOpen, onClose, currentTheme, onSelectTheme, textSiz
           </div>
         </div>
         
+        {/* Custom Theme Options */}
+        {currentTheme === 'custom' && (
+          <div className={`mt-6 p-4 rounded-lg border ${
+            isDark ? 'border-gray-700 bg-gray-900/50' : 'border-gray-200 bg-gray-50'
+          }`}>
+            <h3 className="text-sm font-medium mb-3">Customize Colors</h3>
+            
+            <ColorPicker 
+              label="Primary Brand" 
+              value={customThemeSettings.primary}
+              onChange={(value) => setCustomThemeSettings(s => ({...s, primary: value}))}
+            />
+            
+            <ColorPicker 
+              label="Messages Background" 
+              value={customThemeSettings.userMsgBg}
+              onChange={(value) => setCustomThemeSettings(s => ({...s, userMsgBg: value}))}
+            />
+            
+            <ColorPicker 
+              label="Background" 
+              value={customThemeSettings.bodyBg}
+              onChange={(value) => setCustomThemeSettings(s => ({...s, bodyBg: value}))}
+            />
+            
+            <ColorPicker 
+              label="Text Color" 
+              value={customThemeSettings.bodyText}
+              onChange={(value) => setCustomThemeSettings(s => ({...s, bodyText: value}))}
+            />
+          </div>
+        )}
+        
         {/* Text Size */}
-        <div>
+        <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
           <h3 className={`text-sm font-medium mb-3 ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>Text Size</h3>
           <div className="flex items-center">
             <span className={`text-xs mr-2 ${isDark ? 'text-gray-300' : 'text-gray-500'}`}>A</span>
