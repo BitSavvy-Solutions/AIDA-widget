@@ -7,7 +7,7 @@ import { copyFileSync, mkdirSync, existsSync } from 'fs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig(({ mode }) => {
-  const config = {
+  return {
     define: {
       'process.env.NODE_ENV': JSON.stringify(mode),
       'process.env': JSON.stringify({}),
@@ -20,14 +20,8 @@ export default defineConfig(({ mode }) => {
         name: 'copy-index-html',
         closeBundle() {
           const buildDir = path.resolve(__dirname, 'build');
-          if (!existsSync(buildDir)) {
-            mkdirSync(buildDir, { recursive: true });
-          }
-          
-          copyFileSync(
-            path.resolve(__dirname, 'index.html'),
-            path.resolve(buildDir, 'index.html')
-          );
+          if (!existsSync(buildDir)) mkdirSync(buildDir, { recursive: true });
+          copyFileSync(path.resolve(__dirname, 'index.html'), path.resolve(buildDir, 'index.html'));
           console.log('✓ Copied index.html to build directory');
         }
       }
@@ -37,27 +31,25 @@ export default defineConfig(({ mode }) => {
       lib: {
         entry: path.resolve(__dirname, 'src/main.jsx'),
         name: 'AidaWidget',
-        fileName: (format) => `aida-widget.${format}.js`,
-        formats: ['umd'],
       },
-      // ✅ MODIFIED: Enable minification for production builds.
-      // Vite's default is 'esbuild', which is very fast.
       minify: mode === 'production' ? 'esbuild' : false,
-      sourcemap: false, 
+      sourcemap: false,
       rollupOptions: {
-        external: [],
+        // This tells Rollup to output multiple files
+        output: [
+          {
+            format: 'es',
+            entryFileNames: 'aida-widget.es.js',
+            preserveModules: false, // Set to false to bundle into one file
+          },
+          {
+            format: 'umd',
+            entryFileNames: 'aida-widget.umd.js',
+            name: 'AidaWidget',
+            inlineDynamicImports: true, // Required for UMD
+          }
+        ]
       }
-    },
+    }
   };
-
-  if (mode !== 'production') {
-    config.resolve = {
-      alias: {
-        'react-dom$': 'react-dom/profiling',
-        'scheduler/tracing': 'scheduler/tracing-profiling',
-      },
-    };
-  }
-  
-  return config;
 });
