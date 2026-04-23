@@ -9,7 +9,8 @@ import ErrorModal from './ErrorModal';
 import EmbedModal from './EmbedModal';
 import ShareModal from './ShareModal';
 import './AidaWidget.css';
-import ChatInput from './ChatInput'; 
+import ChatInput from './ChatInput';
+import AppearanceModal, { THEMES } from './AppearanceModal'; // ✅ IMPORT THEMES
 
 import {
     useWidgetState,
@@ -36,7 +37,7 @@ const DEFAULT_MODELS = [
     { value: 'anthropic/claude-3.7-sonnet', label: 'Claude Sonnet 4.7', category: 'reasoning' },
     { value: 'google/gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image', category: 'vision' },
     { value: 'openai/gpt-5.1', label: 'GPT-5.1', category: 'chat' },
-    { value: 'perplexity/sonar', label: 'Perplexity Sonar', category: 'chat'}
+    { value: 'perplexity/sonar', label: 'Perplexity Sonar', category: 'chat' }
 ];
 
 const defaultProps = {
@@ -45,7 +46,7 @@ const defaultProps = {
     translations: { transcribing: 'Transcribing...', inputPlaceholder: 'Type a message to Aida...' },
     user: {},
     pageContext: {},
-    models: [], 
+    models: [],
     features: {
         resizable: true,
         modelSelection: true,
@@ -66,7 +67,7 @@ const AidaWidget = (props) => {
     const availableModels = (models && models.length > 0) ? models : DEFAULT_MODELS;
 
     const [currentMessage, setCurrentMessage] = useState('');
-    
+
     const [selectedModel, setSelectedModel] = useState(() => {
         const saved = localStorage.getItem('aida-selected-model');
         const exists = availableModels.some(m => m.value === saved);
@@ -78,8 +79,24 @@ const AidaWidget = (props) => {
         return stored ? Number(stored) : 10;
     });
 
+    const [textSize, setTextSize] = useState(() => {
+        try {
+            return parseInt(localStorage.getItem('aida-text-size') || '100', 10);
+        } catch (e) {
+            return 100;
+        }
+    });
+
+    const [isAppearanceModalOpen, setIsAppearanceModalOpen] = useState(false);
+
     useEffect(() => { localStorage.setItem('aida-selected-model', selectedModel); }, [selectedModel]);
     useEffect(() => { localStorage.setItem('aida-context-limit', contextLimit); }, [contextLimit]);
+
+    // Apply text size to CSS variables
+    useEffect(() => {
+        document.documentElement.style.setProperty('--aida-text-size-factor', `${textSize / 100}`);
+        localStorage.setItem('aida-text-size', textSize.toString());
+    }, [textSize]);
 
     const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false);
     const [editingMessageId, setEditingMessageId] = useState(null);
@@ -89,7 +106,7 @@ const AidaWidget = (props) => {
     const [imagePreview, setImagePreview] = useState(null);
     const [viewingMessageAttachments, setViewingMessageAttachments] = useState(null);
     const [embedUrl, setEmbedUrl] = useState(null);
-    const [sessionToShare, setSessionToShare] = useState(null); // ✅ NEW: Track which session to share
+    const [sessionToShare, setSessionToShare] = useState(null);
 
     const inputRef = useRef(null);
     const messagesEndRef = useRef(null);
@@ -98,18 +115,18 @@ const AidaWidget = (props) => {
     const [isAtBottom, setIsAtBottom] = useState(true);
     const [isAutoScrollPaused, setIsAutoScrollPaused] = useState(false);
     const siteLanguage = language || 'en';
-    
+
     const { isOpen, isClosing, isFullscreen, theme, setTheme, setIsFullscreen, toggleChatVisibility } = useWidgetState();
     const { messages, setMessages, getSanitizedMessages, loadMessagesForSession } = useChatMessages();
     const { isPanelOpen, openPanel, closePanel, historyItems, projects, currentSessionId, setCurrentSessionId, createNewSession, updateCurrentSession, saveCurrentChatToHistory, historyHandlers } = useChatHistory(getSanitizedMessages);
     const { isOpen: isPromptModalOpen, open: openPromptModal, close: closePromptModal } = useModal();
     const { isOpen: isShareModalOpen, open: openShareModal, close: closeShareModal } = useModal();
-    const { 
+    const {
         attachments, setAttachments, addImageAttachments, addTextAttachment, addFolderAttachments,
-        addUrlAttachment, 
-        removeAttachment, clearAttachments, isAttachmentModalOpen, openModal: openAttachmentModal, closeModal: closeAttachmentModal 
+        addUrlAttachment,
+        removeAttachment, clearAttachments, isAttachmentModalOpen, openModal: openAttachmentModal, closeModal: closeAttachmentModal
     } = useAttachments(setSelectedModel);
-    
+
     const { isDragOverWidget, dropZoneProps } = useDragAndDrop({
         isEnabled: attachmentsEnabled,
         addImageAttachments,
@@ -124,18 +141,22 @@ const AidaWidget = (props) => {
     const { countdown: autoSendCountdown, start: startAutoSendTimer, cancel: cancelAutoSendTimer, setIsPaused: setIsSendTimerPaused } = useCountdown(() => stableHandleSendMessage(), 3);
     const { countdown: autoRecordCountdown, start: startAutoRecordTimer, cancel: cancelAutoRecordTimer, setIsPaused: setIsRecordTimerPaused } = useCountdown(startRecording, 3);
     const displayText = useDisplayAnimation({ isOpen, isLoading });
-    
+
+    // ✅ Map the selected theme to a base Tailwind mode (dark or light)
+    const baseTheme = ['dark', 'azure'].includes(theme) ? 'dark' : 'light';
+    const selectedThemeObj = Object.values(THEMES).find(t => t.id === theme) || THEMES.coral;
+
     useEffect(() => {
         if (loadMessagesForSession) loadMessagesForSession(currentSessionId);
     }, [currentSessionId, loadMessagesForSession]);
 
     useEffect(() => { if (!isLoading) setIsAutoScrollPaused(false); }, [isLoading]);
-    
+
     const handleScrollStateChange = useCallback((atBottom) => {
         setIsAtBottom(atBottom);
         if (atBottom) setIsAutoScrollPaused(false);
     }, []);
-    
+
     const handleUserScrollAway = useCallback(() => {
         if (isLoading) setIsAutoScrollPaused(true);
     }, [isLoading]);
@@ -177,7 +198,7 @@ const AidaWidget = (props) => {
     const handleSaveEdit = useCallback(() => {
         if (!editingMessageId) return;
         setMessages(prevMessages => {
-            const updatedMessages = prevMessages.map(msg => 
+            const updatedMessages = prevMessages.map(msg =>
                 msg.id === editingMessageId ? { ...msg, text: editDraft } : msg
             );
             if (currentSessionId) updateCurrentSession(updatedMessages);
@@ -200,7 +221,7 @@ const AidaWidget = (props) => {
     }, []);
 
     const shouldAutoScroll = isLoading ? !isAutoScrollPaused : isAtBottom;
-    
+
     const getLocalizedGreeting = (lang) => ({ 'ar': "✨ مرحبًا! أنا آيدا، مساعدتك الرقمية الذكية 🤖💖 كيف يمكنني مساعدتك اليوم؟ 😊", 'fr': "👋 Coucou ! Moi c'est Aida, ta super assistante numérique ✨💻 Comment puis-je t'aider aujourd'hui ? 😄" }[lang] || "Hey hey! 👋 I'm Aida, your sparkly smart digital assistant 🤖💖 How can I help you today? 😄");
 
     const toggleChat = useCallback(() => {
@@ -221,60 +242,60 @@ const AidaWidget = (props) => {
     const stableHandleSendMessage = useCallback(async (messageTextOverride = null) => {
         const text = messageTextOverride ?? currentMessage;
         if ((!text.trim() && attachments.length === 0) || isLoading) return;
-        cancelAutoSendTimer(); 
+        cancelAutoSendTimer();
         cancelAutoRecordTimer();
         const botMessageId = `bot-${Date.now()}`;
         const finalModelName = isWebSearchEnabled ? `${selectedModel}:online` : selectedModel;
         const imageAttachments = attachments.filter(a => a.type === 'image');
         let nextMessages = [];
-        let activeSessionId = currentSessionId; 
+        let activeSessionId = currentSessionId;
 
-        const userMessage = { 
-            id: `user-${Date.now()}`, 
-            sender: 'user', 
-            text: text.trim(), 
-            model: finalModelName, 
-            webSearchEnabled: isWebSearchEnabled, 
-            attachments, 
-            images: imageAttachments 
+        const userMessage = {
+            id: `user-${Date.now()}`,
+            sender: 'user',
+            text: text.trim(),
+            model: finalModelName,
+            webSearchEnabled: isWebSearchEnabled,
+            attachments,
+            images: imageAttachments
         };
         nextMessages = [...messages, userMessage, { id: botMessageId, sender: 'bot', text: '' }];
         setMessages(nextMessages);
         if (!activeSessionId) {
-            activeSessionId = createNewSession(nextMessages); 
+            activeSessionId = createNewSession(nextMessages);
         } else {
             updateCurrentSession(nextMessages);
         }
 
-        setCurrentMessage(''); 
-        clearAttachments(); 
-        setEditingMessageId(null); 
+        setCurrentMessage('');
+        clearAttachments();
+        setEditingMessageId(null);
         if (isWebSearchEnabled) setIsWebSearchEnabled(false);
-        
-        const historyForPayload = nextMessages.slice(0, -1); 
+
+        const historyForPayload = nextMessages.slice(0, -1);
         await streamResponse({ userMessage, botMessageId, historyForPayload, sessionId: activeSessionId, contextLimit });
     }, [currentMessage, attachments, isLoading, selectedModel, isWebSearchEnabled, messages, currentSessionId, streamResponse, setMessages, createNewSession, updateCurrentSession, cancelAutoSendTimer, cancelAutoRecordTimer, clearAttachments, contextLimit]);
 
-    const handleRetry = useCallback(async (botMessageId) => { 
-        if (isLoading) return; 
-        const botIndex = messages.findIndex(m => m.id === botMessageId); 
-        if (botIndex === -1) return; 
-        let userIndex = -1; 
-        for (let i = botIndex - 1; i >= 0; i--) { 
-            if (messages[i].sender === 'user' && (messages[i].text || messages[i].attachments?.length > 0)) { userIndex = i; break; } 
-        } 
-        if (userIndex === -1) return; 
+    const handleRetry = useCallback(async (botMessageId) => {
+        if (isLoading) return;
+        const botIndex = messages.findIndex(m => m.id === botMessageId);
+        if (botIndex === -1) return;
+        let userIndex = -1;
+        for (let i = botIndex - 1; i >= 0; i--) {
+            if (messages[i].sender === 'user' && (messages[i].text || messages[i].attachments?.length > 0)) { userIndex = i; break; }
+        }
+        if (userIndex === -1) return;
         const finalModelName = isWebSearchEnabled ? `${selectedModel}:online` : selectedModel;
         const userMessageToRetry = { ...messages[userIndex], model: finalModelName, webSearchEnabled: isWebSearchEnabled };
-        const previousHistory = messages.slice(0, userIndex); 
+        const previousHistory = messages.slice(0, userIndex);
         const historyForPayload = [...previousHistory, userMessageToRetry];
-        const newBotMessageId = `bot-${Date.now()}`; 
+        const newBotMessageId = `bot-${Date.now()}`;
         const nextMessages = [...previousHistory, userMessageToRetry, { id: newBotMessageId, sender: 'bot', text: '' }];
-        setMessages(nextMessages); 
+        setMessages(nextMessages);
         if (currentSessionId) updateCurrentSession(nextMessages);
-        await streamResponse({ userMessage: userMessageToRetry, botMessageId: newBotMessageId, historyForPayload, sessionId: currentSessionId, contextLimit }); 
+        await streamResponse({ userMessage: userMessageToRetry, botMessageId: newBotMessageId, historyForPayload, sessionId: currentSessionId, contextLimit });
     }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession, selectedModel, isWebSearchEnabled, contextLimit]);
-    
+
     const handleRegenerate = useCallback(async (userMessageId) => {
         if (isLoading) return;
         const userIndex = messages.findIndex(m => m.id === userMessageId);
@@ -297,10 +318,10 @@ const AidaWidget = (props) => {
 
     const currentSession = historyItems.find(h => h.id === currentSessionId);
     const currentSessionTitle = currentSession?.title || "New Chat";
-    
+
     useEffect(() => {
         if (isOpen) {
-            document.title = currentSessionTitle && currentSessionTitle !== "New Chat" 
+            document.title = currentSessionTitle && currentSessionTitle !== "New Chat"
                 ? `AIDA - ${currentSessionTitle}` : "AIDA";
         }
         return () => { document.title = "AIDA"; };
@@ -313,11 +334,29 @@ const AidaWidget = (props) => {
     useEffect(() => { if (isOpen && !isLoading && !isTranscribing) inputRef.current?.focus(); }, [isOpen, isLoading, isTranscribing]);
     useEffect(() => { if (inputRef.current) { inputRef.current.style.height = 'auto'; inputRef.current.style.height = `${inputRef.current.scrollHeight}px`; } }, [currentMessage]);
     useEffect(() => { const handleResize = () => setIsMobileViewport(window.innerWidth <= 768); window.addEventListener('resize', handleResize); return () => window.removeEventListener('resize', handleResize); }, []);
-    
-    const containerClasses = `flex flex-col relative aida-widget-shell ${isClosing ? 'animate-collapse-chat' : 'animate-expand-chat'} ${isResizing ? 'aida-widget-shell--active' : ''} ${theme === 'dark' ? 'bg-gray-900 text-gray-100 border-l border-gray-800' : 'bg-white text-gray-900 border-l border-gray-200'} ${isFullscreen ? 'w-full h-full aida-widget-shell--fullscreen' : 'h-full aida-widget-shell--docked'}`;
+
+    // ✅ Use baseTheme for Tailwind classes
+    const containerClasses = `flex flex-col relative aida-widget-shell ${isClosing ? 'animate-collapse-chat' : 'animate-expand-chat'} ${isResizing ? 'aida-widget-shell--active' : ''} ${baseTheme === 'dark' ? 'bg-gray-900 text-gray-100 border-l border-gray-800' : 'bg-white text-gray-900 border-l border-gray-200'} ${isFullscreen ? 'w-full h-full aida-widget-shell--fullscreen' : 'h-full aida-widget-shell--docked'}`;
 
     return (
-        <>
+        <div className="aida-scope">
+            {/* ✅ Inject dynamic CSS variables and overrides for the selected theme */}
+            <style>{`
+                .aida-scope {
+                    --aida-primary: ${selectedThemeObj.primary};
+                    --aida-accent: ${selectedThemeObj.accent};
+                }
+                .aida-scope .bg-brand-coral { background-color: var(--aida-primary) !important; }
+                .aida-scope .text-brand-coral { color: var(--aida-primary) !important; }
+                .aida-scope .border-brand-coral { border-color: var(--aida-primary) !important; }
+                .aida-scope .ring-brand-coral { --tw-ring-color: var(--aida-primary) !important; }
+                .aida-scope .ring-brand-coral\\/50 { --tw-ring-color: color-mix(in srgb, var(--aida-primary) 50%, transparent) !important; }
+                ${theme === 'sepia' ? `
+                .aida-scope .bg-white { background-color: ${selectedThemeObj.background} !important; }
+                .aida-scope .bg-gray-50 { background-color: ${selectedThemeObj.surface} !important; }
+                ` : ''}
+            `}</style>
+
             {!isOpen && (
                 <div className="aida-widget-launcher fixed z-50">
                     <button onClick={toggleChat} className="bg-gray-900 text-white rounded-lg p-2 flex">
@@ -327,11 +366,11 @@ const AidaWidget = (props) => {
             )}
             {isOpen && (
                 <div className={`aida-widget-viewport z-50 ${isFullscreen ? 'aida-widget-viewport--fullscreen' : 'aida-widget-viewport--docked'}`}>
-                    <div ref={sidebarRef} data-theme={theme} style={sidebarInlineStyle} className={containerClasses} {...dropZoneProps}>
+                    <div ref={sidebarRef} data-theme={baseTheme} style={sidebarInlineStyle} className={containerClasses} {...dropZoneProps}>
                         {features.resizable && !isFullscreen && !isMobileViewport && <div {...resizeHandleProps} />}
                         {attachmentsEnabled && isDragOverWidget && (
                             <div className="absolute inset-0 z-[55] pointer-events-none flex items-center justify-center px-4">
-                                <div className={`pointer-events-none flex max-w-sm flex-col items-center gap-2 rounded-2xl border-2 border-dashed px-6 py-5 text-sm font-medium ${theme === 'dark' ? 'border-pink-400/80 bg-gray-900/80 text-pink-100' : 'border-pink-500/60 bg-white/80 text-pink-600'}`}>
+                                <div className={`pointer-events-none flex max-w-sm flex-col items-center gap-2 rounded-2xl border-2 border-dashed px-6 py-5 text-sm font-medium ${baseTheme === 'dark' ? 'border-pink-400/80 bg-gray-900/80 text-pink-100' : 'border-pink-500/60 bg-white/80 text-pink-600'}`}>
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" strokeWidth="1.5" className="h-10 w-10" fill="none" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m.75 12 3 3m0 0 3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
                                     </svg>
@@ -339,18 +378,18 @@ const AidaWidget = (props) => {
                                 </div>
                             </div>
                         )}
-                        <ChatHeader 
-                            displayText={displayText} 
-                            lastCost={lastCost} 
-                            userId={user?.id} 
-                            paymentLinkConfig={features.paymentLink} 
-                            resetChat={resetChat} 
-                            toggleFullscreen={() => setIsFullscreen(p => !p)} 
-                            showFullscreenToggle={!isMobileViewport} 
-                            isMobileViewport={isMobileViewport} 
-                            toggleChat={toggleChat} 
-                            theme={theme} 
-                            onToggleTheme={() => setTheme(p => p === 'dark' ? 'light' : 'dark')} 
+                        <ChatHeader
+                            displayText={displayText}
+                            lastCost={lastCost}
+                            userId={user?.id}
+                            paymentLinkConfig={features.paymentLink}
+                            resetChat={resetChat}
+                            toggleFullscreen={() => setIsFullscreen(p => !p)}
+                            showFullscreenToggle={!isMobileViewport}
+                            isMobileViewport={isMobileViewport}
+                            toggleChat={toggleChat}
+                            theme={baseTheme}
+                            onOpenAppearance={() => setIsAppearanceModalOpen(true)} 
                             onToggleHistory={openPanel}
                             onShare={messages.length > 0 ? () => {
                                 setSessionToShare({ messages, title: currentSessionTitle });
@@ -369,7 +408,7 @@ const AidaWidget = (props) => {
                         />
                         {features.historyProjects && (
                             <ChatHistoryPanel
-                                theme={theme} open={isPanelOpen} onClose={closePanel}
+                                theme={baseTheme} open={isPanelOpen} onClose={closePanel}
                                 sessions={historyItems} projects={projects}
                                 onSelect={handleHistorySelect} currentSessionId={currentSessionId}
                                 {...historyHandlers}
@@ -384,7 +423,7 @@ const AidaWidget = (props) => {
                             isLoading={isLoading}
                             liveReasoning={liveReasoning}
                             siteLanguage={siteLanguage}
-                            theme={theme}
+                            theme={baseTheme}
                             messagesEndRef={messagesEndRef}
                             programmaticScrollRef={programmaticScrollRef}
                             shouldAutoScroll={shouldAutoScroll}
@@ -405,15 +444,15 @@ const AidaWidget = (props) => {
                             onEmbedUrl={handleOpenEmbed}
                             onDeleteMessage={handleDeleteMessage}
                         />
-                        <ChatInput 
+                        <ChatInput
                             currentMessage={currentMessage}
                             setCurrentMessage={setCurrentMessage}
                             handleSendMessage={stableHandleSendMessage}
-                            handleKeyDown={(e) => { 
-                                if (e.key === 'Enter' && !e.shiftKey && !isMobileViewport) { 
-                                    e.preventDefault(); 
-                                    stableHandleSendMessage(); 
-                                } 
+                            handleKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey && !isMobileViewport) {
+                                    e.preventDefault();
+                                    stableHandleSendMessage();
+                                }
                             }}
                             handleRecordButtonClick={handleRecordButtonClick}
                             inputRef={inputRef}
@@ -422,7 +461,7 @@ const AidaWidget = (props) => {
                             isRecording={isRecording}
                             elapsedTime={elapsedTime}
                             siteLanguage={siteLanguage}
-                            theme={theme}
+                            theme={baseTheme}
                             autoSendCountdown={autoSendCountdown}
                             cancelAutoSendTimer={cancelAutoSendTimer}
                             setIsSendTimerPaused={setIsSendTimerPaused}
@@ -450,6 +489,14 @@ const AidaWidget = (props) => {
                             onScrapeUrl={addUrlAttachment}
                             onEmbedUrl={handleOpenEmbed}
                         />
+                        <AppearanceModal
+                            isOpen={isAppearanceModalOpen}
+                            onClose={() => setIsAppearanceModalOpen(false)}
+                            currentTheme={theme}
+                            onSelectTheme={setTheme}
+                            textSize={textSize}
+                            onChangeTextSize={setTextSize}
+                        />
                     </div>
                 </div>
             )}
@@ -457,18 +504,18 @@ const AidaWidget = (props) => {
             {isPromptModalOpen && (
                 <div role="dialog" aria-modal="true" className="fixed inset-0 z-[60] flex items-center justify-center">
                     <div className="absolute inset-0 bg-black/50" onClick={closePromptModal}></div>
-                    <div className={`relative z-10 w-11/12 max-w-md rounded-xl shadow-2xl p-5 ${theme === 'dark' ? 'bg-slate-900 border-white/10 text-gray-100' : 'bg-white border-gray-200 text-gray-900'}`}>
+                    <div className={`relative z-10 w-11/12 max-w-md rounded-xl shadow-2xl p-5 ${baseTheme === 'dark' ? 'bg-slate-900 border-white/10 text-gray-100' : 'bg-white border-gray-200 text-gray-900'}`}>
                         <h2 className="text-lg font-semibold">Custom Instructions</h2>
-                        <p className={`text-sm mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>This text is sent first to give Aida context.</p>
+                        <p className={`text-sm mt-1 ${baseTheme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>This text is sent first to give Aida context.</p>
                         <textarea
                             value={promptDraft}
                             onChange={(e) => setPromptDraft(e.target.value)}
                             onFocus={() => setPromptDraft(customPrompt)}
-                            className={`w-full min-h-[140px] mt-4 p-3 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === 'dark' ? 'bg-slate-950 border-white/10' : 'bg-white border-gray-300'}`}
+                            className={`w-full min-h-[140px] mt-4 p-3 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 ${baseTheme === 'dark' ? 'bg-slate-950 border-white/10' : 'bg-white border-gray-300'}`}
                             placeholder="Provide guidance for Aida..."
                         />
                         <div className="mt-4 flex justify-end space-x-2">
-                            <button type="button" onClick={closePromptModal} className={`px-4 py-2 text-sm rounded-lg ${theme === 'dark' ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>Cancel</button>
+                            <button type="button" onClick={closePromptModal} className={`px-4 py-2 text-sm rounded-lg ${baseTheme === 'dark' ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>Cancel</button>
                             <button
                                 type="button"
                                 onClick={() => { setCustomPrompt(promptDraft.trim()); localStorage.setItem('aida-widget-prompt', promptDraft.trim()); closePromptModal(); }}
@@ -480,22 +527,22 @@ const AidaWidget = (props) => {
                     </div>
                 </div>
             )}
-            
+
             <AttachmentModal
                 isOpen={isAttachmentModalOpen} onClose={closeAttachmentModal}
                 attachments={attachments} onAddImages={addImageAttachments}
                 onAddText={addTextAttachment} onAddFolder={addFolderAttachments}
                 onAddUrl={addUrlAttachment} onRemove={removeAttachment}
                 onClearAll={clearAttachments} onImagePreview={setImagePreview}
-                theme={theme}
+                theme={baseTheme}
             />
-            
+
             <AttachmentModal
                 isOpen={!!viewingMessageAttachments}
                 onClose={() => setViewingMessageAttachments(null)}
                 attachments={viewingMessageAttachments?.attachments || []}
                 onImagePreview={setImagePreview}
-                theme={theme}
+                theme={baseTheme}
                 isReadOnly={true}
                 onRemove={(attachmentId) => {
                     if (viewingMessageAttachments) handleRemoveAttachmentFromMessage(viewingMessageAttachments.id, attachmentId);
@@ -504,7 +551,7 @@ const AidaWidget = (props) => {
 
             {imagePreview && (
                 <div className="fixed inset-0 z-[65] flex items-center justify-center" onClick={() => setImagePreview(null)}>
-                    <div className="absolute inset-0 bg-black/80"/>
+                    <div className="absolute inset-0 bg-black/80" />
                     <div className="relative z-10 max-w-4xl max-h-[90vh] w-full px-6">
                         <button type="button" onClick={() => setImagePreview(null)} className="absolute -top-8 right-2 text-white/80 hover:text-white p-2">✕</button>
                         <img src={imagePreview.src} alt={imagePreview.name || 'uploaded'} className="w-full h-auto max-h-[85vh] object-contain rounded-lg" />
@@ -516,7 +563,7 @@ const AidaWidget = (props) => {
                 isOpen={!!embedUrl}
                 url={embedUrl}
                 onClose={() => setEmbedUrl(null)}
-                theme={theme}
+                theme={baseTheme}
             />
 
             <ShareModal
@@ -527,11 +574,11 @@ const AidaWidget = (props) => {
                 }}
                 messages={sessionToShare ? sessionToShare.messages : messages}
                 sessionTitle={sessionToShare ? sessionToShare.title : currentSessionTitle}
-                theme={theme}
+                theme={baseTheme}
             />
 
-            <ErrorModal isOpen={!!apiError} onClose={clearApiError} error={apiError} userEmail={user?.email} theme={theme} />
-        </>
+            <ErrorModal isOpen={!!apiError} onClose={clearApiError} error={apiError} userEmail={user?.email} theme={baseTheme} />
+        </div>
     );
 };
 

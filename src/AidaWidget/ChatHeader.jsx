@@ -1,19 +1,20 @@
 /* src/AidaWidget/ChatHeader.jsx */
 import React, { useState, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
-import { 
-    HiPlus, HiOutlineSun, HiOutlineMoon, HiClock, HiEllipsisVertical, 
-    HiMinusSmall, HiOutlineArrowsPointingOut, HiPencilSquare, HiCheck, 
-    HiOutlineTag, HiOutlineCog6Tooth, HiOutlineShare
+import {
+    HiPlus, HiOutlineSun, HiOutlineMoon, HiClock, HiEllipsisVertical,
+    HiMinusSmall, HiOutlineArrowsPointingOut, HiPencilSquare, HiCheck,
+    HiOutlineTag, HiOutlineCog6Tooth, HiOutlineShare,
+    HiOutlineAdjustmentsHorizontal
 } from 'react-icons/hi2';
 import { LuHandHeart } from 'react-icons/lu';
 import SevenSegmentDisplay from './SevenSegmentDisplay';
 import CreditsDisplay from './CreditsDisplay';
-import { 
-    ProjectIconPicker, 
-    PROJECT_ICON_OPTIONS, 
-    DEFAULT_PROJECT_ICON_COLOR, 
-    NotebookIcon, 
-    hexToRgba 
+import {
+    ProjectIconPicker,
+    PROJECT_ICON_OPTIONS,
+    DEFAULT_PROJECT_ICON_COLOR,
+    NotebookIcon,
+    hexToRgba
 } from './ProjectAppearance';
 
 const ChatHeader = ({
@@ -24,8 +25,8 @@ const ChatHeader = ({
     toggleFullscreen,
     toggleChat,
     theme = 'dark',
-    paymentLinkConfig, 
-    onToggleTheme,
+    paymentLinkConfig,
+    onOpenAppearance,
     onToggleHistory,
     onDisplayClick,
     showFullscreenToggle = true,
@@ -44,7 +45,7 @@ const ChatHeader = ({
     const headerColors = 'bg-[#0f172a] text-white backdrop-blur-md border-b border-white/10';
     const hoverColor = theme === 'dark' ? 'hover:bg-white/10' : 'hover:bg-slate-200/70';
     const accentColor = '#ffffff';
-    
+
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const menuRef = useRef(null);
     const headerRef = useRef(null);
@@ -356,7 +357,7 @@ const ChatHeader = ({
                                                         type="text"
                                                         value={newTagDraft}
                                                         onChange={(e) => setNewTagDraft(e.target.value)}
-                                                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCreateTag(); }}}
+                                                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCreateTag(); } }}
                                                         placeholder="Create new tag..."
                                                         className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-brand-coral/50 placeholder-gray-500"
                                                     />
@@ -454,16 +455,13 @@ const ChatHeader = ({
                                     <span>Chat history</span>
                                 </button>
                             )}
-                            {onToggleTheme && (
+                            {onOpenAppearance && (
                                 <button
-                                    onClick={() => { onToggleTheme(); closeMenu(); }}
+                                    onClick={() => { onOpenAppearance(); closeMenu(); }} // <--- USE PROP HERE
                                     className="w-full px-3 py-2 text-left hover:bg-white/10 flex items-center gap-2"
                                 >
-                                    {theme === 'dark'
-                                        ? <HiOutlineMoon className="w-4 h-4" />
-                                        : <HiOutlineSun className="w-4 h-4" />
-                                    }
-                                    <span>Toggle theme</span>
+                                    <HiOutlineAdjustmentsHorizontal className="w-4 h-4" />
+                                    <span>Appearance</span>
                                 </button>
                             )}
                         </div>
