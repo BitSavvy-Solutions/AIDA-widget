@@ -1,6 +1,6 @@
 /* src/AidaWidget/hooks/useChatAPI.js */
 import { useState, useCallback, useRef } from 'react';
-import { franc } from 'franc';
+import { franc } from 'franc-min';
 
 export const useChatAPI = ({
     apiConfig,

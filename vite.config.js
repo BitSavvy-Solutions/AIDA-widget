@@ -43,7 +43,7 @@ export default defineConfig(({ mode }) => {
       // ✅ MODIFIED: Enable minification for production builds.
       // Vite's default is 'esbuild', which is very fast.
       minify: mode === 'production' ? 'esbuild' : false,
-      sourcemap: true, // Keep sourcemaps for better production debugging
+      sourcemap: false, 
       rollupOptions: {
         external: [],
       }
