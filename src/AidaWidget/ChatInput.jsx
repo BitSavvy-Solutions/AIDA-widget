@@ -74,7 +74,8 @@ const ChatInput = ({
     const modelSearchRef = useRef(null);
     const modelItemRefs = useRef([]);
 
-    const isDark = theme === 'dark';
+    // ✅ The footer is now forced to be dark across all themes
+    const isDark = true; 
     const isPillMode = autoRecordCountdown !== null || transcriptionError || isRecording || isTranscribing;
 
     const filteredModels = useMemo(() => {
@@ -446,15 +447,14 @@ const ChatInput = ({
     return (
         <div
             className="relative p-2 rounded-none transition-colors border-t"
-            style={{ backgroundColor: 'var(--aida-body-bg)', borderColor: 'var(--aida-card-border)', color: 'var(--aida-body-text)' }}
+            style={{ backgroundColor: 'var(--aida-input-container)', borderColor: 'var(--aida-input-border)', color: 'var(--aida-input-text)' }}
         >
-            {/* ✅ UPDATED: Input container now uses user message background and text colors */}
             <div
                 className="flex items-end rounded-lg px-3 py-1 mb-2 transition-colors border"
                 style={{
                     backgroundColor: 'var(--aida-user-msg-bg)',
                     color: 'var(--aida-user-msg-text)',
-                    borderColor: 'var(--aida-card-border)'
+                    borderColor: 'var(--aida-input-border)'
                 }}
             >
                 <textarea
@@ -732,7 +732,7 @@ const ChatInput = ({
                     <ContextSelector
                         value={contextLimit}
                         onChange={setContextLimit}
-                        theme={theme}
+                        theme="dark"
                     />
                 </div>
 
@@ -741,7 +741,7 @@ const ChatInput = ({
                         <AttachmentButton
                             count={attachmentCount}
                             onClick={onOpenAttachments}
-                            theme={theme}
+                            theme="dark"
                         />
                     )}
                     {features.voiceInput && renderRecordButton()}

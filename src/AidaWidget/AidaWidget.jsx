@@ -10,7 +10,7 @@ import EmbedModal from './EmbedModal';
 import ShareModal from './ShareModal';
 import './AidaWidget.css';
 import ChatInput from './ChatInput';
-import AppearanceModal, { THEMES } from './AppearanceModal'; // ✅ IMPORT THEMES
+import AppearanceModal, { THEMES } from './AppearanceModal'; 
 
 import {
     useWidgetState,
@@ -150,10 +150,8 @@ const AidaWidget = (props) => {
             try {
                 const customTheme = JSON.parse(localStorage.getItem('aida-custom-theme'));
                 if (customTheme) {
-                    // Update the THEMES.custom object with saved values
                     THEMES.custom.primary = customTheme.primary || THEMES.custom.primary;
                     THEMES.custom.accent = customTheme.accent || THEMES.custom.accent;
-                    THEMES.custom.header.background = customTheme.headerBg || THEMES.custom.header.background;
                     THEMES.custom.body.background = customTheme.bodyBg || THEMES.custom.body.background;
                     THEMES.custom.body.text = customTheme.bodyText || THEMES.custom.body.text;
                     THEMES.custom.chatArea.userMessage.background = customTheme.userMsgBg || THEMES.custom.chatArea.userMessage.background;
@@ -362,12 +360,10 @@ const AidaWidget = (props) => {
     useEffect(() => { if (inputRef.current) { inputRef.current.style.height = 'auto'; inputRef.current.style.height = `${inputRef.current.scrollHeight}px`; } }, [currentMessage]);
     useEffect(() => { const handleResize = () => setIsMobileViewport(window.innerWidth <= 768); window.addEventListener('resize', handleResize); return () => window.removeEventListener('resize', handleResize); }, []);
 
-    // ✅ REMOVED hardcoded bg-gray-900/bg-white classes so the CSS variables can take effect
     const containerClasses = `flex flex-col relative aida-widget-shell ${isClosing ? 'animate-collapse-chat' : 'animate-expand-chat'} ${isResizing ? 'aida-widget-shell--active' : ''} border-l ${isFullscreen ? 'w-full h-full aida-widget-shell--fullscreen' : 'h-full aida-widget-shell--docked'}`;
 
     return (
         <div className="aida-scope">
-            {/* ✅ Inject dynamic CSS variables and overrides for the selected theme */}
             <style>{`
                 .aida-scope {
                     /* Base theme variables */
@@ -417,7 +413,6 @@ const AidaWidget = (props) => {
             )}
             {isOpen && (
                 <div className={`aida-widget-viewport z-50 ${isFullscreen ? 'aida-widget-viewport--fullscreen' : 'aida-widget-viewport--docked'}`}>
-                    {/* ✅ ADDED inline styles to enforce the theme variables on the main container */}
                     <div ref={sidebarRef} data-theme={baseTheme} style={{ ...sidebarInlineStyle, backgroundColor: 'var(--aida-body-bg)', color: 'var(--aida-body-text)', borderColor: 'var(--aida-card-border)' }} className={containerClasses} {...dropZoneProps}>
                         {features.resizable && !isFullscreen && !isMobileViewport && <div {...resizeHandleProps} />}
                         {attachmentsEnabled && isDragOverWidget && (
@@ -513,7 +508,7 @@ const AidaWidget = (props) => {
                             isRecording={isRecording}
                             elapsedTime={elapsedTime}
                             siteLanguage={siteLanguage}
-                            theme={baseTheme}
+                            theme="dark" // ✅ Forced dark theme for the footer area
                             autoSendCountdown={autoSendCountdown}
                             cancelAutoSendTimer={cancelAutoSendTimer}
                             setIsSendTimerPaused={setIsSendTimerPaused}

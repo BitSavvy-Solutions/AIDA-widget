@@ -69,15 +69,22 @@ const adjustColorForContrast = (textColorHex, bgColorHex) => {
   const bgLum = getLuminance(...bgRgb);
   let [h, s, l] = rgbToHsl(...textRgb);
 
-  // ✅ UPDATED: Lowered threshold from 0.5 to 0.2 for better light/dark detection
   if (bgLum > 0.2) {
-    // Background is light, ensure text is dark enough
     if (l > 0.35) l = 0.15; 
   } else {
-    // Background is dark, ensure text is light enough
     if (l < 0.65) l = 0.90; 
   }
 
+  const newRgb = hslToRgb(h, s, l);
+  return rgbToHex(...newRgb);
+};
+
+// ✅ NEW: Function to derive a dark color with the same hue for headers/footers
+const deriveDarkColor = (hex) => {
+  const rgb = hexToRgb(hex);
+  let [h, s, l] = rgbToHsl(...rgb);
+  // Force lightness to be very low (max 12%), scaling down if already dark
+  l = Math.min(l * 0.25, 0.12); 
   const newRgb = hslToRgb(h, s, l);
   return rgbToHex(...newRgb);
 };
@@ -175,9 +182,9 @@ export const THEMES = {
     primary: '#b45309',
     accent: '#d97706',
     header: {
-      background: '#92400e',
+      background: '#451a03', // ✅ UPDATED: Forced dark header
       text: '#fffbeb',
-      border: 'rgba(180, 83, 9, 0.2)'
+      border: 'rgba(254, 243, 199, 0.1)'
     },
     body: {
       background: '#fffbeb',
@@ -195,11 +202,11 @@ export const THEMES = {
       }
     },
     inputArea: {
-      container: '#fef3c7', 
-      background: '#fef3c7',
-      border: 'rgba(180, 83, 9, 0.2)',
-      text: '#713f12',
-      placeholder: 'rgba(113, 63, 18, 0.6)'
+      container: '#451a03', // ✅ UPDATED: Forced dark footer
+      background: '#451a03',
+      border: 'rgba(254, 243, 199, 0.1)',
+      text: '#fffbeb',
+      placeholder: 'rgba(254, 243, 199, 0.5)'
     },
     card: {
       background: '#fef3c7',
@@ -218,9 +225,9 @@ export const THEMES = {
     primary: '#FF5F90',
     accent: '#ff87b0',
     header: {
-      background: '#f8fafc',
-      text: '#0f172a',
-      border: 'rgba(15, 23, 42, 0.1)'
+      background: '#0f172a', // ✅ UPDATED: Forced dark header
+      text: '#f8fafc',
+      border: 'rgba(248, 250, 252, 0.1)'
     },
     body: {
       background: '#ffffff',
@@ -238,11 +245,11 @@ export const THEMES = {
       }
     },
     inputArea: {
-      container: '#f1f5f9',
-      background: '#f1f5f9',
-      border: 'rgba(15, 23, 42, 0.1)',
-      text: '#0f172a',
-      placeholder: 'rgba(15, 23, 42, 0.5)'
+      container: '#0f172a', // ✅ UPDATED: Forced dark footer
+      background: '#0f172a',
+      border: 'rgba(248, 250, 252, 0.1)',
+      text: '#f8fafc',
+      placeholder: 'rgba(248, 250, 252, 0.5)'
     },
     card: {
       background: '#f8fafc',
@@ -346,7 +353,6 @@ const AppearanceModal = ({ isOpen, onClose, currentTheme, onSelectTheme, textSiz
     return {
       primary: THEMES.custom.primary,
       accent: THEMES.custom.accent,
-      headerBg: THEMES.custom.header.background,
       bodyBg: THEMES.custom.body.background,
       bodyText: THEMES.custom.body.text,
       userMsgBg: THEMES.custom.chatArea.userMessage.background
@@ -354,19 +360,24 @@ const AppearanceModal = ({ isOpen, onClose, currentTheme, onSelectTheme, textSiz
   });
 
   useEffect(() => {
+    // ✅ Automatically derive dark header and footer backgrounds from the body background
+    const derivedDarkBg = deriveDarkColor(customThemeSettings.bodyBg);
+    const adjustedHeaderText = adjustColorForContrast(customThemeSettings.bodyText, derivedDarkBg);
     const adjustedBodyText = adjustColorForContrast(customThemeSettings.bodyText, customThemeSettings.bodyBg);
     const adjustedUserMsgText = adjustColorForContrast(customThemeSettings.bodyText, customThemeSettings.userMsgBg);
-    const adjustedInputText = adjustColorForContrast(customThemeSettings.bodyText, customThemeSettings.bodyBg);
 
     THEMES.custom.primary = customThemeSettings.primary;
     THEMES.custom.accent = customThemeSettings.accent;
-    THEMES.custom.header.background = customThemeSettings.headerBg;
+    THEMES.custom.header.background = derivedDarkBg;
+    THEMES.custom.header.text = adjustedHeaderText;
     THEMES.custom.body.background = customThemeSettings.bodyBg;
     THEMES.custom.body.text = adjustedBodyText;
     THEMES.custom.chatArea.userMessage.background = customThemeSettings.userMsgBg;
     THEMES.custom.chatArea.userMessage.text = adjustedUserMsgText;
     THEMES.custom.chatArea.botMessage.text = adjustedBodyText;
-    THEMES.custom.inputArea.text = adjustedInputText;
+    THEMES.custom.inputArea.container = derivedDarkBg;
+    THEMES.custom.inputArea.background = derivedDarkBg;
+    THEMES.custom.inputArea.text = adjustedHeaderText;
     
     localStorage.setItem('aida-custom-theme', JSON.stringify(customThemeSettings));
     
