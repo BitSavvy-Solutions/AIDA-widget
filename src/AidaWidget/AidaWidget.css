@@ -244,17 +244,10 @@ body.aida-widget-resizing * {
 }
 
 .bot-message code {
-  background-color: rgba(0, 0, 0, 0.04);
-  color: #d63384;
   padding: 0.2rem 0.4rem;
   border-radius: 0.3rem;
   font-family: 'Fira Code', monospace;
   font-size: calc(0.85rem * var(--aida-text-size-factor));
-}
-
-[data-theme='dark'] .bot-message :not(pre) > code {
-  background-color: rgba(255, 255, 255, 0.08);
-  color: #f472b6;
 }
 
 .bot-message pre code {
@@ -291,8 +284,8 @@ body.aida-widget-resizing * {
 }
 
 .user-message code {
-  background-color: #fff0f5;
-  color: #1a1a1a;
+  background-color: rgba(0, 0, 0, 0.15);
+  color: inherit;
   padding: 0.2rem 0.4rem;
   border-radius: 0.3rem;
   font-family: 'Fira Code', monospace;
@@ -777,15 +770,12 @@ textarea.auto-expand {
   }
 }
 
-/* Add to AidaWidget.css */
 /* Theme-based styling for key elements */
 .aida-scope {
-  /* Ensure base background and text color apply throughout */
   background-color: var(--aida-body-bg);
   color: var(--aida-body-text);
 }
 
-/* Glass header effect with theme colors */
 .aida-scope .glass-header {
   background-color: var(--aida-header-bg);
   color: var(--aida-header-text);
@@ -800,23 +790,19 @@ textarea.auto-expand {
   );
 }
 
-/* User message with theme colors */
 .aida-scope .user-message {
   background-color: var(--aida-user-msg-bg);
   color: var(--aida-user-msg-text);
 }
 
-/* Bot message with theme colors */
 .aida-scope .bot-message {
   color: var(--aida-bot-msg-text);
 }
 
-/* Theme-specific overrides for card elements */
 .aida-scope .rounded-lg.border {
   border-color: var(--aida-card-border) !important;
 }
 
-/* Dropdown Menu Items */
 .aida-scope .aida-menu-item {
   transition: background-color 0.2s ease;
 }
@@ -824,10 +810,9 @@ textarea.auto-expand {
   background-color: var(--aida-code-inline-bg);
 }
 
-/* ✅ UPDATED: Chat input container placeholder color */
 .aida-scope .aida-input-textarea::placeholder {
-color: var(--aida-user-msg-text);
-opacity: 0.7;
+  color: var(--aida-user-msg-text);
+  opacity: 0.7;
 }
 
 /* Theme-specific code block styles */
@@ -838,7 +823,7 @@ opacity: 0.7;
 
 .aida-scope :not(pre) > code {
   background-color: var(--aida-code-inline-bg);
-  color: var(--aida-code-text);
+  color: var(--aida-body-text); /* Inherit body text color for perfect readability */
 }
 
 /* Enhanced styles for sepia theme */
@@ -862,17 +847,4 @@ opacity: 0.7;
 
 .aida-scope[data-theme="light"] .glass-header {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-
-/* Theme-specific overrides for card elements */
-.aida-scope .rounded-lg.border {
-    border-color: var(--aida-card-border) !important;
-}
-
-/* Dropdown Menu Items */
-.aida-scope .aida-menu-item {
-    transition: background-color 0.2s ease;
-}
-.aida-scope .aida-menu-item:hover {
-    background-color: var(--aida-code-inline-bg);
 }

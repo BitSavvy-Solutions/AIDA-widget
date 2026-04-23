@@ -79,11 +79,9 @@ const adjustColorForContrast = (textColorHex, bgColorHex) => {
   return rgbToHex(...newRgb);
 };
 
-// ✅ NEW: Function to derive a dark color with the same hue for headers/footers
 const deriveDarkColor = (hex) => {
   const rgb = hexToRgb(hex);
   let [h, s, l] = rgbToHsl(...rgb);
-  // Force lightness to be very low (max 12%), scaling down if already dark
   l = Math.min(l * 0.25, 0.12); 
   const newRgb = hslToRgb(h, s, l);
   return rgbToHex(...newRgb);
@@ -182,7 +180,7 @@ export const THEMES = {
     primary: '#b45309',
     accent: '#d97706',
     header: {
-      background: '#451a03', // ✅ UPDATED: Forced dark header
+      background: '#451a03',
       text: '#fffbeb',
       border: 'rgba(254, 243, 199, 0.1)'
     },
@@ -202,7 +200,7 @@ export const THEMES = {
       }
     },
     inputArea: {
-      container: '#451a03', // ✅ UPDATED: Forced dark footer
+      container: '#451a03',
       background: '#451a03',
       border: 'rgba(254, 243, 199, 0.1)',
       text: '#fffbeb',
@@ -225,7 +223,7 @@ export const THEMES = {
     primary: '#FF5F90',
     accent: '#ff87b0',
     header: {
-      background: '#0f172a', // ✅ UPDATED: Forced dark header
+      background: '#0f172a',
       text: '#f8fafc',
       border: 'rgba(248, 250, 252, 0.1)'
     },
@@ -245,7 +243,7 @@ export const THEMES = {
       }
     },
     inputArea: {
-      container: '#0f172a', // ✅ UPDATED: Forced dark footer
+      container: '#0f172a',
       background: '#0f172a',
       border: 'rgba(248, 250, 252, 0.1)',
       text: '#f8fafc',
@@ -360,11 +358,13 @@ const AppearanceModal = ({ isOpen, onClose, currentTheme, onSelectTheme, textSiz
   });
 
   useEffect(() => {
-    // ✅ Automatically derive dark header and footer backgrounds from the body background
     const derivedDarkBg = deriveDarkColor(customThemeSettings.bodyBg);
     const adjustedHeaderText = adjustColorForContrast(customThemeSettings.bodyText, derivedDarkBg);
     const adjustedBodyText = adjustColorForContrast(customThemeSettings.bodyText, customThemeSettings.bodyBg);
     const adjustedUserMsgText = adjustColorForContrast(customThemeSettings.bodyText, customThemeSettings.userMsgBg);
+
+    const bgLum = getLuminance(...hexToRgb(customThemeSettings.bodyBg));
+    const isLightBg = bgLum > 0.5;
 
     THEMES.custom.primary = customThemeSettings.primary;
     THEMES.custom.accent = customThemeSettings.accent;
@@ -378,6 +378,13 @@ const AppearanceModal = ({ isOpen, onClose, currentTheme, onSelectTheme, textSiz
     THEMES.custom.inputArea.container = derivedDarkBg;
     THEMES.custom.inputArea.background = derivedDarkBg;
     THEMES.custom.inputArea.text = adjustedHeaderText;
+    
+    // Dynamically adjust code block colors based on background luminance
+    THEMES.custom.code = {
+      background: isLightBg ? '#f1f5f9' : '#1e1e1e',
+      inline: isLightBg ? 'rgba(15, 23, 42, 0.05)' : 'rgba(255, 255, 255, 0.1)',
+      text: isLightBg ? '#0f172a' : '#f8f8f2'
+    };
     
     localStorage.setItem('aida-custom-theme', JSON.stringify(customThemeSettings));
     
