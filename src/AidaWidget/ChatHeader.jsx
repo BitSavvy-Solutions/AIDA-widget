@@ -51,18 +51,15 @@ const ChatHeader = ({
     const headerRef = useRef(null);
     const [isNarrow, setIsNarrow] = useState(false);
 
-    // Title Editing
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [titleDraft, setTitleDraft] = useState(sessionTitle);
     const titleInputRef = useRef(null);
 
-    // Tag Menu
     const [isTagMenuOpen, setIsTagMenuOpen] = useState(false);
     const tagMenuRef = useRef(null);
     const [newTagDraft, setNewTagDraft] = useState('');
     const [editingProjectId, setEditingProjectId] = useState(null);
 
-    // Dynamic Tag Sizing
     const [visibleTagCount, setVisibleTagCount] = useState(0);
     const tagsContainerRef = useRef(null);
     const hiddenMeasureRef = useRef(null);
@@ -214,7 +211,6 @@ const ChatHeader = ({
     return (
         <div ref={headerRef} className={`${headerColors} pl-0.5 pr-1 py-0.5 flex justify-between items-center rounded-none relative`}>
             <div className="flex items-center gap-1 flex-1 min-w-0 mr-2">
-                {/* LCD Display */}
                 {onDisplayClick ? (
                     <button
                         type="button"
@@ -227,9 +223,7 @@ const ChatHeader = ({
                     <SevenSegmentDisplay text={displayText} />
                 )}
 
-                {/* Title and Tags Column */}
                 <div className="flex-1 min-w-0 flex flex-col justify-center">
-                    {/* Title Row */}
                     <div className="flex items-center h-7">
                         {isEditingTitle ? (
                             <div className="flex items-center gap-1 w-full max-w-[240px]">
@@ -253,10 +247,7 @@ const ChatHeader = ({
                             <button
                                 onClick={handleStartEdit}
                                 disabled={!isSessionActive}
-                                className={`
-                                    group flex items-center gap-2 px-2 py-1 rounded-md transition-all duration-200 border max-w-full text-left aida-menu-item
-                                    ${!isSessionActive ? 'opacity-50 cursor-default' : 'cursor-pointer'}
-                                `}
+                                className={`group flex items-center gap-2 px-2 py-1 rounded-md transition-all duration-200 border max-w-full text-left aida-menu-item ${!isSessionActive ? 'opacity-50 cursor-default' : 'cursor-pointer'}`}
                                 style={{
                                     backgroundColor: isDefaultTitle ? 'rgba(0,0,0,0.1)' : 'transparent',
                                     borderColor: isDefaultTitle ? 'var(--aida-header-border)' : 'transparent',
@@ -274,7 +265,6 @@ const ChatHeader = ({
                         )}
                     </div>
 
-                    {/* Tags Row */}
                     {isSessionActive && (
                         <div className="relative flex items-center mt-1 ml-0.5 w-full" ref={tagMenuRef}>
                             <button
@@ -292,11 +282,7 @@ const ChatHeader = ({
                                                 </div>
                                             )}
                                         </div>
-                                        <div
-                                            ref={hiddenMeasureRef}
-                                            className="flex items-center gap-1 absolute top-0 left-0 opacity-0 pointer-events-none invisible"
-                                            aria-hidden="true"
-                                        >
+                                        <div ref={hiddenMeasureRef} className="flex items-center gap-1 absolute top-0 left-0 opacity-0 pointer-events-none invisible" aria-hidden="true">
                                             {assignedProjects.map(p => renderTag(p))}
                                         </div>
                                     </div>
@@ -308,11 +294,10 @@ const ChatHeader = ({
                                 )}
                             </button>
 
-                            {/* Tag dropdown */}
                             {isTagMenuOpen && (
                                 <div 
                                     className="absolute top-full left-0 mt-2 w-64 rounded-lg text-sm shadow-xl border z-50 flex flex-col overflow-hidden"
-                                    style={{ backgroundColor: 'var(--aida-card-bg)', borderColor: 'var(--aida-card-border)', color: 'var(--aida-body-text)' }}
+                                    style={{ backgroundColor: 'var(--aida-header-bg)', borderColor: 'var(--aida-header-border)', color: 'var(--aida-header-text)' }}
                                 >
                                     {editingProjectId ? (
                                         <ProjectIconPicker
@@ -324,23 +309,18 @@ const ChatHeader = ({
                                         />
                                     ) : (
                                         <>
-                                            <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--aida-card-border)', backgroundColor: 'var(--aida-input-bg)' }}>
+                                            <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--aida-header-border)', backgroundColor: 'rgba(0,0,0,0.1)' }}>
                                                 <span className="text-xs font-semibold uppercase tracking-wider opacity-70">Tags</span>
                                             </div>
                                             <div className="max-h-56 overflow-y-auto custom-scrollbar p-1 space-y-0.5">
-                                                {projects.length === 0 && (
-                                                    <div className="px-3 py-4 text-xs italic text-center opacity-60">No tags created yet</div>
-                                                )}
+                                                {projects.length === 0 && <div className="px-3 py-4 text-xs italic text-center opacity-60">No tags created yet</div>}
                                                 {projects.map(project => {
                                                     const isSelected = project.chatIds.includes(currentSessionId);
                                                     const Icon = PROJECT_ICON_OPTIONS.find(opt => opt.key === project.iconKey)?.Icon || NotebookIcon;
                                                     const color = project.iconColor || DEFAULT_PROJECT_ICON_COLOR;
                                                     return (
                                                         <div key={project.id} className="flex items-center gap-1 group rounded pr-1 aida-menu-item">
-                                                            <button
-                                                                onClick={() => handleToggleTag(project.id)}
-                                                                className="flex-1 px-2 py-1.5 text-left flex items-center gap-2 min-w-0"
-                                                            >
+                                                            <button onClick={() => handleToggleTag(project.id)} className="flex-1 px-2 py-1.5 text-left flex items-center gap-2 min-w-0">
                                                                 <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${isSelected ? 'bg-brand-coral border-brand-coral' : 'border-gray-400 group-hover:border-gray-500'}`}>
                                                                     {isSelected && <HiCheck className="w-3 h-3 text-white" />}
                                                                 </div>
@@ -349,18 +329,14 @@ const ChatHeader = ({
                                                                     <span className={`truncate text-xs ${isSelected ? 'font-medium' : ''}`}>{project.name}</span>
                                                                 </div>
                                                             </button>
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); setEditingProjectId(project.id); }}
-                                                                className="p-1.5 rounded opacity-0 group-hover:opacity-100 transition-all aida-menu-item"
-                                                                title="Customize Tag"
-                                                            >
+                                                            <button onClick={(e) => { e.stopPropagation(); setEditingProjectId(project.id); }} className="p-1.5 rounded opacity-0 group-hover:opacity-100 transition-all aida-menu-item" title="Customize Tag">
                                                                 <HiOutlineCog6Tooth className="w-3.5 h-3.5" />
                                                             </button>
                                                         </div>
                                                     );
                                                 })}
                                             </div>
-                                            <div className="p-2 border-t" style={{ borderColor: 'var(--aida-card-border)', backgroundColor: 'var(--aida-input-bg)' }}>
+                                            <div className="p-2 border-t" style={{ borderColor: 'var(--aida-header-border)', backgroundColor: 'rgba(0,0,0,0.1)' }}>
                                                 <div className="flex items-center gap-1">
                                                     <input
                                                         type="text"
@@ -369,14 +345,9 @@ const ChatHeader = ({
                                                         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCreateTag(); } }}
                                                         placeholder="Create new tag..."
                                                         className="flex-1 border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-brand-coral/50"
-                                                        style={{ backgroundColor: 'var(--aida-input-container)', borderColor: 'var(--aida-input-border)', color: 'var(--aida-input-text)' }}
+                                                        style={{ backgroundColor: 'rgba(0,0,0,0.2)', borderColor: 'var(--aida-header-border)', color: 'var(--aida-header-text)' }}
                                                     />
-                                                    <button
-                                                        onClick={handleCreateTag}
-                                                        disabled={!newTagDraft.trim()}
-                                                        className="p-1.5 rounded disabled:opacity-30 disabled:cursor-not-allowed transition-colors aida-menu-item"
-                                                        title="Add Tag"
-                                                    >
+                                                    <button onClick={handleCreateTag} disabled={!newTagDraft.trim()} className="p-1.5 rounded disabled:opacity-30 disabled:cursor-not-allowed transition-colors aida-menu-item" title="Add Tag">
                                                         <HiPlus className="w-4 h-4" />
                                                     </button>
                                                 </div>
@@ -393,13 +364,7 @@ const ChatHeader = ({
                     <div className="shrink-0 flex items-center gap-2 ml-auto">
                         <CreditsDisplay userId={userId} lastCost={lastCost} theme={theme} />
                         {paymentLinkConfig?.show && paymentLinkConfig?.url && (
-                            <a
-                                href={paymentLinkConfig.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-2 py-1.5 rounded-md transition-colors bg-white/10 hover:bg-white/20 text-white shadow-sm"
-                                title={paymentLinkConfig.text || 'Support Us'}
-                            >
+                            <a href={paymentLinkConfig.url} target="_blank" rel="noopener noreferrer" className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-2 py-1.5 rounded-md transition-colors bg-white/10 hover:bg-white/20 text-white shadow-sm" title={paymentLinkConfig.text || 'Support Us'}>
                                 <LuHandHeart className="w-4 h-4 text-brand-coral" />
                                 {paymentLinkConfig.text}
                             </a>
@@ -410,12 +375,7 @@ const ChatHeader = ({
 
             <div className="flex items-center space-x-2 pr-1 shrink-0 ml-2 border-l border-white/10 pl-2">
                 {showFullscreenToggle && typeof toggleFullscreen === 'function' && (
-                    <button
-                        onClick={toggleFullscreen}
-                        className={`p-1 rounded-full ${hoverColor} transition-colors`}
-                        style={{ color: accentColor }}
-                        title="Toggle fullscreen"
-                    >
+                    <button onClick={toggleFullscreen} className={`p-1 rounded-full ${hoverColor} transition-colors`} style={{ color: accentColor }} title="Toggle fullscreen">
                         <HiOutlineArrowsPointingOut className="w-5 h-5" />
                     </button>
                 )}
@@ -428,51 +388,34 @@ const ChatHeader = ({
                     </button>
                 )}
                 <div className="relative" ref={menuRef}>
-                    <button
-                        onClick={() => setIsMenuOpen(p => !p)}
-                        className={`p-1 rounded-full ${hoverColor}`}
-                        aria-haspopup="menu"
-                        aria-expanded={isMenuOpen}
-                    >
+                    <button onClick={() => setIsMenuOpen(p => !p)} className={`p-1 rounded-full ${hoverColor}`} aria-haspopup="menu" aria-expanded={isMenuOpen}>
                         <HiEllipsisVertical className="w-5 h-5" />
                     </button>
                     {isMenuOpen && (
                         <div 
                             className="absolute right-0 mt-2 w-40 rounded-lg text-sm shadow-lg border py-1 z-50"
-                            style={{ backgroundColor: 'var(--aida-card-bg)', borderColor: 'var(--aida-card-border)', color: 'var(--aida-body-text)' }}
+                            style={{ backgroundColor: 'var(--aida-header-bg)', borderColor: 'var(--aida-header-border)', color: 'var(--aida-header-text)' }}
                         >
                             {!isMobileViewport && (
-                                <button
-                                    onClick={() => { resetChat(); closeMenu(); }}
-                                    className="w-full px-3 py-2 text-left flex items-center gap-2 aida-menu-item"
-                                >
+                                <button onClick={() => { resetChat(); closeMenu(); }} className="w-full px-3 py-2 text-left flex items-center gap-2 aida-menu-item">
                                     <HiPlus className="w-4 h-4" />
                                     <span>New chat</span>
                                 </button>
                             )}
                             {onShare && (
-                                <button
-                                    onClick={() => { onShare(); closeMenu(); }}
-                                    className="w-full px-3 py-2 text-left flex items-center gap-2 aida-menu-item"
-                                >
+                                <button onClick={() => { onShare(); closeMenu(); }} className="w-full px-3 py-2 text-left flex items-center gap-2 aida-menu-item">
                                     <HiOutlineShare className="w-4 h-4" />
                                     <span>Share</span>
                                 </button>
                             )}
                             {onToggleHistory && (
-                                <button
-                                    onClick={() => { onToggleHistory(); closeMenu(); }}
-                                    className="w-full px-3 py-2 text-left flex items-center gap-2 aida-menu-item"
-                                >
+                                <button onClick={() => { onToggleHistory(); closeMenu(); }} className="w-full px-3 py-2 text-left flex items-center gap-2 aida-menu-item">
                                     <HiClock className="w-4 h-4" />
                                     <span>Chat history</span>
                                 </button>
                             )}
                             {onOpenAppearance && (
-                                <button
-                                    onClick={() => { onOpenAppearance(); closeMenu(); }}
-                                    className="w-full px-3 py-2 text-left flex items-center gap-2 aida-menu-item"
-                                >
+                                <button onClick={() => { onOpenAppearance(); closeMenu(); }} className="w-full px-3 py-2 text-left flex items-center gap-2 aida-menu-item">
                                     <HiOutlineAdjustmentsHorizontal className="w-4 h-4" />
                                     <span>Appearance</span>
                                 </button>
