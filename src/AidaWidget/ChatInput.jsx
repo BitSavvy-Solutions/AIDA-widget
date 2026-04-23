@@ -78,7 +78,6 @@ const ChatInput = ({
     const isPillMode = autoRecordCountdown !== null || transcriptionError || isRecording || isTranscribing;
 
     const filteredModels = useMemo(() => {
-        // Fix Bug 2: deduplicate by value before doing anything else
         const seen = new Set();
         const unique = availableModels.filter((m) => {
             if (seen.has(m.value)) return false;
@@ -89,13 +88,9 @@ const ChatInput = ({
         const q = modelSearchQuery.trim().toLowerCase();
         if (!q) return unique;
     
-        // Split into individual words so "gemini pro" means
-        // must contain "gemini" AND "pro", not the literal phrase
         const words = q.split(/\s+/).filter(Boolean);
     
         return unique.filter((m) => {
-            // Fix Bug 1: only search fields the user can actually see
-            // Drop m.value entirely since it is an internal API identifier
             const searchable = `${m.label} ${m.category || ''}`.toLowerCase();
             return words.every((word) => searchable.includes(word));
         });
@@ -475,7 +470,7 @@ const ChatInput = ({
                     placeholder={translations.inputPlaceholder || 'Type your message...'}
                     dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'}
                     rows={1}
-                    className={`flex-1 bg-transparent px-0 py-1 resize-none focus:outline-none custom-scrollbar overflow-y-auto whitespace-pre-wrap leading-tight ${
+                    className={`aida-input-textarea flex-1 bg-transparent px-0 py-1 resize-none focus:outline-none custom-scrollbar overflow-y-auto whitespace-pre-wrap leading-tight ${
                         isDark ? 'text-gray-100 placeholder-gray-400' : ''
                     } min-h-[32px] max-h-[200px]`}
                     style={{ overflowY: 'auto', overflowX: 'hidden' }}
