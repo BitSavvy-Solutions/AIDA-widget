@@ -1,3 +1,4 @@
+/* src/AidaWidget/AidaWidget.css */
 /* ===== Theme Variables ===== */
 :root {
   /* Default theme values (coral) */
@@ -156,7 +157,7 @@ body.aida-widget-resizing * {
   padding: 0rem 1rem 0rem;
   max-width: 80%;
   line-height: 1.72;
-  font-size: 0.95rem;
+  font-size: calc(0.95rem * var(--aida-text-size-factor));
   font-family: 'Inter', sans-serif;
   text-align: left;
   color: inherit;
@@ -237,7 +238,7 @@ body.aida-widget-resizing * {
   padding: 0.4rem;
   border-radius: 0.5rem;
   overflow-x: auto;
-  font-size: 0.85rem;
+  font-size: calc(0.85rem * var(--aida-text-size-factor));
   line-height: 1.5;
   font-family: 'Fira Code', monospace;
 }
@@ -248,7 +249,7 @@ body.aida-widget-resizing * {
   padding: 0.2rem 0.4rem;
   border-radius: 0.3rem;
   font-family: 'Fira Code', monospace;
-  font-size: 0.85rem;
+  font-size: calc(0.85rem * var(--aida-text-size-factor));
 }
 
 [data-theme='dark'] .bot-message :not(pre) > code {
@@ -273,7 +274,7 @@ body.aida-widget-resizing * {
   overflow-wrap: break-word;
   font-family: 'Inter', sans-serif;
   line-height: 1.4;
-  font-size: 0.95rem;
+  font-size: calc(0.95rem * var(--aida-text-size-factor));
   text-align: left;
 }
 
@@ -295,7 +296,7 @@ body.aida-widget-resizing * {
   padding: 0.2rem 0.4rem;
   border-radius: 0.3rem;
   font-family: 'Fira Code', monospace;
-  font-size: 0.85rem;
+  font-size: calc(0.85rem * var(--aida-text-size-factor));
 }
 
 .user-message pre {
@@ -304,7 +305,7 @@ body.aida-widget-resizing * {
   padding: 0.4rem;
   border-radius: 0.5rem;
   overflow-x: auto;
-  font-size: 0.85rem;
+  font-size: calc(0.85rem * var(--aida-text-size-factor));
   line-height: 1.5;
   font-family: 'Fira Code', monospace;
 }
@@ -421,8 +422,12 @@ textarea.auto-expand {
 .edit-textarea {
   min-height: 60px;
   font-family: inherit;
-  font-size: 0.95rem;
+  font-size: calc(0.95rem * var(--aida-text-size-factor));
   line-height: 1.5;
+}
+
+.aida-input-textarea {
+  font-size: calc(0.875rem * var(--aida-text-size-factor));
 }
 
 /* ===== LCD Display Component ===== */
@@ -759,7 +764,7 @@ textarea.auto-expand {
     min-width: 0;
     width: 100%;
     margin: 0;
-    font-size: 1.1rem;
+    font-size: calc(1.1rem * var(--aida-text-size-factor));
     padding: 0.65rem 1rem;
     border-radius: 1.4rem;
     box-sizing: border-box;
