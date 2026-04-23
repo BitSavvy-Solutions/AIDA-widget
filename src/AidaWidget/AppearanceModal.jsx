@@ -2,15 +2,89 @@
 import React, { useState, useEffect } from 'react';
 import { HiXMark, HiCheck } from 'react-icons/hi2';
 
-// Expanded theme definitions with comprehensive styling properties
+const hexToRgb = (hex) => {
+  let c = (hex || '').replace('#', '');
+  if (c.length === 3) c = c.split('').map(x => x + x).join('');
+  const r = parseInt(c.slice(0, 2), 16);
+  const g = parseInt(c.slice(2, 4), 16);
+  const b = parseInt(c.slice(4, 6), 16);
+  return isNaN(r) ? [0, 0, 0] : [r, g, b];
+};
+
+const getLuminance = (r, g, b) => {
+  const a = [r, g, b].map(v => {
+    v /= 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  });
+  return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722;
+};
+
+const rgbToHsl = (r, g, b) => {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0, l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2; break;
+      case b: h = (r - g) / d + 4; break;
+    }
+    h /= 6;
+  }
+  return [h, s, l];
+};
+
+const hslToRgb = (h, s, l) => {
+  let r, g, b;
+  if (s === 0) {
+    r = g = b = l;
+  } else {
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hue2rgb(p, q, h + 1 / 3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1 / 3);
+  }
+  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+};
+
+const rgbToHex = (r, g, b) => {
+  return "#" + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+};
+
+const adjustColorForContrast = (textColorHex, bgColorHex) => {
+  const bgRgb = hexToRgb(bgColorHex);
+  const textRgb = hexToRgb(textColorHex);
+
+  const bgLum = getLuminance(...bgRgb);
+  let [h, s, l] = rgbToHsl(...textRgb);
+
+  if (bgLum > 0.5) {
+    if (l > 0.35) l = 0.25;
+  } else {
+    if (l < 0.65) l = 0.85;
+  }
+
+  const newRgb = hslToRgb(h, s, l);
+  return rgbToHex(...newRgb);
+};
+
 export const THEMES = {
   coral: {
-    id: 'dark',  // Keep 'dark' for backward compatibility
+    id: 'dark',
     name: 'Coral Pink',
-    // Core colors
     primary: '#FF5F90',
     accent: '#ff87b0',
-    // UI elements
     header: {
       background: '#0f172a',
       text: '#ffffff',
@@ -221,7 +295,6 @@ export const THEMES = {
   }
 };
 
-// Theme card component for theme selection
 const ThemeCard = ({ theme, isSelected, onSelect }) => {
   return (
     <button
@@ -239,7 +312,6 @@ const ThemeCard = ({ theme, isSelected, onSelect }) => {
   );
 };
 
-// Color picker component
 const ColorPicker = ({ label, value, onChange }) => {
   return (
     <div className="flex items-center justify-between mb-3">
@@ -263,7 +335,6 @@ const ColorPicker = ({ label, value, onChange }) => {
 };
 
 const AppearanceModal = ({ isOpen, onClose, currentTheme, onSelectTheme, textSize, onChangeTextSize }) => {
-  // Load saved custom theme settings
   const [customThemeSettings, setCustomThemeSettings] = useState(() => {
     try {
       const saved = localStorage.getItem('aida-custom-theme');
@@ -279,19 +350,23 @@ const AppearanceModal = ({ isOpen, onClose, currentTheme, onSelectTheme, textSiz
     };
   });
 
-  // Update the THEMES.custom object when settings change
   useEffect(() => {
+    const adjustedBodyText = adjustColorForContrast(customThemeSettings.bodyText, customThemeSettings.bodyBg);
+    const adjustedUserMsgText = adjustColorForContrast(customThemeSettings.bodyText, customThemeSettings.userMsgBg);
+    const adjustedInputText = adjustColorForContrast(customThemeSettings.bodyText, customThemeSettings.bodyBg);
+
     THEMES.custom.primary = customThemeSettings.primary;
     THEMES.custom.accent = customThemeSettings.accent;
     THEMES.custom.header.background = customThemeSettings.headerBg;
     THEMES.custom.body.background = customThemeSettings.bodyBg;
-    THEMES.custom.body.text = customThemeSettings.bodyText;
+    THEMES.custom.body.text = adjustedBodyText;
     THEMES.custom.chatArea.userMessage.background = customThemeSettings.userMsgBg;
+    THEMES.custom.chatArea.userMessage.text = adjustedUserMsgText;
+    THEMES.custom.chatArea.botMessage.text = adjustedBodyText;
+    THEMES.custom.inputArea.text = adjustedInputText;
     
-    // Save to localStorage
     localStorage.setItem('aida-custom-theme', JSON.stringify(customThemeSettings));
     
-    // If currently using custom theme, trigger refresh
     if (currentTheme === 'custom') {
       onSelectTheme('custom');
     }
@@ -321,7 +396,6 @@ const AppearanceModal = ({ isOpen, onClose, currentTheme, onSelectTheme, textSiz
           </button>
         </div>
         
-        {/* Theme Selection */}
         <div className="mb-6">
           <h3 className={`text-sm font-medium mb-3 ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>Color Theme</h3>
           <div className="grid grid-cols-2 gap-3">
@@ -336,7 +410,6 @@ const AppearanceModal = ({ isOpen, onClose, currentTheme, onSelectTheme, textSiz
           </div>
         </div>
         
-        {/* Custom Theme Options */}
         {currentTheme === 'custom' && (
           <div className={`mt-6 p-4 rounded-lg border ${
             isDark ? 'border-gray-700 bg-gray-900/50' : 'border-gray-200 bg-gray-50'
@@ -369,7 +442,6 @@ const AppearanceModal = ({ isOpen, onClose, currentTheme, onSelectTheme, textSiz
           </div>
         )}
         
-        {/* Text Size */}
         <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
           <h3 className={`text-sm font-medium mb-3 ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>Text Size</h3>
           <div className="flex items-center">
