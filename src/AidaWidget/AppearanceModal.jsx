@@ -69,10 +69,13 @@ const adjustColorForContrast = (textColorHex, bgColorHex) => {
   const bgLum = getLuminance(...bgRgb);
   let [h, s, l] = rgbToHsl(...textRgb);
 
-  if (bgLum > 0.5) {
-    if (l > 0.35) l = 0.25;
+  // ✅ UPDATED: Lowered threshold from 0.5 to 0.2 for better light/dark detection
+  if (bgLum > 0.2) {
+    // Background is light, ensure text is dark enough
+    if (l > 0.35) l = 0.15; 
   } else {
-    if (l < 0.65) l = 0.85;
+    // Background is dark, ensure text is light enough
+    if (l < 0.65) l = 0.90; 
   }
 
   const newRgb = hslToRgb(h, s, l);
@@ -381,7 +384,7 @@ const AppearanceModal = ({ isOpen, onClose, currentTheme, onSelectTheme, textSiz
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       
-      <div className={`relative rounded-xl shadow-xl p-6 max-w-md w-full ${
+      <div className={`relative rounded-xl shadow-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto custom-scrollbar ${
         isDark ? 'bg-gray-800 text-gray-100' : 'bg-white text-gray-900'
       }`}>
         <div className="flex items-center justify-between mb-5">

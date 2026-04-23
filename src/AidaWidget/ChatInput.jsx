@@ -1,7 +1,7 @@
 /* src/AidaWidget/ChatInput.jsx */
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { 
-    HiPaperAirplane, HiOutlineMicrophone, HiStop, HiArrowPath, HiXMark, 
+import {
+    HiPaperAirplane, HiOutlineMicrophone, HiStop, HiArrowPath, HiXMark,
     HiChevronDown, HiOutlineGlobeAlt, HiLightBulb, HiPhoto, HiChatBubbleLeftRight,
     HiArrowTopRightOnSquare, HiPaperClip, HiEye, HiMagnifyingGlass
 } from 'react-icons/hi2';
@@ -70,11 +70,11 @@ const ChatInput = ({
     const [modelSearchQuery, setModelSearchQuery] = useState('');
     const [focusedModelIndex, setFocusedModelIndex] = useState(-1);
 
-    const modelMenuRef   = useRef(null);
+    const modelMenuRef = useRef(null);
     const modelSearchRef = useRef(null);
-    const modelItemRefs  = useRef([]);
+    const modelItemRefs = useRef([]);
 
-    const isDark     = theme === 'dark';
+    const isDark = theme === 'dark';
     const isPillMode = autoRecordCountdown !== null || transcriptionError || isRecording || isTranscribing;
 
     const filteredModels = useMemo(() => {
@@ -84,12 +84,12 @@ const ChatInput = ({
             seen.add(m.value);
             return true;
         });
-    
+
         const q = modelSearchQuery.trim().toLowerCase();
         if (!q) return unique;
-    
+
         const words = q.split(/\s+/).filter(Boolean);
-    
+
         return unique.filter((m) => {
             const searchable = `${m.label} ${m.category || ''}`.toLowerCase();
             return words.every((word) => searchable.includes(word));
@@ -107,7 +107,7 @@ const ChatInput = ({
         setIsModelMenuOpen(false);
         setModelSearchQuery('');
         setFocusedModelIndex(-1);
-        
+
         setTimeout(() => {
             inputRef.current?.focus();
         }, 10);
@@ -191,8 +191,8 @@ const ChatInput = ({
                         focusedModelIndex >= 0
                             ? filteredModels[focusedModelIndex]
                             : filteredModels.length === 1
-                            ? filteredModels[0]
-                            : null;
+                                ? filteredModels[0]
+                                : null;
                     if (target) selectModel(target.value);
                     break;
                 }
@@ -245,10 +245,10 @@ const ChatInput = ({
         }
     };
 
-    const currentModelObj   = availableModels.find((m) => m.value === selectedModel);
+    const currentModelObj = availableModels.find((m) => m.value === selectedModel);
     const selectedModelLabel = currentModelObj?.label || selectedModel;
-    const currentVisuals     = getModelVisuals(currentModelObj?.category || 'chat');
-    const CurrentIcon        = currentVisuals.icon;
+    const currentVisuals = getModelVisuals(currentModelObj?.category || 'chat');
+    const CurrentIcon = currentVisuals.icon;
 
     const handlePaste = (e) => {
         const items = e.clipboardData?.items;
@@ -310,19 +310,17 @@ const ChatInput = ({
                 type="button"
                 onClick={() => handleSendMessage()}
                 disabled={isDisabled}
-                className={`ml-2 p-2 rounded-full transition-opacity disabled:opacity-50 ${
-                    isDark
+                className={`ml-2 p-2 rounded-full transition-opacity disabled:opacity-50 ${isDark
                         ? isDisabled ? 'bg-gray-600' : 'bg-gray-700 hover:bg-gray-600'
                         : isDisabled ? 'bg-gray-300' : 'bg-gray-900 hover:bg-gray-700'
-                } ${visibilityClass}`}
+                    } ${visibilityClass}`}
                 aria-label="Send Message"
             >
                 <HiPaperAirplane
-                    className={`w-5 h-5 ${
-                        isDisabled
+                    className={`w-5 h-5 ${isDisabled
                             ? isDark ? 'text-gray-300' : 'text-gray-500'
                             : 'text-white'
-                    }`}
+                        }`}
                 />
             </button>
         );
@@ -352,18 +350,16 @@ const ChatInput = ({
         } else if (transcriptionError) {
             pillContent = (
                 <div
-                    className={`${pillBaseClass} gap-1 rounded-full px-1 h-9 w-auto shadow-md transition-all duration-200 ${
-                        isDark ? 'bg-red-800' : 'bg-red-100 border border-red-200'
-                    }`}
+                    className={`${pillBaseClass} gap-1 rounded-full px-1 h-9 w-auto shadow-md transition-all duration-200 ${isDark ? 'bg-red-800' : 'bg-red-100 border border-red-200'
+                        }`}
                     title={`Error: ${transcriptionError}`}
                 >
                     <button
                         onClick={onRetryTranscription}
-                        className={`p-1.5 rounded-full transition-colors !w-auto !h-auto ${
-                            isDark
+                        className={`p-1.5 rounded-full transition-colors !w-auto !h-auto ${isDark
                                 ? 'bg-slate-800 hover:bg-slate-700 text-gray-100'
                                 : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
-                        }`}
+                            }`}
                         aria-label="Retry transcription"
                         title="Retry"
                     >
@@ -371,9 +367,8 @@ const ChatInput = ({
                     </button>
                     <button
                         onClick={onClearFailedTranscription}
-                        className={`p-1.5 rounded-full transition-colors !w-auto !h-auto ${
-                            isDark ? 'text-red-300 hover:bg-red-500/30' : 'text-red-500 hover:bg-red-500/10'
-                        }`}
+                        className={`p-1.5 rounded-full transition-colors !w-auto !h-auto ${isDark ? 'text-red-300 hover:bg-red-500/30' : 'text-red-500 hover:bg-red-500/10'
+                            }`}
                         aria-label="Cancel failed transcription"
                         title="Cancel"
                     >
@@ -386,10 +381,10 @@ const ChatInput = ({
             const pillBgColor = isRecording
                 ? `bg-red-600 hover:bg-red-700 ${isNearingTimeLimit ? 'animate-pulse' : ''}`
                 : isCancelHover
-                ? 'bg-red-600 hover:bg-red-700'
-                : isDark
-                ? 'bg-gray-700'
-                : 'bg-gray-900';
+                    ? 'bg-red-600 hover:bg-red-700'
+                    : isDark
+                        ? 'bg-gray-700'
+                        : 'bg-gray-900';
 
             pillContent = (
                 <button
@@ -401,8 +396,8 @@ const ChatInput = ({
                         isRecording
                             ? 'Stop Recording'
                             : isCancelHover
-                            ? 'Cancel transcription'
-                            : 'Transcribing...'
+                                ? 'Cancel transcription'
+                                : 'Transcribing...'
                     }
                 >
                     {isRecording ? (
@@ -429,7 +424,7 @@ const ChatInput = ({
         }
 
         const micVisibilityClass = isPillMode ? 'invisible pointer-events-none opacity-0' : '';
-        const marginClass        = isPillMode ? '!ml-4' : 'ml-2';
+        const marginClass = isPillMode ? '!ml-4' : 'ml-2';
 
         return (
             <>
@@ -437,9 +432,8 @@ const ChatInput = ({
                 <button
                     onClick={handleRecordButtonClick}
                     disabled={autoSendCountdown !== null}
-                    className={`${marginClass} p-2 rounded-full text-white transition-all duration-200 disabled:opacity-50 ${
-                        isDark ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-900 hover:bg-gray-700'
-                    } ${micVisibilityClass}`}
+                    className={`${marginClass} p-2 rounded-full text-white transition-all duration-200 disabled:opacity-50 ${isDark ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-900 hover:bg-gray-700'
+                        } ${micVisibilityClass}`}
                     aria-label="Start Recording"
                 >
                     <HiOutlineMicrophone className="w-5 h-5" />
@@ -448,7 +442,7 @@ const ChatInput = ({
         );
     };
 
-    
+
     return (
         <div
             className="relative p-2 rounded-none transition-colors border-t"
@@ -479,29 +473,25 @@ const ChatInput = ({
 
             {detectedUrls.length > 0 && (
                 <div
-                    className={`flex items-center gap-1.5 px-1 pb-2 flex-wrap border-b mb-2 ${
-                        isDark ? 'border-gray-700/50' : 'border-gray-200'
-                    }`}
+                    className={`flex items-center gap-1.5 px-1 pb-2 flex-wrap border-b mb-2 ${isDark ? 'border-gray-700/50' : 'border-gray-200'
+                        }`}
                 >
                     <span
-                        className={`text-[10px] font-medium flex-shrink-0 ${
-                            isDark ? 'text-gray-500' : 'text-gray-400'
-                        }`}
+                        className={`text-[10px] font-medium flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'
+                            }`}
                     >
                         Links detected:
                     </span>
                     {detectedUrls.map((url) => (
                         <div
                             key={url}
-                            className={`flex items-center gap-0 rounded-full border text-[10px] overflow-hidden flex-shrink-0 max-w-[220px] ${
-                                isDark ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300'
-                            }`}
+                            className={`flex items-center gap-0 rounded-full border text-[10px] overflow-hidden flex-shrink-0 max-w-[220px] ${isDark ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300'
+                                }`}
                             title={url}
                         >
                             <span
-                                className={`px-2 py-1 truncate max-w-[110px] ${
-                                    isDark ? 'text-gray-300' : 'text-gray-600'
-                                }`}
+                                className={`px-2 py-1 truncate max-w-[110px] ${isDark ? 'text-gray-300' : 'text-gray-600'
+                                    }`}
                             >
                                 {getHostname(url)}
                             </span>
@@ -510,11 +500,10 @@ const ChatInput = ({
                                 <button
                                     type="button"
                                     onClick={() => onEmbedUrl(url)}
-                                    className={`px-1.5 py-1 border-l flex-shrink-0 transition-colors ${
-                                        isDark
+                                    className={`px-1.5 py-1 border-l flex-shrink-0 transition-colors ${isDark
                                             ? 'border-gray-600 text-gray-400 hover:bg-gray-700 hover:text-gray-100'
                                             : 'border-gray-300 text-gray-500 hover:bg-gray-200 hover:text-gray-900'
-                                    }`}
+                                        }`}
                                     title="Open here"
                                     aria-label={`Open ${url} here`}
                                 >
@@ -525,11 +514,10 @@ const ChatInput = ({
                             <button
                                 type="button"
                                 onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
-                                className={`px-1.5 py-1 border-l flex-shrink-0 transition-colors ${
-                                    isDark
+                                className={`px-1.5 py-1 border-l flex-shrink-0 transition-colors ${isDark
                                         ? 'border-gray-600 text-gray-400 hover:bg-gray-700 hover:text-gray-100'
                                         : 'border-gray-300 text-gray-500 hover:bg-gray-200 hover:text-gray-900'
-                                }`}
+                                    }`}
                                 title="Open in new tab"
                                 aria-label={`Open ${url} in new tab`}
                             >
@@ -539,11 +527,10 @@ const ChatInput = ({
                             <button
                                 type="button"
                                 onClick={() => onScrapeUrl(url)}
-                                className={`px-1.5 py-1 border-l flex-shrink-0 transition-colors ${
-                                    isDark
+                                className={`px-1.5 py-1 border-l flex-shrink-0 transition-colors ${isDark
                                         ? 'border-gray-600 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300'
                                         : 'border-gray-300 text-blue-500 hover:bg-blue-50 hover:text-blue-600'
-                                }`}
+                                    }`}
                                 title="Fetch & attach content"
                                 aria-label={`Fetch content from ${url}`}
                             >
@@ -561,15 +548,14 @@ const ChatInput = ({
                         <button
                             type="button"
                             onClick={() => setIsWebSearchEnabled((p) => !p)}
-                            className={`p-2 rounded-full disabled:opacity-50 transition-colors flex-shrink-0 ${
-                                isWebSearchEnabled
+                            className={`p-2 rounded-full disabled:opacity-50 transition-colors flex-shrink-0 ${isWebSearchEnabled
                                     ? isDark
                                         ? 'bg-blue-500/30 text-blue-300'
                                         : 'bg-blue-100 text-blue-600'
                                     : isDark
-                                    ? 'text-gray-300 hover:bg-gray-700'
-                                    : 'text-gray-700 hover:bg-gray-100'
-                            }`}
+                                        ? 'text-gray-300 hover:bg-gray-700'
+                                        : 'text-gray-700 hover:bg-gray-100'
+                                }`}
                             aria-pressed={isWebSearchEnabled}
                             aria-label="Toggle web search"
                             title="Toggle web search"
@@ -583,9 +569,8 @@ const ChatInput = ({
                             <button
                                 type="button"
                                 onClick={() => (isModelMenuOpen ? closeModelMenu() : openModelMenu())}
-                                className={`flex items-center gap-2 rounded-full px-3 py-1 text-sm disabled:opacity-50 transition-colors max-w-full border ${
-                                    isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-                                } ${currentVisuals.colorClass} ${currentVisuals.borderClass} ${currentVisuals.bgClass}`}
+                                className={`flex items-center gap-2 rounded-full px-3 py-1 text-sm disabled:opacity-50 transition-colors max-w-full border ${isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                                    } ${currentVisuals.colorClass} ${currentVisuals.borderClass} ${currentVisuals.bgClass}`}
                                 aria-haspopup="listbox"
                                 aria-expanded={isModelMenuOpen}
                                 aria-label={`Select AI model. Current: ${selectedModelLabel}. Press Tab to open.`}
@@ -596,33 +581,29 @@ const ChatInput = ({
                                     {selectedModelLabel}
                                 </span>
                                 <HiChevronDown
-                                    className={`h-3 w-3 flex-shrink-0 opacity-70 transition-transform duration-200 ${
-                                        isModelMenuOpen ? 'rotate-180' : ''
-                                    } ${isDark ? 'text-gray-400' : 'text-gray-500'}`}
+                                    className={`h-3 w-3 flex-shrink-0 opacity-70 transition-transform duration-200 ${isModelMenuOpen ? 'rotate-180' : ''
+                                        } ${isDark ? 'text-gray-400' : 'text-gray-500'}`}
                                 />
                             </button>
 
                             {isModelMenuOpen && (
                                 <div
-                                    className={`absolute z-50 left-0 bottom-full mb-2 w-64 rounded-xl shadow-2xl overflow-hidden border flex flex-col ${
-                                        isDark
+                                    className={`absolute z-50 left-0 bottom-full mb-2 w-64 rounded-xl shadow-2xl overflow-hidden border flex flex-col ${isDark
                                             ? 'bg-gray-800 border-gray-700 text-gray-100'
                                             : 'bg-white border-gray-200 text-gray-900'
-                                    }`}
+                                        }`}
                                     role="listbox"
                                     aria-label="Choose AI model"
                                 >
                                     <div
-                                        className={`flex items-center gap-2 px-3 py-2 border-b ${
-                                            isDark
+                                        className={`flex items-center gap-2 px-3 py-2 border-b ${isDark
                                                 ? 'border-gray-700/80 bg-gray-900/40'
                                                 : 'border-gray-100 bg-gray-50'
-                                        }`}
+                                            }`}
                                     >
                                         <HiMagnifyingGlass
-                                            className={`w-3.5 h-3.5 flex-shrink-0 ${
-                                                isDark ? 'text-gray-500' : 'text-gray-400'
-                                            }`}
+                                            className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'
+                                                }`}
                                         />
                                         <input
                                             ref={modelSearchRef}
@@ -632,9 +613,8 @@ const ChatInput = ({
                                             onKeyDown={handleModelSearchKeyDown}
                                             placeholder="Search models..."
                                             autoComplete="off"
-                                            className={`flex-1 bg-transparent text-xs outline-none placeholder-gray-500 ${
-                                                isDark ? 'text-gray-200' : 'text-gray-800'
-                                            }`}
+                                            className={`flex-1 bg-transparent text-xs outline-none placeholder-gray-500 ${isDark ? 'text-gray-200' : 'text-gray-800'
+                                                }`}
                                             aria-label="Search AI models"
                                         />
                                         {modelSearchQuery && (
@@ -644,11 +624,10 @@ const ChatInput = ({
                                                     setModelSearchQuery('');
                                                     modelSearchRef.current?.focus();
                                                 }}
-                                                className={`flex-shrink-0 p-0.5 rounded transition-colors ${
-                                                    isDark
+                                                className={`flex-shrink-0 p-0.5 rounded transition-colors ${isDark
                                                         ? 'text-gray-500 hover:text-gray-300'
                                                         : 'text-gray-400 hover:text-gray-600'
-                                                }`}
+                                                    }`}
                                                 aria-label="Clear search"
                                             >
                                                 <HiXMark className="w-3 h-3" />
@@ -659,18 +638,17 @@ const ChatInput = ({
                                     <div className="overflow-y-auto custom-scrollbar p-1 max-h-60">
                                         {filteredModels.length === 0 ? (
                                             <p
-                                                className={`px-3 py-5 text-xs text-center ${
-                                                    isDark ? 'text-gray-500' : 'text-gray-400'
-                                                }`}
+                                                className={`px-3 py-5 text-xs text-center ${isDark ? 'text-gray-500' : 'text-gray-400'
+                                                    }`}
                                             >
                                                 No models match your search
                                             </p>
                                         ) : (
                                             filteredModels.map((opt, idx) => {
-                                                const visuals   = getModelVisuals(opt.category || 'chat');
-                                                const Icon      = visuals.icon;
+                                                const visuals = getModelVisuals(opt.category || 'chat');
+                                                const Icon = visuals.icon;
                                                 const isSelected = selectedModel === opt.value;
-                                                const isFocused  = focusedModelIndex === idx;
+                                                const isFocused = focusedModelIndex === idx;
 
                                                 let rowClass =
                                                     'w-full text-left px-3 py-2.5 text-sm rounded-lg flex items-center gap-3 transition-colors outline-none ';
@@ -704,11 +682,10 @@ const ChatInput = ({
                                                         </div>
                                                         <div className="flex flex-col min-w-0 flex-1">
                                                             <span
-                                                                className={`font-medium truncate ${
-                                                                    isSelected
+                                                                className={`font-medium truncate ${isSelected
                                                                         ? isDark ? 'text-white' : 'text-gray-900'
                                                                         : isDark ? 'text-gray-300' : 'text-gray-700'
-                                                                }`}
+                                                                    }`}
                                                             >
                                                                 {opt.label}
                                                             </span>
@@ -729,23 +706,20 @@ const ChatInput = ({
                                     </div>
 
                                     <div
-                                        className={`px-3 py-1.5 border-t flex items-center justify-between gap-2 shrink-0 ${
-                                            isDark
+                                        className={`px-3 py-1.5 border-t flex items-center justify-between gap-2 shrink-0 ${isDark
                                                 ? 'border-gray-700/80 bg-gray-900/30'
                                                 : 'border-gray-100 bg-gray-50'
-                                        }`}
+                                            }`}
                                     >
                                         <span
-                                            className={`text-[10px] font-mono font-bold ${
-                                                isDark ? 'text-gray-500' : 'text-gray-500'
-                                            }`}
+                                            className={`text-[10px] font-mono font-bold ${isDark ? 'text-gray-500' : 'text-gray-500'
+                                                }`}
                                         >
                                             Tab
                                         </span>
                                         <span
-                                            className={`text-[10px] ${
-                                                isDark ? 'text-gray-600' : 'text-gray-400'
-                                            }`}
+                                            className={`text-[10px] ${isDark ? 'text-gray-600' : 'text-gray-400'
+                                                }`}
                                         >
                                             arrows to navigate, Enter to pick
                                         </span>
