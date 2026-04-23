@@ -542,7 +542,7 @@ const AidaWidget = (props) => {
 
     return (
         
-        <div className="aida-scope">
+        <div className="aida-scope h-full w-full">
             {/* ✅ Inject dynamic CSS variables and overrides for the selected theme */}
             <style>{`
                 .aida-scope {
