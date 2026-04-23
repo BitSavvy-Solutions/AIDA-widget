@@ -1,3 +1,4 @@
+/* src/AidaWidget/ChatDisplay.jsx */
 import React, { memo, useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -246,7 +247,7 @@ const MessageInfoPopover = ({ meta, theme }) => {
                 onClick={() => setIsOpen(p => !p)}
                 className={`transition-colors p-1 ${isWebSearch
                     ? 'text-blue-400 hover:text-blue-300'
-                    : 'text-gray-400 hover:text-gray-600'
+                    : 'opacity-50 hover:opacity-100'
                     }`}
                 title={isWebSearch ? 'Response info (web search used)' : 'Response info'}
                 aria-label="View response metadata"
@@ -752,7 +753,7 @@ const ChatDisplay = ({
                                     <button
                                         type="button"
                                         onClick={() => handleCopy(messageText, message.id)}
-                                        className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+                                        className="opacity-50 hover:opacity-100 transition-opacity p-1"
                                         aria-label="Copy message"
                                         title="Copy message"
                                     >
@@ -766,7 +767,7 @@ const ChatDisplay = ({
                                         <button
                                             type="button"
                                             onClick={() => handleToggleSpeech(message)}
-                                            className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+                                            className="opacity-50 hover:opacity-100 transition-opacity p-1"
                                             aria-label={
                                                 speakingMessageId === message.id && speechStatus === 'speaking' ? 'Pause speech'
                                                     : speakingMessageId === message.id && speechStatus === 'paused' ? 'Resume speech'
@@ -792,7 +793,7 @@ const ChatDisplay = ({
                                             type="button"
                                             onClick={() => onRegenerateResponse(message.id)}
                                             disabled={isLoading}
-                                            className="text-gray-400 hover:text-gray-600 transition-colors p-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            className="opacity-50 hover:opacity-100 transition-opacity p-1 disabled:opacity-20 disabled:cursor-not-allowed"
                                             aria-label="Regenerate response"
                                             title="Regenerate response"
                                         >
@@ -808,7 +809,7 @@ const ChatDisplay = ({
                                             type="button"
                                             onClick={() => onRetryBotMessage(message.id)}
                                             disabled={isLoading}
-                                            className="text-gray-400 hover:text-gray-600 transition-colors p-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            className="opacity-50 hover:opacity-100 transition-opacity p-1 disabled:opacity-20 disabled:cursor-not-allowed"
                                             aria-label="Retry response"
                                             title="Retry response"
                                         >
@@ -823,7 +824,7 @@ const ChatDisplay = ({
                                         <button
                                             type="button"
                                             onClick={() => onStartEdit(message)}
-                                            className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+                                            className="opacity-50 hover:opacity-100 transition-opacity p-1"
                                             aria-label="Edit message"
                                             title="Edit message"
                                         >
@@ -846,9 +847,9 @@ const ChatDisplay = ({
                                                 }
                                             }}
                                             disabled={isLoading}
-                                            className={`transition-all p-1 rounded disabled:opacity-50 disabled:cursor-not-allowed ${isPendingDelete
-                                                ? 'text-red-500 bg-red-500/15 ring-1 ring-red-500/40 scale-110'
-                                                : 'text-gray-400 hover:text-red-400'
+                                            className={`transition-all p-1 rounded disabled:opacity-20 disabled:cursor-not-allowed ${isPendingDelete
+                                                ? 'text-red-500 bg-red-500/15 ring-1 ring-red-500/40 scale-110 opacity-100'
+                                                : 'opacity-50 hover:opacity-100 hover:text-red-500'
                                                 }`}
                                             aria-label={isPendingDelete ? 'Click again to confirm delete' : 'Delete message'}
                                             title={isPendingDelete ? 'Click again to confirm delete' : 'Delete message'}
