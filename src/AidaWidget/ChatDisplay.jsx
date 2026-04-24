@@ -748,7 +748,11 @@ const ChatDisplay = ({
                             )}
 
                             {!isBotLoading && !isEditing && (
-                                <div className="mt-3 flex items-center gap-2 select-none">
+                                <div 
+                                    className="mt-3 flex items-center gap-2 select-none"
+                                    // ✅ FIX: Force the action buttons to inherit the AI text color (or body text for user messages)
+                                    style={{ color: message.sender === 'bot' ? 'var(--aida-bot-msg-text)' : 'inherit' }}
+                                >
                                     {/* Copy */}
                                     <button
                                         type="button"
