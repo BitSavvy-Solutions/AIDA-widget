@@ -248,6 +248,7 @@ body.aida-widget-resizing * {
   border-radius: 0.3rem;
   font-family: 'Fira Code', monospace;
   font-size: calc(0.85rem * var(--aida-text-size-factor));
+  color: inherit;
 }
 
 .bot-message pre code {
@@ -823,7 +824,7 @@ textarea.auto-expand {
 
 .aida-scope :not(pre) > code {
   background-color: var(--aida-code-inline-bg);
-  color: var(--aida-body-text); /* Inherit body text color for perfect readability */
+  color: inherit; /* Inherit body text color for perfect readability */
 }
 
 /* Enhanced styles for sepia theme */
