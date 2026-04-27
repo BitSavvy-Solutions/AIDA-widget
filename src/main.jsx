@@ -5,17 +5,10 @@ import './main.css';
 import AidaWidget from './AidaWidget/AidaWidget';
 
 const roots = {};
-/**
- * This is the public API for the AidaWidget.
- * It will be exposed on the `window` object.
- *
- * @param {string} selector - The CSS selector for the element to mount the widget in.
- * @param {object} props - The props to pass to the AidaWidget component.
- */
+
 function render(selector, props) {
   let rootElement = document.querySelector(selector);
 
-  // If element doesn't exist, create it and append to body
   if (!rootElement) {
     rootElement = document.createElement('div');
     rootElement.id = selector.replace('#', '');
@@ -23,15 +16,12 @@ function render(selector, props) {
   }
 
   if (rootElement) {
-    // ✅ Get the root from cache or create it if it doesn't exist.
     let root = roots[selector];
     if (!root) {
       root = ReactDOM.createRoot(rootElement);
       roots[selector] = root;
     }
 
-    // ✅ Always call render on the same root instance.
-    // React will handle updates without unmounting the component.
     root.render(
       <AidaWidget {...props} />
     );
@@ -40,13 +30,17 @@ function render(selector, props) {
   }
 }
 
-// --- FOR LOCAL DEVELOPMENT ONLY ---
-// This will run automatically when you run `npm run dev`
+// ✅ NEW: Expose a method for the host page to push context into the widget programmatically
+function pushContext(content, name = 'Page Context.md') {
+  const event = new CustomEvent('aida-push-context', { 
+    detail: { content, name } 
+  });
+  window.dispatchEvent(event);
+}
+
 if (import.meta.env.DEV) {
-  // Create a floating container instead of using existing #root
   const widgetContainerId = 'aida-widget-container';
 
-  // Create container if it doesn't exist
   if (!document.getElementById(widgetContainerId)) {
     const container = document.createElement('div');
     container.id = widgetContainerId;
@@ -54,12 +48,9 @@ if (import.meta.env.DEV) {
   }
 
   render(`#${widgetContainerId}`, {
-    // You can put default props here for testing
     language: 'en',
     user: { email: 'dev-user@example.com', id: 'dev-id' },
     translations: { transcribing: 'Transcribing...', inputPlaceholder: 'Type a message to Aida...' },
-    // ✅ NEW: Example of passing custom models configuration
-
     features: {
       resizable: true,
       modelSelection: true,
@@ -69,15 +60,16 @@ if (import.meta.env.DEV) {
       retryMessage: true,
       customInstructions: true,
       historyProjects: true,
-      paymentLink: {
-        show: true,
-        url: 'https://buy.stripe.com/5kQ8wO11A3y97tjcThabK00',
-        text: '' // Custom text for dev environment
+      // ✅ NEW: Mock getPageContext for local dev testing
+      getPageContext: async () => {
+        return {
+          name: 'Dev Page Content.md',
+          content: 'This is mock content extracted from the host page during local development.'
+        };
       }
     },
   });
 }
 
-// Expose the render function to the global scope
-// So it can be called from a <script> tag on any website
-export { render };
+// ✅ Export both render and pushContext
+export { render, pushContext };

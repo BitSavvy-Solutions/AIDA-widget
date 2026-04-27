@@ -1,6 +1,6 @@
 /* src/AidaWidget/AttachmentModal.jsx */
 import React, { useRef, useState } from 'react';
-import { HiXMark, HiPhoto, HiDocumentText, HiGlobeAlt, HiArrowPath, HiOutlineFolder } from 'react-icons/hi2';
+import { HiXMark, HiPhoto, HiDocumentText, HiGlobeAlt, HiArrowPath, HiOutlineFolder, HiOutlineComputerDesktop } from 'react-icons/hi2';
 import AttachmentItem from './AttachmentItem';
 import AttachmentPreview from './AttachmentPreview';
 
@@ -12,6 +12,8 @@ const AttachmentModal = ({
     onAddText,
     onAddFolder,
     onAddUrl,
+    onReadPage,
+    isReadingPage,
     onRemove,
     onClearAll,
     onImagePreview,
@@ -46,8 +48,8 @@ const AttachmentModal = ({
         }
     };
 
-    const filteredAttachments = activeTab === 'all' 
-        ? attachments 
+    const filteredAttachments = activeTab === 'all'
+        ? attachments
         : attachments.filter(att => {
             if (activeTab === 'images') return att.type === 'image';
             if (activeTab === 'text') return att.type === 'text';
@@ -64,7 +66,7 @@ const AttachmentModal = ({
         <div className="fixed inset-0 z-[60] flex items-center justify-center" role="dialog" aria-modal="true">
             <div className="absolute inset-0 bg-black/50" onClick={onClose} />
             <div className={`relative z-10 w-11/12 max-w-lg ${surfaceClasses} rounded-xl shadow-2xl flex flex-col max-h-[80vh]`}>
-                
+
                 {previewingAttachment ? (
                     <AttachmentPreview
                         attachment={previewingAttachment}
@@ -80,11 +82,10 @@ const AttachmentModal = ({
                                     <button
                                         type="button"
                                         onClick={onClearAll}
-                                        className={`text-sm font-medium transition-colors ${
-                                            isDark
+                                        className={`text-sm font-medium transition-colors ${isDark
                                                 ? 'text-red-400/90 hover:text-red-400'
                                                 : 'text-red-600 hover:text-red-700'
-                                        }`}
+                                            }`}
                                         title="Clear all attachments"
                                     >
                                         Clear All
@@ -101,11 +102,10 @@ const AttachmentModal = ({
                                     key={tab}
                                     type="button"
                                     onClick={() => setActiveTab(tab)}
-                                    className={`px-3 py-2 text-sm font-medium rounded-t-lg transition-colors ${
-                                        activeTab === tab
+                                    className={`px-3 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeTab === tab
                                             ? (isDark ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-900')
                                             : (isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-600 hover:text-gray-900')
-                                    }`}
+                                        }`}
                                 >
                                     {tab.charAt(0).toUpperCase() + tab.slice(1)}
                                 </button>
@@ -129,14 +129,14 @@ const AttachmentModal = ({
                                 ))
                             )}
                         </div>
-                        
+
                         {!isReadOnly && (
                             <div className={`p-4 border-t space-y-3 ${borderClasses}`}>
-                                
+
                                 {/* Hidden file inputs */}
-                                <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files || []); if (files.length) onAddImages(files); e.target.value = ''; }}/>
-                                <input ref={textInputRef} type="file" accept="text/*,.md,.json,.yml,.yaml,.ini,.log,.env,.py,.js,.jsx,.ts,.tsx,.html,.css,.scss,.sh,.bat,.ps1,.xml,.csv,.java,.c,.cpp,.h,.cs,.go,.rb,.php,.sql" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) onAddText(file); e.target.value = ''; }}/>
-                                
+                                <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files || []); if (files.length) onAddImages(files); e.target.value = ''; }} />
+                                <input ref={textInputRef} type="file" accept="text/*,.md,.json,.yml,.yaml,.ini,.log,.env,.py,.js,.jsx,.ts,.tsx,.html,.css,.scss,.sh,.bat,.ps1,.xml,.csv,.java,.c,.cpp,.h,.cs,.go,.rb,.php,.sql" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) onAddText(file); e.target.value = ''; }} />
+
                                 <input
                                     ref={folderInputRef}
                                     type="file"
@@ -156,7 +156,7 @@ const AttachmentModal = ({
                                         e.target.value = ''; // Clear input for re-selection
                                     }}
                                 />
-                                
+
                                 {/* Action buttons */}
                                 <div className="grid grid-cols-3 gap-3">
                                     <button type="button" onClick={() => imageInputRef.current?.click()} className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg border transition-colors ${isDark ? 'border-gray-700 bg-gray-800/50 hover:bg-gray-800' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}`} title="Add Images">
@@ -171,13 +171,26 @@ const AttachmentModal = ({
                                         <HiOutlineFolder className="w-6 h-6" />
                                         <span className="text-xs font-medium">Folder</span>
                                     </button>
+
+                                    {onReadPage && (
+                                        <button
+                                            type="button"
+                                            onClick={onReadPage}
+                                            disabled={isReadingPage}
+                                            className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-wait ${isDark ? 'border-gray-700 bg-gray-800/50 hover:bg-gray-800' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}`}
+                                            title="Read Current Page"
+                                        >
+                                            {isReadingPage ? <HiArrowPath className="w-6 h-6 animate-spin" /> : <HiOutlineComputerDesktop className="w-6 h-6" />}
+                                            <span className="text-xs font-medium">Read Page</span>
+                                        </button>
+                                    )}
                                 </div>
 
                                 {/* URL input */}
                                 <div className="relative flex items-center">
                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                                        { isScraping 
-                                            ? <HiArrowPath className={`w-5 h-5 animate-spin ${isDark ? 'text-gray-400' : 'text-gray-500'}`} /> 
+                                        {isScraping
+                                            ? <HiArrowPath className={`w-5 h-5 animate-spin ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
                                             : <HiGlobeAlt className={`w-5 h-5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
                                         }
                                     </span>

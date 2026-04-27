@@ -240,6 +240,22 @@ export const useAttachments = (setSelectedModel) => {
         }
     }, []);
 
+    const addContextAttachment = useCallback((content, name = 'Page Context.md') => {
+        try {
+            const stringContent = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+            const newAttachment = {
+                id: `context-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                type: 'text',
+                content: stringContent,
+                name: name,
+                size: new Blob([stringContent]).size
+            };
+            setAttachments(prev => [...prev, newAttachment]);
+        } catch (e) {
+            console.error('Failed to add context attachment', e);
+        }
+    }, []);
+
     const removeAttachment = useCallback((id) => {
         setAttachments(prev => prev.filter(att => att.id !== id));
     }, []);

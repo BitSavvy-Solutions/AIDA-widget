@@ -10,7 +10,7 @@ import EmbedModal from './EmbedModal';
 import ShareModal from './ShareModal';
 import './AidaWidget.css';
 import ChatInput from './ChatInput';
-import AppearanceModal, { THEMES } from './AppearanceModal'; 
+import AppearanceModal, { THEMES } from './AppearanceModal';
 
 import {
     useWidgetState,
@@ -125,9 +125,43 @@ const AidaWidget = (props) => {
     const { isOpen: isShareModalOpen, open: openShareModal, close: closeShareModal } = useModal();
     const {
         attachments, setAttachments, addImageAttachments, addTextAttachment, addFolderAttachments,
-        addUrlAttachment,
+        addUrlAttachment, addContextAttachment, // ✅ Destructure new function
         removeAttachment, clearAttachments, isAttachmentModalOpen, openModal: openAttachmentModal, closeModal: closeAttachmentModal
     } = useAttachments(setSelectedModel);
+
+    // ✅ NEW: State for reading page
+    const [isReadingPage, setIsReadingPage] = useState(false);
+
+    // ✅ NEW: Handler for the "Read Page" button inside the widget
+    const handleReadPage = useCallback(async () => {
+        if (!features.getPageContext) return;
+        setIsReadingPage(true);
+        try {
+            const contextData = await features.getPageContext();
+            if (contextData) {
+                const content = contextData.content || contextData;
+                const name = contextData.name || 'Page Context.md';
+                addContextAttachment(content, name);
+            }
+        } catch (error) {
+            console.error("Failed to read page context:", error);
+            alert("Failed to read page context.");
+        } finally {
+            setIsReadingPage(false);
+        }
+    }, [features, addContextAttachment]);
+
+    // ✅ NEW: Global event listener for pushed context from the host page
+    useEffect(() => {
+        const handleContextPush = (e) => {
+            const { content, name } = e.detail || {};
+            if (content) {
+                addContextAttachment(content, name || 'Pushed Context.md');
+            }
+        };
+        window.addEventListener('aida-push-context', handleContextPush);
+        return () => window.removeEventListener('aida-push-context', handleContextPush);
+    }, [addContextAttachment]);
 
     const { isDragOverWidget, dropZoneProps } = useDragAndDrop({
         isEnabled: attachmentsEnabled,
@@ -582,6 +616,8 @@ const AidaWidget = (props) => {
                 onAddUrl={addUrlAttachment} onRemove={removeAttachment}
                 onClearAll={clearAttachments} onImagePreview={setImagePreview}
                 theme={baseTheme}
+                onReadPage={features.getPageContext ? handleReadPage : undefined} // ✅ Pass handler
+                isReadingPage={isReadingPage} // ✅ Pass loading state
             />
 
             <AttachmentModal
