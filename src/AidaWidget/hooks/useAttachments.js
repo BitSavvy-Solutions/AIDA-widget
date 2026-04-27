@@ -276,6 +276,7 @@ export const useAttachments = (setSelectedModel) => {
         addUrlAttachment,
         removeAttachment,
         clearAttachments,
+        addContextAttachment,
         isAttachmentModalOpen,
         openModal,
         closeModal
