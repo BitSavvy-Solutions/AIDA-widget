@@ -43,7 +43,9 @@ const DEFAULT_MODELS = [
 // ✅ NEW: Default Audio Models
 const DEFAULT_AUDIO_MODELS = [
     { value: 'whisper-1', label: 'OpenAI Whisper', category: 'audio' },
-    { value: 'saaras:v3', label: 'Sarvam Saaras v3', category: 'audio' }
+    { value: 'whisper-1|translate', label: 'OpenAI Whisper (Translate to EN)', category: 'audio' },
+    { value: 'saaras:v3', label: 'Sarvam Saaras v3', category: 'audio' },
+    { value: 'saaras:v3|translate', label: 'Sarvam Saaras v3 (Translate to EN)', category: 'audio' }
 ];
 
 const defaultProps = {

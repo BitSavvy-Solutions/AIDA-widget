@@ -33,9 +33,16 @@ export const useVoiceInput = ({ transcriptionUrl, selectedAudioModel, onTranscri
         const formData = new FormData();
         formData.append('audio_file', audioBlob, 'recording.webm');
         
-        // ✅ NEW: Append the selected audio model to the request
+        // ✅ UPDATED: Parse the model and mode from the selectedAudioModel string
         if (selectedAudioModel) {
-            formData.append('model', selectedAudioModel);
+            if (selectedAudioModel.includes('|')) {
+                const [modelName, mode] = selectedAudioModel.split('|');
+                formData.append('model', modelName);
+                formData.append('mode', mode);
+            } else {
+                formData.append('model', selectedAudioModel);
+                formData.append('mode', 'transcribe'); // Default mode
+            }
         }
 
         const abortController = new AbortController();
@@ -74,6 +81,8 @@ export const useVoiceInput = ({ transcriptionUrl, selectedAudioModel, onTranscri
         }
     }, [transcriptionUrl, selectedAudioModel, onTranscriptionComplete]);
 
+    // ... (rest of the hook remains exactly the same)
+    
     const stopRecording = useCallback(() => {
         if (mediaRecorderRef.current?.state === "recording") {
             mediaRecorderRef.current.stop();
