@@ -40,6 +40,12 @@ const DEFAULT_MODELS = [
     { value: 'perplexity/sonar', label: 'Perplexity Sonar', category: 'chat' }
 ];
 
+// ✅ NEW: Default Audio Models
+const DEFAULT_AUDIO_MODELS = [
+    { value: 'whisper-1', label: 'OpenAI Whisper', category: 'audio' },
+    { value: 'saaras:v3', label: 'Sarvam Saaras v3', category: 'audio' }
+];
+
 const defaultProps = {
     apiConfig: { chatUrl: CHAT_URL, transcriptionUrl: TRANSCRIPTION_URL },
     language: 'en',
@@ -47,6 +53,7 @@ const defaultProps = {
     user: {},
     pageContext: {},
     models: [],
+    audioModels: [], // ✅ NEW
     features: {
         resizable: true,
         modelSelection: true,
@@ -61,10 +68,11 @@ const defaultProps = {
 };
 
 const AidaWidget = (props) => {
-    const { apiConfig, user, language, translations, pageContext, features, models } = { ...defaultProps, ...props };
+    const { apiConfig, user, language, translations, pageContext, features, models, audioModels } = { ...defaultProps, ...props };
     const attachmentsEnabled = Boolean(features?.imageUpload);
 
     const availableModels = (models && models.length > 0) ? models : DEFAULT_MODELS;
+    const availableAudioModels = (audioModels && audioModels.length > 0) ? audioModels : DEFAULT_AUDIO_MODELS;
 
     const [currentMessage, setCurrentMessage] = useState('');
 
@@ -72,6 +80,13 @@ const AidaWidget = (props) => {
         const saved = localStorage.getItem('aida-selected-model');
         const exists = availableModels.some(m => m.value === saved);
         return exists ? saved : availableModels[0].value;
+    });
+
+    // ✅ NEW: State for selected audio model
+    const [selectedAudioModel, setSelectedAudioModel] = useState(() => {
+        const saved = localStorage.getItem('aida-selected-audio-model');
+        const exists = availableAudioModels.some(m => m.value === saved);
+        return exists ? saved : availableAudioModels[0].value;
     });
 
     const [contextLimit, setContextLimit] = useState(() => {
@@ -90,15 +105,13 @@ const AidaWidget = (props) => {
     const [isAppearanceModalOpen, setIsAppearanceModalOpen] = useState(false);
 
     useEffect(() => { localStorage.setItem('aida-selected-model', selectedModel); }, [selectedModel]);
+    useEffect(() => { localStorage.setItem('aida-selected-audio-model', selectedAudioModel); }, [selectedAudioModel]); // ✅ NEW
     useEffect(() => { localStorage.setItem('aida-context-limit', contextLimit); }, [contextLimit]);
 
-    // Apply text size to CSS variables
     useEffect(() => {
         document.documentElement.style.setProperty('--aida-text-size-factor', `${textSize / 100}`);
         localStorage.setItem('aida-text-size', textSize.toString());
     }, [textSize]);
-
-
 
     const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false);
     const [editingMessageId, setEditingMessageId] = useState(null);
@@ -125,14 +138,12 @@ const AidaWidget = (props) => {
     const { isOpen: isShareModalOpen, open: openShareModal, close: closeShareModal } = useModal();
     const {
         attachments, setAttachments, addImageAttachments, addTextAttachment, addFolderAttachments,
-        addUrlAttachment, addContextAttachment, // ✅ Destructure new function
+        addUrlAttachment, addContextAttachment,
         removeAttachment, clearAttachments, isAttachmentModalOpen, openModal: openAttachmentModal, closeModal: closeAttachmentModal
     } = useAttachments(setSelectedModel);
 
-    // ✅ NEW: State for reading page
     const [isReadingPage, setIsReadingPage] = useState(false);
 
-    // ✅ NEW: Handler for the "Read Page" button inside the widget
     const handleReadPage = useCallback(async () => {
         if (!features.getPageContext) return;
         setIsReadingPage(true);
@@ -151,7 +162,6 @@ const AidaWidget = (props) => {
         }
     }, [features, addContextAttachment]);
 
-    // ✅ NEW: Global event listener for pushed context from the host page
     useEffect(() => {
         const handleContextPush = (e) => {
             const { content, name } = e.detail || {};
@@ -173,12 +183,18 @@ const AidaWidget = (props) => {
     const requestFullscreen = useCallback(() => setIsFullscreen(true), [setIsFullscreen]);
     const { sidebarRef, sidebarInlineStyle, resizeHandleProps, isResizing } = useResizableSidebar({ isOpen, isFullscreen, isMobileViewport, isEnabled: features.resizable, onRequestFullscreen: requestFullscreen });
     const { isLoading, lastCost, liveReasoning, streamResponse, stopStreaming, apiError, clearApiError } = useChatAPI({ apiConfig, messages, setMessages, currentSessionId, updateCurrentSession, user, pageContext, customPrompt });
-    const { isRecording, isTranscribing, elapsedTime, startRecording, stopRecording, cancelTranscription, lastInputWasVoiceRef, transcriptionError, retryTranscription, clearFailedTranscription, isNearingTimeLimit } = useVoiceInput({ transcriptionUrl: apiConfig.transcriptionUrl, onTranscriptionComplete: (text) => { setCurrentMessage(p => p.trim() ? `${p} ${text}` : text); if (text) startAutoSendTimer(); } });
+    
+    // ✅ MODIFIED: Pass selectedAudioModel to useVoiceInput
+    const { isRecording, isTranscribing, elapsedTime, startRecording, stopRecording, cancelTranscription, lastInputWasVoiceRef, transcriptionError, retryTranscription, clearFailedTranscription, isNearingTimeLimit } = useVoiceInput({ 
+        transcriptionUrl: apiConfig.transcriptionUrl, 
+        selectedAudioModel, 
+        onTranscriptionComplete: (text) => { setCurrentMessage(p => p.trim() ? `${p} ${text}` : text); if (text) startAutoSendTimer(); } 
+    });
+    
     const { countdown: autoSendCountdown, start: startAutoSendTimer, cancel: cancelAutoSendTimer, setIsPaused: setIsSendTimerPaused } = useCountdown(() => stableHandleSendMessage(), 3);
     const { countdown: autoRecordCountdown, start: startAutoRecordTimer, cancel: cancelAutoRecordTimer, setIsPaused: setIsRecordTimerPaused } = useCountdown(startRecording, 3);
     const displayText = useDisplayAnimation({ isOpen, isLoading });
 
-    // Load custom theme from localStorage when component mounts
     useEffect(() => {
         if (theme === 'custom') {
             try {
@@ -196,10 +212,7 @@ const AidaWidget = (props) => {
         }
     }, [theme]);
 
-    // Get the appropriate theme object
     const selectedThemeObj = Object.values(THEMES).find(t => t.id === theme) || THEMES.coral;
-
-    // Determine if we should use dark or light base styling
     const baseTheme = ['dark', 'azure'].includes(theme) ||
         (theme === 'custom' && selectedThemeObj.body.background.match(/#([0-9a-f]{2}){1,2}/i) &&
             parseInt(selectedThemeObj.body.background.slice(1), 16) < 0x808080)
@@ -400,38 +413,25 @@ const AidaWidget = (props) => {
         <div className="aida-scope">
             <style>{`
                 .aida-scope {
-                    /* Base theme variables */
                     --aida-primary: ${selectedThemeObj.primary};
                     --aida-accent: ${selectedThemeObj.accent};
-                    
-                    /* Header */
                     --aida-header-bg: ${selectedThemeObj.header.background};
                     --aida-header-text: ${selectedThemeObj.header.text};
                     --aida-header-border: ${selectedThemeObj.header.border};
-                    
-                    /* Body */
                     --aida-body-bg: ${selectedThemeObj.body.background};
                     --aida-body-text: ${selectedThemeObj.body.text};
-                    
-                    /* Chat area */
                     --aida-chat-bg: ${selectedThemeObj.chatArea.background};
                     --aida-user-msg-bg: ${selectedThemeObj.chatArea.userMessage.background};
                     --aida-user-msg-text: ${selectedThemeObj.chatArea.userMessage.text};
                     --aida-bot-msg-bg: ${selectedThemeObj.chatArea.botMessage.background};
                     --aida-bot-msg-text: ${selectedThemeObj.chatArea.botMessage.text};
-                    
-                    /* Input area */
                     --aida-input-container: ${selectedThemeObj.inputArea.container};
                     --aida-input-bg: ${selectedThemeObj.inputArea.background};
                     --aida-input-border: ${selectedThemeObj.inputArea.border};
                     --aida-input-text: ${selectedThemeObj.inputArea.text};
                     --aida-input-placeholder: ${selectedThemeObj.inputArea.placeholder};
-                    
-                    /* Card elements */
                     --aida-card-bg: ${selectedThemeObj.card.background};
                     --aida-card-border: ${selectedThemeObj.card.border};
-                    
-                    /* Code blocks */
                     --aida-code-bg: ${selectedThemeObj.code.background};
                     --aida-code-inline-bg: ${selectedThemeObj.code.inline};
                     --aida-code-text: ${selectedThemeObj.code.text};
@@ -542,7 +542,7 @@ const AidaWidget = (props) => {
                             isRecording={isRecording}
                             elapsedTime={elapsedTime}
                             siteLanguage={siteLanguage}
-                            theme="dark" // ✅ Forced dark theme for the footer area
+                            theme="dark"
                             autoSendCountdown={autoSendCountdown}
                             cancelAutoSendTimer={cancelAutoSendTimer}
                             setIsSendTimerPaused={setIsSendTimerPaused}
@@ -552,6 +552,9 @@ const AidaWidget = (props) => {
                             selectedModel={selectedModel}
                             setSelectedModel={setSelectedModel}
                             availableModels={availableModels}
+                            selectedAudioModel={selectedAudioModel} // ✅ NEW
+                            setSelectedAudioModel={setSelectedAudioModel} // ✅ NEW
+                            availableAudioModels={availableAudioModels} // ✅ NEW
                             translations={translations}
                             attachmentCount={attachments.length}
                             onOpenAttachments={openAttachmentModal}
@@ -616,8 +619,8 @@ const AidaWidget = (props) => {
                 onAddUrl={addUrlAttachment} onRemove={removeAttachment}
                 onClearAll={clearAttachments} onImagePreview={setImagePreview}
                 theme={baseTheme}
-                onReadPage={features.getPageContext ? handleReadPage : undefined} // ✅ Pass handler
-                isReadingPage={isReadingPage} // ✅ Pass loading state
+                onReadPage={features.getPageContext ? handleReadPage : undefined}
+                isReadingPage={isReadingPage}
             />
 
             <AttachmentModal

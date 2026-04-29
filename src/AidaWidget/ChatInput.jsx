@@ -44,6 +44,9 @@ const ChatInput = ({
     selectedModel,
     setSelectedModel,
     availableModels = [],
+    selectedAudioModel, // ✅ NEW
+    setSelectedAudioModel, // ✅ NEW
+    availableAudioModels = [], // ✅ NEW
     translations,
     attachmentCount = 0,
     onOpenAttachments,
@@ -74,11 +77,11 @@ const ChatInput = ({
     const modelSearchRef = useRef(null);
     const modelItemRefs = useRef([]);
 
-    // ✅ The footer is now forced to be dark across all themes
     const isDark = true; 
     const isPillMode = autoRecordCountdown !== null || transcriptionError || isRecording || isTranscribing;
 
-    const filteredModels = useMemo(() => {
+    // ✅ MODIFIED: Filter both text and audio models
+    const filteredTextModels = useMemo(() => {
         const seen = new Set();
         const unique = availableModels.filter((m) => {
             if (seen.has(m.value)) return false;
@@ -90,12 +93,35 @@ const ChatInput = ({
         if (!q) return unique;
 
         const words = q.split(/\s+/).filter(Boolean);
-
         return unique.filter((m) => {
             const searchable = `${m.label} ${m.category || ''}`.toLowerCase();
             return words.every((word) => searchable.includes(word));
         });
     }, [availableModels, modelSearchQuery]);
+
+    const filteredAudioModels = useMemo(() => {
+        const seen = new Set();
+        const unique = availableAudioModels.filter((m) => {
+            if (seen.has(m.value)) return false;
+            seen.add(m.value);
+            return true;
+        });
+
+        const q = modelSearchQuery.trim().toLowerCase();
+        if (!q) return unique;
+
+        const words = q.split(/\s+/).filter(Boolean);
+        return unique.filter((m) => {
+            const searchable = `${m.label} ${m.category || ''}`.toLowerCase();
+            return words.every((word) => searchable.includes(word));
+        });
+    }, [availableAudioModels, modelSearchQuery]);
+
+    // Combine for keyboard navigation
+    const selectableItems = useMemo(() => [
+        ...filteredTextModels.map(m => ({ ...m, _type: 'text' })),
+        ...filteredAudioModels.map(m => ({ ...m, _type: 'audio' }))
+    ], [filteredTextModels, filteredAudioModels]);
 
     const openModelMenu = useCallback(() => {
         modelItemRefs.current = [];
@@ -114,13 +140,15 @@ const ChatInput = ({
         }, 10);
     }, [inputRef]);
 
-    const selectModel = useCallback(
-        (value) => {
-            setSelectedModel(value);
-            closeModelMenu();
-        },
-        [setSelectedModel, closeModelMenu]
-    );
+    // ✅ MODIFIED: Handle selection based on type
+    const selectModel = useCallback((item) => {
+        if (item._type === 'text') {
+            setSelectedModel(item.value);
+        } else {
+            setSelectedAudioModel(item.value);
+        }
+        closeModelMenu();
+    }, [setSelectedModel, setSelectedAudioModel, closeModelMenu]);
 
     const modelSelectionEnabled = Boolean(features?.modelSelection);
 
@@ -177,24 +205,24 @@ const ChatInput = ({
                 case 'ArrowDown':
                     e.preventDefault();
                     setFocusedModelIndex((prev) =>
-                        prev < filteredModels.length - 1 ? prev + 1 : 0
+                        prev < selectableItems.length - 1 ? prev + 1 : 0
                     );
                     break;
                 case 'ArrowUp':
                     e.preventDefault();
                     setFocusedModelIndex((prev) =>
-                        prev > 0 ? prev - 1 : filteredModels.length - 1
+                        prev > 0 ? prev - 1 : selectableItems.length - 1
                     );
                     break;
                 case 'Enter': {
                     e.preventDefault();
                     const target =
                         focusedModelIndex >= 0
-                            ? filteredModels[focusedModelIndex]
-                            : filteredModels.length === 1
-                                ? filteredModels[0]
+                            ? selectableItems[focusedModelIndex]
+                            : selectableItems.length === 1
+                                ? selectableItems[0]
                                 : null;
-                    if (target) selectModel(target.value);
+                    if (target) selectModel(target);
                     break;
                 }
                 case 'Escape':
@@ -205,7 +233,7 @@ const ChatInput = ({
                     break;
             }
         },
-        [filteredModels, focusedModelIndex, selectModel, closeModelMenu]
+        [selectableItems, focusedModelIndex, selectModel, closeModelMenu]
     );
 
     const detectedUrls = useMemo(() => {
@@ -219,6 +247,7 @@ const ChatInput = ({
         return `${m}:${s}`;
     };
 
+    // ✅ MODIFIED: Added 'audio' category visuals
     const getModelVisuals = (category) => {
         switch (category) {
             case 'reasoning':
@@ -234,6 +263,13 @@ const ChatInput = ({
                     colorClass: 'text-pink-500',
                     bgClass: isDark ? 'bg-pink-500/10' : 'bg-pink-50',
                     borderClass: 'border-pink-500/30',
+                };
+            case 'audio':
+                return {
+                    icon: HiOutlineMicrophone,
+                    colorClass: 'text-green-500',
+                    bgClass: isDark ? 'bg-green-500/10' : 'bg-green-50',
+                    borderClass: 'border-green-500/30',
                 };
             case 'chat':
             default:
@@ -443,6 +479,54 @@ const ChatInput = ({
         );
     };
 
+    // ✅ NEW: Helper to render a single model option
+    const renderModelOption = (opt, idx, type) => {
+        const visuals = getModelVisuals(opt.category || 'chat');
+        const Icon = visuals.icon;
+        const isSelected = type === 'text' ? selectedModel === opt.value : selectedAudioModel === opt.value;
+        const isFocused = focusedModelIndex === idx;
+
+        let rowClass = 'w-full text-left px-3 py-2.5 text-sm rounded-lg flex items-center gap-3 transition-colors outline-none ';
+
+        if (isFocused) {
+            rowClass += isDark
+                ? 'bg-white/10 ring-1 ring-inset ring-brand-coral/50 '
+                : 'bg-blue-50 ring-1 ring-inset ring-blue-300 ';
+        } else if (isSelected) {
+            rowClass += isDark ? 'bg-gray-700 ' : 'bg-gray-100 ';
+        } else {
+            rowClass += isDark
+                ? 'hover:bg-gray-700/50 '
+                : 'hover:bg-gray-50 ';
+        }
+
+        return (
+            <button
+                key={opt.value}
+                type="button"
+                ref={(el) => { modelItemRefs.current[idx] = el; }}
+                role="option"
+                aria-selected={isSelected}
+                onClick={() => selectModel({ ...opt, _type: type })}
+                className={rowClass}
+            >
+                <div className={`p-1.5 rounded-md flex-shrink-0 ${visuals.bgClass} ${visuals.colorClass}`}>
+                    <Icon className="w-4 h-4" />
+                </div>
+                <div className="flex flex-col min-w-0 flex-1">
+                    <span className={`font-medium truncate ${isSelected ? (isDark ? 'text-white' : 'text-gray-900') : (isDark ? 'text-gray-300' : 'text-gray-700')}`}>
+                        {opt.label}
+                    </span>
+                    <span className="text-[10px] opacity-50 uppercase tracking-wider font-semibold">
+                        {opt.category || 'Chat'}
+                    </span>
+                </div>
+                {isSelected && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-brand-coral flex-shrink-0" aria-hidden="true" />
+                )}
+            </button>
+        );
+    };
 
     return (
         <div
@@ -636,72 +720,32 @@ const ChatInput = ({
                                     </div>
 
                                     <div className="overflow-y-auto custom-scrollbar p-1 max-h-60">
-                                        {filteredModels.length === 0 ? (
-                                            <p
-                                                className={`px-3 py-5 text-xs text-center ${isDark ? 'text-gray-500' : 'text-gray-400'
-                                                    }`}
-                                            >
+                                        {selectableItems.length === 0 ? (
+                                            <p className={`px-3 py-5 text-xs text-center ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                                                 No models match your search
                                             </p>
                                         ) : (
-                                            filteredModels.map((opt, idx) => {
-                                                const visuals = getModelVisuals(opt.category || 'chat');
-                                                const Icon = visuals.icon;
-                                                const isSelected = selectedModel === opt.value;
-                                                const isFocused = focusedModelIndex === idx;
-
-                                                let rowClass =
-                                                    'w-full text-left px-3 py-2.5 text-sm rounded-lg flex items-center gap-3 transition-colors outline-none ';
-
-                                                if (isFocused) {
-                                                    rowClass += isDark
-                                                        ? 'bg-white/10 ring-1 ring-inset ring-brand-coral/50 '
-                                                        : 'bg-blue-50 ring-1 ring-inset ring-blue-300 ';
-                                                } else if (isSelected) {
-                                                    rowClass += isDark ? 'bg-gray-700 ' : 'bg-gray-100 ';
-                                                } else {
-                                                    rowClass += isDark
-                                                        ? 'hover:bg-gray-700/50 '
-                                                        : 'hover:bg-gray-50 ';
-                                                }
-
-                                                return (
-                                                    <button
-                                                        key={opt.value}
-                                                        type="button"
-                                                        ref={(el) => { modelItemRefs.current[idx] = el; }}
-                                                        role="option"
-                                                        aria-selected={isSelected}
-                                                        onClick={() => selectModel(opt.value)}
-                                                        className={rowClass}
-                                                    >
-                                                        <div
-                                                            className={`p-1.5 rounded-md flex-shrink-0 ${visuals.bgClass} ${visuals.colorClass}`}
-                                                        >
-                                                            <Icon className="w-4 h-4" />
+                                            <>
+                                                {/* ✅ NEW: Render Text Models Section */}
+                                                {filteredTextModels.length > 0 && (
+                                                    <div className="mb-2">
+                                                        <div className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
+                                                            Text Models
                                                         </div>
-                                                        <div className="flex flex-col min-w-0 flex-1">
-                                                            <span
-                                                                className={`font-medium truncate ${isSelected
-                                                                        ? isDark ? 'text-white' : 'text-gray-900'
-                                                                        : isDark ? 'text-gray-300' : 'text-gray-700'
-                                                                    }`}
-                                                            >
-                                                                {opt.label}
-                                                            </span>
-                                                            <span className="text-[10px] opacity-50 uppercase tracking-wider font-semibold">
-                                                                {opt.category || 'Chat'}
-                                                            </span>
+                                                        {filteredTextModels.map((opt, idx) => renderModelOption(opt, idx, 'text'))}
+                                                    </div>
+                                                )}
+                                                
+                                                {/* ✅ NEW: Render Audio Models Section */}
+                                                {filteredAudioModels.length > 0 && (
+                                                    <div>
+                                                        <div className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
+                                                            Audio Models
                                                         </div>
-                                                        {isSelected && (
-                                                            <span
-                                                                className="w-1.5 h-1.5 rounded-full bg-brand-coral flex-shrink-0"
-                                                                aria-hidden="true"
-                                                            />
-                                                        )}
-                                                    </button>
-                                                );
-                                            })
+                                                        {filteredAudioModels.map((opt, idx) => renderModelOption(opt, filteredTextModels.length + idx, 'audio'))}
+                                                    </div>
+                                                )}
+                                            </>
                                         )}
                                     </div>
 
