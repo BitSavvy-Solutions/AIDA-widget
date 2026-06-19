@@ -34,12 +34,18 @@ const DEFAULT_MODELS = [
     { value: 'deepseek/deepseek-chat-v3-0324', label: 'Deepseek V3', category: 'reasoning' },
     { value: 'openai/gpt-5.1', label: 'GPT-5.1', category: 'reasoning' },
     { value: 'google/gemini-3.1-pro-preview', label: 'Gemini Pro 3 (Reasoner)', category: 'reasoning' },
+    { value: 'google/gemini-3.5-flash', label: 'Gemini Flash 3.5 Pre', category: 'reasoning' },
     { value: 'google/gemini-3.1-flash-lite-preview', label: 'Gemini Flash 3 Pre', category: 'chat' },
     { value: '~anthropic/claude-sonnet-latest', label: 'Claude Sonnet Latest', category: 'reasoning' },
     { value: '~anthropic/claude-haiku-latest', label: 'Claude Haiku Latest', category: 'reasoning' },
     { value: 'google/gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image', category: 'vision' },
     { value: 'openai/gpt-5.1', label: 'GPT-5.1', category: 'chat' },
-    { value: 'perplexity/sonar', label: 'Perplexity Sonar', category: 'chat' }
+    { value: 'perplexity/sonar', label: 'Perplexity Sonar', category: 'chat' },
+    { value: 'z-ai/glm-5.2', label: 'GLM-5.2', category: 'reasoning' },
+    { value: 'qwen/qwen3.7-max', label: 'Qwen 3.7 Max', category: 'reasoning' },
+    { value: 'minimax/minimax-m3', label: 'MiniMax M3', category: 'reasoning' },
+    { value: 'moonshotai/kimi-k2.7-code', label: 'Kimi K2.7 Code', category: 'reasoning' },
+    { value: 'xiaomi/mimo-v2.5-pro', label: 'MiMo v2.5 Pro', category: 'reasoning' },
 ];
 
 // ✅ NEW: Default Audio Models
