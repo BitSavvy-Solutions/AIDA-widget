@@ -83,12 +83,10 @@ const AidaWidget = (props) => {
     const [fetchedModels, setFetchedModels] = useState([]);
     const [fetchedAudioModels, setFetchedAudioModels] = useState([]);
     
-    // ✅ NEW: Search state
     const [searchedModels, setSearchedModels] = useState(null);
     const [isSearchingModels, setIsSearchingModels] = useState(false);
     const searchTimeoutRef = useRef(null);
 
-    // ✅ NEW: Recent models state, persisted to localStorage
     const [recentModelValues, setRecentModelValues] = useState(() => {
         try {
             const saved = JSON.parse(localStorage.getItem('aida-recent-models'));
@@ -128,26 +126,21 @@ const AidaWidget = (props) => {
     const availableModels = (fetchedModels.length > 0) ? fetchedModels : ((models && models.length > 0) ? models : DEFAULT_MODELS);
     const availableAudioModels = (fetchedAudioModels.length > 0) ? fetchedAudioModels : ((audioModels && audioModels.length > 0) ? audioModels : DEFAULT_AUDIO_MODELS);
 
-    // ✅ NEW: Debounced API search function
     const handleSearchModels = useCallback((query) => {
         if (searchTimeoutRef.current) {
             clearTimeout(searchTimeoutRef.current);
         }
-
         if (!query.trim()) {
             setSearchedModels(null);
             setIsSearchingModels(false);
             return;
         }
-
         setIsSearchingModels(true);
-
         searchTimeoutRef.current = setTimeout(async () => {
             try {
                 const res = await fetch(`${MODELS_URL}?q=${encodeURIComponent(query)}`);
                 if (!res.ok) throw new Error('Failed to search models');
                 const data = await res.json();
-                
                 const normalize = (list = []) => list.map(m => ({
                     value: m.id,
                     label: m.name,
@@ -158,7 +151,6 @@ const AidaWidget = (props) => {
                     available: m.available,
                     reason: m.reason
                 }));
-
                 setSearchedModels({
                     text: normalize(data.text),
                     audio: normalize(data.audio)
@@ -172,7 +164,6 @@ const AidaWidget = (props) => {
         }, 400);
     }, []);
 
-    // ✅ NEW: Add a model to the recent list
     const addRecentModel = useCallback((modelValue, modelType) => {
         setRecentModelValues(prev => {
             const next = [
@@ -187,8 +178,6 @@ const AidaWidget = (props) => {
             return next;
         });
     }, []);
-
-    const [currentMessage, setCurrentMessage] = useState('');
 
     const [selectedModel, setSelectedModel] = useState(() => {
         const saved = localStorage.getItem('aida-selected-model');
@@ -297,10 +286,9 @@ const AidaWidget = (props) => {
     const { sidebarRef, sidebarInlineStyle, resizeHandleProps, isResizing } = useResizableSidebar({ isOpen, isFullscreen, isMobileViewport, isEnabled: features.resizable, onRequestFullscreen: requestFullscreen });
     const { isLoading, lastCost, liveReasoning, streamResponse, stopStreaming, apiError, clearApiError } = useChatAPI({ apiConfig, messages, setMessages, currentSessionId, updateCurrentSession, user, pageContext, customPrompt });
     
-    const { isRecording, isTranscribing, elapsedTime, startRecording, stopRecording, cancelTranscription, lastInputWasVoiceRef, transcriptionError, retryTranscription, clearFailedTranscription, isNearingTimeLimit } = useVoiceInput({ 
+    const { isRecording, elapsedTime, recordings, startRecording, stopRecording, retryTranscription, removeRecording, isNearingTimeLimit } = useVoiceInput({ 
         transcriptionUrl: apiConfig.transcriptionUrl, 
-        selectedAudioModel, 
-        onTranscriptionComplete: (text) => { setCurrentMessage(p => p.trim() ? `${p} ${text}` : text); if (text) startAutoSendTimer(); } 
+        selectedAudioModel
     });
     
     const { countdown: autoSendCountdown, start: startAutoSendTimer, cancel: cancelAutoSendTimer, setIsPaused: setIsSendTimerPaused } = useCountdown(() => stableHandleSendMessage(), 3);
@@ -421,10 +409,10 @@ const AidaWidget = (props) => {
     }, [isOpen, isRecording, isLoading, messages.length, siteLanguage, stopRecording, stopStreaming, toggleChatVisibility, setMessages, cancelAutoSendTimer, cancelAutoRecordTimer]);
 
     const resetChat = () => { saveCurrentChatToHistory(); setMessages([]); setCurrentSessionId(null); clearAttachments(); };
-    const handleRecordButtonClick = useCallback(() => { if (isLoading || isTranscribing) return; cancelAutoRecordTimer(); isRecording ? stopRecording() : startRecording(); }, [isRecording, isLoading, isTranscribing, stopRecording, startRecording, cancelAutoRecordTimer]);
+    const handleRecordButtonClick = useCallback(() => { if (isLoading) return; cancelAutoRecordTimer(); isRecording ? stopRecording() : startRecording(); }, [isRecording, isLoading, stopRecording, startRecording, cancelAutoRecordTimer]);
 
     const stableHandleSendMessage = useCallback(async (messageTextOverride = null) => {
-        const text = messageTextOverride ?? currentMessage;
+        const text = messageTextOverride ?? '';
         if ((!text.trim() && attachments.length === 0) || isLoading) return;
         cancelAutoSendTimer();
         cancelAutoRecordTimer();
@@ -451,14 +439,13 @@ const AidaWidget = (props) => {
             updateCurrentSession(nextMessages);
         }
 
-        setCurrentMessage('');
         clearAttachments();
         setEditingMessageId(null);
         if (isWebSearchEnabled) setIsWebSearchEnabled(false);
 
         const historyForPayload = nextMessages.slice(0, -1);
         await streamResponse({ userMessage, botMessageId, historyForPayload, sessionId: activeSessionId, contextLimit });
-    }, [currentMessage, attachments, isLoading, selectedModel, isWebSearchEnabled, messages, currentSessionId, streamResponse, setMessages, createNewSession, updateCurrentSession, cancelAutoSendTimer, cancelAutoRecordTimer, clearAttachments, contextLimit]);
+    }, [attachments, isLoading, selectedModel, isWebSearchEnabled, messages, currentSessionId, streamResponse, setMessages, createNewSession, updateCurrentSession, cancelAutoSendTimer, cancelAutoRecordTimer, clearAttachments, contextLimit]);
 
     const handleRetry = useCallback(async (botMessageId) => {
         if (isLoading) return;
@@ -515,8 +502,7 @@ const AidaWidget = (props) => {
         if (currentSessionId) historyHandlers.onRename(currentSessionId, newTitle);
     }, [currentSessionId, historyHandlers]);
 
-    useEffect(() => { if (isOpen && !isLoading && !isTranscribing) inputRef.current?.focus(); }, [isOpen, isLoading, isTranscribing]);
-    useEffect(() => { if (inputRef.current) { inputRef.current.style.height = 'auto'; inputRef.current.style.height = `${inputRef.current.scrollHeight}px`; } }, [currentMessage]);
+    useEffect(() => { if (isOpen && !isLoading) inputRef.current?.focus(); }, [isOpen, isLoading]);
     useEffect(() => { const handleResize = () => setIsMobileViewport(window.innerWidth <= 768); window.addEventListener('resize', handleResize); return () => window.removeEventListener('resize', handleResize); }, []);
 
     const containerClasses = `flex flex-col relative aida-widget-shell ${isClosing ? 'animate-collapse-chat' : 'animate-expand-chat'} ${isResizing ? 'aida-widget-shell--active' : ''} border-l ${isFullscreen ? 'w-full h-full aida-widget-shell--fullscreen' : 'h-full aida-widget-shell--docked'}`;
@@ -638,19 +624,11 @@ const AidaWidget = (props) => {
                             onDeleteMessage={handleDeleteMessage}
                         />
                         <ChatInput
-                            currentMessage={currentMessage}
-                            setCurrentMessage={setCurrentMessage}
                             handleSendMessage={stableHandleSendMessage}
-                            handleKeyDown={(e) => {
-                                if (e.key === 'Enter' && !e.shiftKey && !isMobileViewport) {
-                                    e.preventDefault();
-                                    stableHandleSendMessage();
-                                }
-                            }}
                             handleRecordButtonClick={handleRecordButtonClick}
                             inputRef={inputRef}
                             isLoading={isLoading}
-                            isTranscribing={isTranscribing}
+                            isTranscribing={recordings.some(r => r.isTranscribing)}
                             isRecording={isRecording}
                             elapsedTime={elapsedTime}
                             siteLanguage={siteLanguage}
@@ -674,21 +652,18 @@ const AidaWidget = (props) => {
                             setIsWebSearchEnabled={setIsWebSearchEnabled}
                             onStopStreaming={stopStreaming}
                             features={features}
-                            onCancelTranscription={cancelTranscription}
-                            transcriptionError={transcriptionError}
-                            onRetryTranscription={retryTranscription}
-                            onClearFailedTranscription={clearFailedTranscription}
+                            recordings={recordings}
+                            retryTranscription={retryTranscription}
+                            removeRecording={removeRecording}
                             isNearingTimeLimit={isNearingTimeLimit}
                             onAddImages={addImageAttachments}
                             contextLimit={contextLimit}
                             setContextLimit={setContextLimit}
                             onScrapeUrl={addUrlAttachment}
                             onEmbedUrl={handleOpenEmbed}
-                            // ✅ NEW: Search props
                             onSearchModels={handleSearchModels}
                             isSearchingModels={isSearchingModels}
                             searchedModels={searchedModels}
-                            // ✅ NEW: Recent models props
                             recentModelValues={recentModelValues}
                             onModelSelected={addRecentModel}
                         />
