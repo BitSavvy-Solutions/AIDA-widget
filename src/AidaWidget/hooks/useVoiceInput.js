@@ -4,36 +4,28 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 const MAX_RECORDING_SECONDS = 600;
 const WARNING_THRESHOLD_SECONDS = 540;
 
-export const useVoiceInput = ({ transcriptionUrl, selectedAudioModel, onTranscriptionComplete }) => {
+export const useVoiceInput = ({ transcriptionUrl, selectedAudioModel }) => {
     const [isRecording, setIsRecording] = useState(false);
-    const [isTranscribing, setIsTranscribing] = useState(false);
     const [elapsedTime, setElapsedTime] = useState(0);
-    const [transcriptionError, setTranscriptionError] = useState(null);
-    const [failedAudioBlob, setFailedAudioBlob] = useState(null);
+    const [recordings, setRecordings] = useState([]);
     const [isNearingTimeLimit, setIsNearingTimeLimit] = useState(false);
 
     const mediaRecorderRef = useRef(null);
     const streamRef = useRef(null);
     const audioChunksRef = useRef([]);
     const timerIntervalRef = useRef(null);
-    const lastInputWasVoiceRef = useRef(false);
-    const transcriptionAbortControllerRef = useRef(null);
     const autoStopTimerRef = useRef(null);
+    const elapsedTimeRef = useRef(0);
+    const abortControllersRef = useRef({});
 
-    const transcribeAudioBlob = useCallback(async (audioBlob) => {
-        if (audioBlob.size === 0) {
-            console.warn("Audio blob is empty, skipping transcription.");
-            return;
-        }
+    const transcribeAudioBlob = useCallback(async (id, audioBlob) => {
+        if (audioBlob.size === 0) return;
 
-        setIsTranscribing(true);
-        setTranscriptionError(null);
-        setFailedAudioBlob(null);
-        
+        setRecordings(prev => prev.map(r => r.id === id ? { ...r, isTranscribing: true, error: null } : r));
+
         const formData = new FormData();
         formData.append('audio_file', audioBlob, 'recording.webm');
-        
-        // ✅ UPDATED: Parse the model and mode from the selectedAudioModel string
+
         if (selectedAudioModel) {
             if (selectedAudioModel.includes('|')) {
                 const [modelName, mode] = selectedAudioModel.split('|');
@@ -41,12 +33,12 @@ export const useVoiceInput = ({ transcriptionUrl, selectedAudioModel, onTranscri
                 formData.append('mode', mode);
             } else {
                 formData.append('model', selectedAudioModel);
-                formData.append('mode', 'transcribe'); // Default mode
+                formData.append('mode', 'transcribe');
             }
         }
 
         const abortController = new AbortController();
-        transcriptionAbortControllerRef.current = abortController;
+        abortControllersRef.current[id] = abortController;
 
         try {
             const response = await fetch(transcriptionUrl, {
@@ -57,32 +49,25 @@ export const useVoiceInput = ({ transcriptionUrl, selectedAudioModel, onTranscri
             if (!response.ok) throw new Error(`Transcription failed: ${response.statusText}`);
 
             const result = await response.json();
-            
             const data = typeof result._HttpResponse__body === 'string'
                 ? JSON.parse(result._HttpResponse__body)
                 : result;
 
             const transcriptionText = data?.text || data?.transcription?.text || '';
-            
-            if (onTranscriptionComplete) {
-                onTranscriptionComplete(transcriptionText);
-            }
+
+            setRecordings(prev => prev.map(r => r.id === id ? { ...r, transcription: transcriptionText, isTranscribing: false } : r));
         } catch (error) {
             if (error.name === 'AbortError') {
                 console.info("Transcription was cancelled by the user.");
             } else {
                 console.error('Transcription error:', error);
-                setTranscriptionError(error.message || "Transcription failed.");
-                setFailedAudioBlob(audioBlob);
+                setRecordings(prev => prev.map(r => r.id === id ? { ...r, error: error.message || "Transcription failed.", isTranscribing: false } : r));
             }
         } finally {
-            setIsTranscribing(false);
-            transcriptionAbortControllerRef.current = null;
+            delete abortControllersRef.current[id];
         }
-    }, [transcriptionUrl, selectedAudioModel, onTranscriptionComplete]);
+    }, [transcriptionUrl, selectedAudioModel]);
 
-    // ... (rest of the hook remains exactly the same)
-    
     const stopRecording = useCallback(() => {
         if (mediaRecorderRef.current?.state === "recording") {
             mediaRecorderRef.current.stop();
@@ -92,18 +77,14 @@ export const useVoiceInput = ({ transcriptionUrl, selectedAudioModel, onTranscri
             streamRef.current = null;
         }
         if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-
         if (autoStopTimerRef.current) {
             clearTimeout(autoStopTimerRef.current);
             autoStopTimerRef.current = null;
         }
-
         setIsRecording(false);
     }, []);
 
     const startRecording = useCallback(async () => {
-        setTranscriptionError(null);
-        setFailedAudioBlob(null);
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             streamRef.current = stream;
@@ -116,11 +97,14 @@ export const useVoiceInput = ({ transcriptionUrl, selectedAudioModel, onTranscri
                 if (e.data.size > 0) audioChunksRef.current.push(e.data);
             };
             recorder.onstart = () => {
-                lastInputWasVoiceRef.current = true;
                 setIsRecording(true);
+                elapsedTimeRef.current = 0;
                 setElapsedTime(0);
                 setIsNearingTimeLimit(false);
-                timerIntervalRef.current = setInterval(() => setElapsedTime(p => p + 1), 1000);
+                timerIntervalRef.current = setInterval(() => {
+                    elapsedTimeRef.current += 1;
+                    setElapsedTime(elapsedTimeRef.current);
+                }, 1000);
 
                 autoStopTimerRef.current = setTimeout(() => {
                     console.log("Recording time limit reached. Stopping automatically.");
@@ -128,7 +112,13 @@ export const useVoiceInput = ({ transcriptionUrl, selectedAudioModel, onTranscri
                 }, MAX_RECORDING_SECONDS * 1000);
             };
             recorder.onstop = () => {
-                transcribeAudioBlob(new Blob(audioChunksRef.current, { type: 'audio/webm' }));
+                const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+                const url = URL.createObjectURL(blob);
+                const id = `rec-${Date.now()}`;
+                const duration = elapsedTimeRef.current;
+                const newRecording = { id, blob, url, duration, transcription: '', isTranscribing: false, error: null };
+                setRecordings(prev => [...prev, newRecording]);
+                transcribeAudioBlob(id, blob);
             };
             recorder.start();
         } catch (err) {
@@ -137,28 +127,27 @@ export const useVoiceInput = ({ transcriptionUrl, selectedAudioModel, onTranscri
         }
     }, [transcribeAudioBlob, stopRecording]);
 
-    const cancelTranscription = useCallback(() => {
-        if (transcriptionAbortControllerRef.current) {
-            transcriptionAbortControllerRef.current.abort();
+    const cancelTranscription = useCallback((id) => {
+        if (abortControllersRef.current[id]) {
+            abortControllersRef.current[id].abort();
         }
     }, []);
 
-    const retryTranscription = useCallback(() => {
-        if (failedAudioBlob) {
-            transcribeAudioBlob(failedAudioBlob);
-        }
-    }, [failedAudioBlob, transcribeAudioBlob]);
+    const retryTranscription = useCallback((id) => {
+        const rec = recordings.find(r => r.id === id);
+        if (rec) transcribeAudioBlob(id, rec.blob);
+    }, [recordings, transcribeAudioBlob]);
 
-    const clearFailedTranscription = useCallback(() => {
-        setTranscriptionError(null);
-        setFailedAudioBlob(null);
-    }, []);
+    const removeRecording = useCallback((id) => {
+        cancelTranscription(id);
+        setRecordings(prev => prev.filter(r => r.id !== id));
+        const el = document.getElementById(`capsule-${id}`);
+        if (el) el.remove();
+    }, [cancelTranscription]);
 
     useEffect(() => {
         if (isRecording && elapsedTime >= WARNING_THRESHOLD_SECONDS) {
-            if (!isNearingTimeLimit) {
-                setIsNearingTimeLimit(true);
-            }
+            if (!isNearingTimeLimit) setIsNearingTimeLimit(true);
         } else if (isNearingTimeLimit) {
             setIsNearingTimeLimit(false);
         }
@@ -170,19 +159,18 @@ export const useVoiceInput = ({ transcriptionUrl, selectedAudioModel, onTranscri
         if (streamRef.current) {
             streamRef.current.getTracks().forEach(track => track.stop());
         }
+        Object.values(abortControllersRef.current).forEach(c => c.abort());
     }, []);
 
     return {
         isRecording,
-        isTranscribing,
         elapsedTime,
+        recordings,
         startRecording,
         stopRecording,
         cancelTranscription,
-        lastInputWasVoiceRef,
-        transcriptionError,
         retryTranscription,
-        clearFailedTranscription,
+        removeRecording,
         isNearingTimeLimit,
     };
 };

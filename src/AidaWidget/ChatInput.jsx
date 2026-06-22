@@ -1,10 +1,11 @@
 /* src/AidaWidget/ChatInput.jsx */
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
     HiPaperAirplane, HiOutlineMicrophone, HiStop, HiArrowPath, HiXMark,
     HiChevronDown, HiOutlineGlobeAlt, HiLightBulb, HiPhoto, HiChatBubbleLeftRight,
     HiArrowTopRightOnSquare, HiPaperClip, HiEye, HiMagnifyingGlass,
-    HiOutlineDocument, HiOutlineRectangleStack
+    HiOutlineDocument, HiOutlineRectangleStack, HiPlay, HiPause, HiArrowDownTray
 } from 'react-icons/hi2';
 import AttachmentButton from './AttachmentButton';
 import ContextSelector from './ContextSelector';
@@ -27,21 +28,62 @@ const formatPrice = (priceValue) => {
     if (priceValue === undefined || priceValue === null) return null;
     const n = parseFloat(priceValue);
     if (Number.isNaN(n) || n === 0) return null;
-
     if (n < 0.001) {
         const perM = n * 1_000_000;
         return `$${perM.toFixed(2)}/M`;
     }
-
     return `$${n.toFixed(2)}/M`;
+};
+
+const formatTime = (seconds) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+};
+
+const AudioCapsule = ({ recording, onDownload, onRetranscribe, onRemove }) => {
+    const { url, duration, isTranscribing, error } = recording;
+    const [isPlaying, setIsPlaying] = useState(false);
+    const audioRef = useRef(null);
+
+    const handlePlay = () => {
+        if (!audioRef.current) {
+            audioRef.current = new Audio(url);
+            audioRef.current.onended = () => setIsPlaying(false);
+        }
+        if (isPlaying) {
+            audioRef.current.pause();
+            setIsPlaying(false);
+        } else {
+            audioRef.current.play();
+            setIsPlaying(true);
+        }
+    };
+
+    return (
+        <span className="audio-capsule">
+            <button onClick={handlePlay} className="capsule-btn" title="Play">
+                {isPlaying ? <HiPause className="w-3 h-3" /> : <HiPlay className="w-3 h-3" />}
+            </button>
+            <span className="capsule-duration">{formatTime(duration)}</span>
+            <button onClick={onDownload} className="capsule-btn" title="Download">
+                <HiArrowDownTray className="w-3 h-3" />
+            </button>
+            <button onClick={onRetranscribe} disabled={isTranscribing} className="capsule-btn" title="Retranscribe">
+                <HiArrowPath className={`w-3 h-3 ${isTranscribing ? 'animate-spin' : ''}`} />
+            </button>
+            <button onClick={onRemove} className="capsule-btn" title="Remove">
+                <HiXMark className="w-3 h-3" />
+            </button>
+            {error && <span className="capsule-error">{error}</span>}
+        </span>
+    );
 };
 
 const ModularBadges = ({ modality }) => {
     if (!modality) return null;
-
     const parts = modality.split('->');
     if (parts.length !== 2) return <span className="text-xs opacity-60">{modality}</span>;
-
     const [inputsRaw, outputsRaw] = parts;
 
     const getIcon = (type) => {
@@ -80,10 +122,7 @@ const ModularBadges = ({ modality }) => {
 };
 
 const ChatInput = ({
-    currentMessage,
-    setCurrentMessage,
     handleSendMessage,
-    handleKeyDown,
     handleRecordButtonClick,
     inputRef,
     isLoading,
@@ -110,28 +149,27 @@ const ChatInput = ({
     isWebSearchEnabled,
     setIsWebSearchEnabled,
     onStopStreaming,
-    onCancelTranscription,
     features,
-    transcriptionError,
-    onRetryTranscription,
-    onClearFailedTranscription,
+    recordings,
+    retryTranscription,
+    removeRecording,
     isNearingTimeLimit,
     onAddImages,
     contextLimit,
     setContextLimit,
     onScrapeUrl,
     onEmbedUrl,
-    // ✅ NEW: Search props
     onSearchModels,
     isSearchingModels,
     searchedModels,
-    // ✅ NEW: Recent models props
     recentModelValues = [],
     onModelSelected,
 }) => {
     const [isHoveringSend, setIsHoveringSend] = useState(false);
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
     const [isHoveringCancel, setIsHoveringCancel] = useState(false);
+
+    const [capsuleRenderTick, setCapsuleRenderTick] = useState(0);
 
     const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
     const [modelSearchQuery, setModelSearchQuery] = useState('');
@@ -142,16 +180,14 @@ const ChatInput = ({
     const modelItemRefs = useRef([]);
 
     const isDark = true;
-    const isPillMode = autoRecordCountdown !== null || transcriptionError || isRecording || isTranscribing;
+    const isPillMode = autoRecordCountdown !== null || isRecording;
 
-    // ✅ NEW: Trigger API search on query change
     useEffect(() => {
         if (onSearchModels) {
             onSearchModels(modelSearchQuery);
         }
     }, [modelSearchQuery, onSearchModels]);
 
-    // ✅ NEW: Build recent model items from stored recent values
     const recentModelItems = useMemo(() => {
         if (modelSearchQuery.trim() || isSearchingModels) return [];
         return recentModelValues
@@ -164,9 +200,7 @@ const ChatInput = ({
     }, [recentModelValues, availableModels, availableAudioModels, modelSearchQuery, isSearchingModels]);
 
     const filteredTextModels = useMemo(() => {
-        // If we have search results from the API, use them directly
         const sourceModels = searchedModels ? searchedModels.text : availableModels;
-
         const seen = new Set();
         const unique = sourceModels.filter((m) => {
             if (seen.has(m.value)) return false;
@@ -178,7 +212,6 @@ const ChatInput = ({
 
         const q = modelSearchQuery.trim().toLowerCase();
         if (!q) {
-            // ✅ Exclude recent models from the main list to avoid duplicates
             const recentSet = new Set(recentModelValues.map(m => m.value));
             return unique.filter(m => !recentSet.has(m.value));
         }
@@ -192,7 +225,6 @@ const ChatInput = ({
 
     const filteredAudioModels = useMemo(() => {
         const sourceModels = searchedModels ? searchedModels.audio : availableAudioModels;
-
         const seen = new Set();
         const unique = sourceModels.filter((m) => {
             if (seen.has(m.value)) return false;
@@ -204,7 +236,6 @@ const ChatInput = ({
 
         const q = modelSearchQuery.trim().toLowerCase();
         if (!q) {
-            // ✅ Exclude recent models from the main list to avoid duplicates
             const recentSet = new Set(recentModelValues.map(m => m.value));
             return unique.filter(m => !recentSet.has(m.value));
         }
@@ -233,7 +264,6 @@ const ChatInput = ({
         setIsModelMenuOpen(false);
         setModelSearchQuery('');
         setFocusedModelIndex(-1);
-
         setTimeout(() => {
             inputRef.current?.focus();
         }, 10);
@@ -255,12 +285,10 @@ const ChatInput = ({
 
     useEffect(() => {
         if (!modelSelectionEnabled) return;
-
         const onKeyDown = (e) => {
             if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
                 const isInputFocused = document.activeElement === inputRef.current;
                 const isSearchFocused = document.activeElement === modelSearchRef.current;
-
                 if (isInputFocused || isSearchFocused || isModelMenuOpen) {
                     e.preventDefault();
                     if (isModelMenuOpen) {
@@ -271,7 +299,6 @@ const ChatInput = ({
                 }
             }
         };
-
         document.addEventListener('keydown', onKeyDown);
         return () => document.removeEventListener('keydown', onKeyDown);
     }, [modelSelectionEnabled, isModelMenuOpen, openModelMenu, closeModelMenu, inputRef]);
@@ -305,24 +332,15 @@ const ChatInput = ({
             switch (e.key) {
                 case 'ArrowDown':
                     e.preventDefault();
-                    setFocusedModelIndex((prev) =>
-                        prev < selectableItems.length - 1 ? prev + 1 : 0
-                    );
+                    setFocusedModelIndex((prev) => prev < selectableItems.length - 1 ? prev + 1 : 0);
                     break;
                 case 'ArrowUp':
                     e.preventDefault();
-                    setFocusedModelIndex((prev) =>
-                        prev > 0 ? prev - 1 : selectableItems.length - 1
-                    );
+                    setFocusedModelIndex((prev) => prev > 0 ? prev - 1 : selectableItems.length - 1);
                     break;
                 case 'Enter': {
                     e.preventDefault();
-                    const target =
-                        focusedModelIndex >= 0
-                            ? selectableItems[focusedModelIndex]
-                            : selectableItems.length === 1
-                                ? selectableItems[0]
-                                : null;
+                    const target = focusedModelIndex >= 0 ? selectableItems[focusedModelIndex] : selectableItems.length === 1 ? selectableItems[0] : null;
                     if (target) selectModel(target);
                     break;
                 }
@@ -337,55 +355,109 @@ const ChatInput = ({
         [selectableItems, focusedModelIndex, selectModel, closeModelMenu]
     );
 
-    const detectedUrls = useMemo(() => {
-        if (!onScrapeUrl || !currentMessage?.trim()) return [];
-        return extractUrls(currentMessage).slice(0, 5);
-    }, [currentMessage, onScrapeUrl]);
-
-    const formatTime = (seconds) => {
-        const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-        const s = (seconds % 60).toString().padStart(2, '0');
-        return `${m}:${s}`;
+    const insertCapsule = (recordingId) => {
+        const div = inputRef.current;
+        if (!div) return;
+        div.focus();
+        const sel = window.getSelection();
+        let range;
+        if (sel.rangeCount > 0 && div.contains(sel.anchorNode)) {
+            range = sel.getRangeAt(0);
+        } else {
+            range = document.createRange();
+            range.selectNodeContents(div);
+            range.collapse(false);
+        }
+        range.deleteContents();
+        const span = document.createElement('span');
+        span.contentEditable = 'false';
+        span.id = `capsule-${recordingId}`;
+        span.className = 'audio-capsule-container';
+        range.insertNode(span);
+        const space = document.createTextNode('\u00A0');
+        span.after(space);
+        range.setStartAfter(space);
+        range.setEndAfter(space);
+        sel.removeAllRanges();
+        sel.addRange(range);
     };
 
-    const getModelVisuals = (category) => {
-        switch (category) {
-            case 'reasoning':
-                return {
-                    icon: HiLightBulb,
-                    colorClass: 'text-purple-500',
-                    bgClass: isDark ? 'bg-purple-500/10' : 'bg-purple-50',
-                    borderClass: 'border-purple-500/30',
-                };
-            case 'vision':
-                return {
-                    icon: HiPhoto,
-                    colorClass: 'text-pink-500',
-                    bgClass: isDark ? 'bg-pink-500/10' : 'bg-pink-50',
-                    borderClass: 'border-pink-500/30',
-                };
-            case 'audio':
-                return {
-                    icon: HiOutlineMicrophone,
-                    colorClass: 'text-green-500',
-                    bgClass: isDark ? 'bg-green-500/10' : 'bg-green-50',
-                    borderClass: 'border-green-500/30',
-                };
-            case 'chat':
-            default:
-                return {
-                    icon: HiChatBubbleLeftRight,
-                    colorClass: 'text-blue-500',
-                    bgClass: isDark ? 'bg-blue-500/10' : 'bg-blue-50',
-                    borderClass: 'border-blue-500/30',
-                };
+    useEffect(() => {
+        if (recordings.length > 0) {
+            const lastRec = recordings[recordings.length - 1];
+            if (!document.getElementById(`capsule-${lastRec.id}`)) {
+                insertCapsule(lastRec.id);
+                setCapsuleRenderTick(t => t + 1);
+            }
+        }
+    }, [recordings]);
+
+    useEffect(() => {
+        if (recordings.length === 0) return;
+
+        for (const rec of recordings) {
+            if (!rec.transcription) continue;
+
+            const capsuleEl = document.getElementById(`capsule-${rec.id}`);
+            if (!capsuleEl) continue;
+
+            // Collect the plain text that appears after this capsule
+            let textAfter = '';
+            let sibling = capsuleEl.nextSibling;
+            while (sibling) {
+                if (sibling.nodeType === Node.TEXT_NODE) {
+                    textAfter += sibling.textContent;
+                } else if (sibling.nodeType === Node.ELEMENT_NODE && !sibling.id?.startsWith('capsule-')) {
+                    textAfter += sibling.innerText || '';
+                }
+                sibling = sibling.nextSibling;
+            }
+
+            const incomingWords = rec.transcription.trim().split(/\s+/).filter(Boolean);
+            const afterWords = textAfter.trim().split(/\s+/).filter(Boolean);
+
+            // Compare the first few words after the capsule with the transcription
+            const checkCount = Math.min(3, incomingWords.length);
+            const alreadyPresent = afterWords.length >= checkCount &&
+                incomingWords.slice(0, checkCount).every((word, i) => word === afterWords[i]);
+
+            if (!alreadyPresent) {
+                const textNode = document.createTextNode(' ' + rec.transcription);
+                capsuleEl.parentNode.insertBefore(textNode, capsuleEl.nextSibling);
+            }
+        }
+    }, [recordings]);
+
+    const getMessageText = () => {
+        const div = inputRef.current;
+        if (!div) return '';
+        let text = '';
+        div.childNodes.forEach(node => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                text += node.textContent;
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+                if (node.id.startsWith('capsule-')) {
+                    // Transcription is now inserted as a text node before the capsule
+                } else {
+                    text += node.innerText;
+                }
+            }
+        });
+        return text;
+    };
+
+    const onSend = () => {
+        const text = getMessageText();
+        handleSendMessage(text);
+        if (inputRef.current) inputRef.current.innerHTML = '';
+    };
+
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey && !window.matchMedia('(max-width: 768px)').matches) {
+            e.preventDefault();
+            onSend();
         }
     };
-
-    const currentModelObj = availableModels.find((m) => m.value === selectedModel);
-    const selectedModelLabel = currentModelObj?.label || selectedModel;
-    const currentVisuals = getModelVisuals(currentModelObj?.category || 'chat');
-    const CurrentIcon = currentVisuals.icon;
 
     const handlePaste = (e) => {
         const items = e.clipboardData?.items;
@@ -403,62 +475,45 @@ const ChatInput = ({
         }
     };
 
+    const getModelVisuals = (category) => {
+        switch (category) {
+            case 'reasoning':
+                return { icon: HiLightBulb, colorClass: 'text-purple-500', bgClass: isDark ? 'bg-purple-500/10' : 'bg-purple-50', borderClass: 'border-purple-500/30' };
+            case 'vision':
+                return { icon: HiPhoto, colorClass: 'text-pink-500', bgClass: isDark ? 'bg-pink-500/10' : 'bg-pink-50', borderClass: 'border-pink-500/30' };
+            case 'audio':
+                return { icon: HiOutlineMicrophone, colorClass: 'text-green-500', bgClass: isDark ? 'bg-green-500/10' : 'bg-green-50', borderClass: 'border-green-500/30' };
+            case 'chat':
+            default:
+                return { icon: HiChatBubbleLeftRight, colorClass: 'text-blue-500', bgClass: isDark ? 'bg-blue-500/10' : 'bg-blue-50', borderClass: 'border-blue-500/30' };
+        }
+    };
+
+    const currentModelObj = availableModels.find((m) => m.value === selectedModel);
+    const selectedModelLabel = currentModelObj?.label || selectedModel;
+    const currentVisuals = getModelVisuals(currentModelObj?.category || 'chat');
+    const CurrentIcon = currentVisuals.icon;
+
     const renderSendButton = () => {
         const visibilityClass = isPillMode ? 'invisible pointer-events-none opacity-0' : '';
-
         if (isLoading) {
             return (
-                <button
-                    type="button"
-                    onClick={onStopStreaming}
-                    className={`ml-2 p-2 rounded-full bg-[#2f3645] hover:bg-[#3a4254] ${visibilityClass}`}
-                    aria-label="Stop response generation"
-                >
+                <button type="button" onClick={onStopStreaming} className={`ml-2 p-2 rounded-full bg-[#2f3645] hover:bg-[#3a4254] ${visibilityClass}`} aria-label="Stop response generation">
                     <HiStop className="w-5 h-5 text-[#ff6bbd]" />
                 </button>
             );
         }
-
         if (autoSendCountdown !== null) {
             return (
-                <button
-                    onClick={cancelAutoSendTimer}
-                    onMouseEnter={() => { setIsHoveringSend(true); setIsSendTimerPaused(true); }}
-                    onMouseLeave={() => { setIsHoveringSend(false); setIsSendTimerPaused(false); }}
-                    className={`ml-2 flex items-center justify-center timer-button !w-9 !h-9 ${visibilityClass}`}
-                    style={{ animationPlayState: isHoveringSend ? 'paused' : 'running' }}
-                    aria-label="Cancel auto-send"
-                >
-                    {isHoveringSend ? (
-                        <HiXMark className="h-5 w-5 text-white" />
-                    ) : (
-                        <span className={`${isDark ? 'text-white' : 'text-gray-900'} font-bold text-base`}>
-                            {autoSendCountdown}
-                        </span>
-                    )}
+                <button onClick={cancelAutoSendTimer} onMouseEnter={() => { setIsHoveringSend(true); setIsSendTimerPaused(true); }} onMouseLeave={() => { setIsHoveringSend(false); setIsSendTimerPaused(false); }} className={`ml-2 flex items-center justify-center timer-button !w-9 !h-9 ${visibilityClass}`} style={{ animationPlayState: isHoveringSend ? 'paused' : 'running' }} aria-label="Cancel auto-send">
+                    {isHoveringSend ? <HiXMark className="h-5 w-5 text-white" /> : <span className={`${isDark ? 'text-white' : 'text-gray-900'} font-bold text-base`}>{autoSendCountdown}</span>}
                 </button>
             );
         }
-
-        const isDisabled = isRecording || (!currentMessage.trim() && attachmentCount === 0);
-
+        const isDisabled = isRecording;
         return (
-            <button
-                type="button"
-                onClick={() => handleSendMessage()}
-                disabled={isDisabled}
-                className={`ml-2 p-2 rounded-full transition-opacity disabled:opacity-50 ${isDark
-                    ? isDisabled ? 'bg-gray-600' : 'bg-gray-700 hover:bg-gray-600'
-                    : isDisabled ? 'bg-gray-300' : 'bg-gray-900 hover:bg-gray-700'
-                    } ${visibilityClass}`}
-                aria-label="Send Message"
-            >
-                <HiPaperAirplane
-                    className={`w-5 h-5 ${isDisabled
-                        ? isDark ? 'text-gray-300' : 'text-gray-500'
-                        : 'text-white'
-                        }`}
-                />
+            <button type="button" onClick={onSend} disabled={isDisabled} className={`ml-2 p-2 rounded-full transition-opacity disabled:opacity-50 ${isDark ? isDisabled ? 'bg-gray-600' : 'bg-gray-700 hover:bg-gray-600' : isDisabled ? 'bg-gray-300' : 'bg-gray-900 hover:bg-gray-700'} ${visibilityClass}`} aria-label="Send Message">
+                <HiPaperAirplane className={`w-5 h-5 ${isDisabled ? isDark ? 'text-gray-300' : 'text-gray-500' : 'text-white'}`} />
             </button>
         );
     };
@@ -469,93 +524,16 @@ const ChatInput = ({
 
         if (autoRecordCountdown !== null) {
             pillContent = (
-                <button
-                    onClick={cancelAutoRecordTimer}
-                    onMouseEnter={() => { setIsHoveringRecord(true); setIsRecordTimerPaused(true); }}
-                    onMouseLeave={() => { setIsHoveringRecord(false); setIsRecordTimerPaused(false); }}
-                    className={`${pillBaseClass} justify-center record-timer-button !w-9 !h-9`}
-                    style={{ animationPlayState: isHoveringRecord ? 'paused' : 'running' }}
-                    aria-label="Cancel auto-record"
-                >
-                    {isHoveringRecord ? (
-                        <HiXMark className="h-5 w-5 text-white" />
-                    ) : (
-                        <span className="text-white font-bold text-base">{autoRecordCountdown}</span>
-                    )}
+                <button onClick={cancelAutoRecordTimer} onMouseEnter={() => { setIsHoveringRecord(true); setIsRecordTimerPaused(true); }} onMouseLeave={() => { setIsHoveringRecord(false); setIsRecordTimerPaused(false); }} className={`${pillBaseClass} justify-center record-timer-button !w-9 !h-9`} style={{ animationPlayState: isHoveringRecord ? 'paused' : 'running' }} aria-label="Cancel auto-record">
+                    {isHoveringRecord ? <HiXMark className="h-5 w-5 text-white" /> : <span className="text-white font-bold text-base">{autoRecordCountdown}</span>}
                 </button>
             );
-        } else if (transcriptionError) {
+        } else if (isRecording) {
+            const pillBgColor = `bg-red-600 hover:bg-red-700 ${isNearingTimeLimit ? 'animate-pulse' : ''}`;
             pillContent = (
-                <div
-                    className={`${pillBaseClass} gap-1 rounded-full px-1 h-9 w-auto shadow-md transition-all duration-200 ${isDark ? 'bg-red-800' : 'bg-red-100 border border-red-200'
-                        }`}
-                    title={`Error: ${transcriptionError}`}
-                >
-                    <button
-                        onClick={onRetryTranscription}
-                        className={`p-1.5 rounded-full transition-colors !w-auto !h-auto ${isDark
-                            ? 'bg-slate-800 hover:bg-slate-700 text-gray-100'
-                            : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
-                            }`}
-                        aria-label="Retry transcription"
-                        title="Retry"
-                    >
-                        <HiArrowPath className="h-4 w-4" />
-                    </button>
-                    <button
-                        onClick={onClearFailedTranscription}
-                        className={`p-1.5 rounded-full transition-colors !w-auto !h-auto ${isDark ? 'text-red-300 hover:bg-red-500/30' : 'text-red-500 hover:bg-red-500/10'
-                            }`}
-                        aria-label="Cancel failed transcription"
-                        title="Cancel"
-                    >
-                        <HiXMark className="h-4 w-4" />
-                    </button>
-                </div>
-            );
-        } else if (isRecording || isTranscribing) {
-            const isCancelHover = isTranscribing && isHoveringCancel;
-            const pillBgColor = isRecording
-                ? `bg-red-600 hover:bg-red-700 ${isNearingTimeLimit ? 'animate-pulse' : ''}`
-                : isCancelHover
-                    ? 'bg-red-600 hover:bg-red-700'
-                    : isDark
-                        ? 'bg-gray-700'
-                        : 'bg-gray-900';
-
-            pillContent = (
-                <button
-                    onClick={isRecording ? handleRecordButtonClick : onCancelTranscription}
-                    onMouseEnter={isTranscribing ? () => setIsHoveringCancel(true) : undefined}
-                    onMouseLeave={isTranscribing ? () => setIsHoveringCancel(false) : undefined}
-                    className={`${pillBaseClass} gap-2 !rounded-full !px-3 !py-2 !w-auto !h-auto text-white shadow-md transition-all duration-200 ${pillBgColor} ${isTranscribing ? 'cursor-pointer' : ''}`}
-                    aria-label={
-                        isRecording
-                            ? 'Stop Recording'
-                            : isCancelHover
-                                ? 'Cancel transcription'
-                                : 'Transcribing...'
-                    }
-                >
-                    {isRecording ? (
-                        <>
-                            <HiStop className="h-5 w-5 flex-shrink-0" />
-                            <span className="font-mono text-sm font-medium tracking-wider">
-                                {formatTime(elapsedTime)}
-                            </span>
-                        </>
-                    ) : (
-                        <>
-                            <HiArrowPath className="h-5 w-5 flex-shrink-0 animate-spin" />
-                            {isCancelHover ? (
-                                <span className="font-sans text-sm font-medium">Cancel</span>
-                            ) : (
-                                <span className="font-mono text-sm font-medium tracking-wider">
-                                    {formatTime(elapsedTime)}
-                                </span>
-                            )}
-                        </>
-                    )}
+                <button onClick={handleRecordButtonClick} className={`${pillBaseClass} gap-2 !rounded-full !px-3 !py-2 !w-auto !h-auto text-white shadow-md transition-all duration-200 ${pillBgColor}`} aria-label="Stop Recording">
+                    <HiStop className="h-5 w-5 flex-shrink-0" />
+                    <span className="font-mono text-sm font-medium tracking-wider">{formatTime(elapsedTime)}</span>
                 </button>
             );
         }
@@ -566,13 +544,7 @@ const ChatInput = ({
         return (
             <>
                 {pillContent}
-                <button
-                    onClick={handleRecordButtonClick}
-                    disabled={autoSendCountdown !== null}
-                    className={`${marginClass} p-2 rounded-full text-white transition-all duration-200 disabled:opacity-50 ${isDark ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-900 hover:bg-gray-700'
-                        } ${micVisibilityClass}`}
-                    aria-label="Start Recording"
-                >
+                <button onClick={handleRecordButtonClick} disabled={autoSendCountdown !== null} className={`${marginClass} p-2 rounded-full text-white transition-all duration-200 disabled:opacity-50 ${isDark ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-900 hover:bg-gray-700'} ${micVisibilityClass}`} aria-label="Start Recording">
                     <HiOutlineMicrophone className="w-5 h-5" />
                 </button>
             </>
@@ -584,73 +556,34 @@ const ChatInput = ({
         const Icon = visuals.icon;
         const isSelected = type === 'text' ? selectedModel === opt.value : selectedAudioModel === opt.value;
         const isFocused = focusedModelIndex === idx;
-
         let rowClass = 'w-full text-left px-2.5 py-2 text-sm rounded-lg flex items-start gap-2.5 transition-colors outline-none border ';
-
         if (isFocused) {
-            rowClass += isDark
-                ? 'bg-white/10 ring-1 ring-inset ring-brand-coral/50 border-brand-coral/50 '
-                : 'bg-blue-50 ring-1 ring-inset ring-blue-300 border-blue-300 ';
+            rowClass += isDark ? 'bg-white/10 ring-1 ring-inset ring-brand-coral/50 border-brand-coral/50 ' : 'bg-blue-50 ring-1 ring-inset ring-blue-300 border-blue-300 ';
         } else if (isSelected) {
-            rowClass += isDark
-                ? 'bg-gray-700/50 border-gray-600 '
-                : 'bg-gray-100 border-gray-200 ';
+            rowClass += isDark ? 'bg-gray-700/50 border-gray-600 ' : 'bg-gray-100 border-gray-200 ';
         } else {
-            rowClass += isDark
-                ? 'hover:bg-gray-700/30 border-gray-700/50 hover:border-gray-600 '
-                : 'hover:bg-gray-50 border-gray-200 ';
+            rowClass += isDark ? 'hover:bg-gray-700/30 border-gray-700/50 hover:border-gray-600 ' : 'hover:bg-gray-50 border-gray-200 ';
         }
-
         const promptPrice = formatPrice(opt.pricing?.prompt);
         const completionPrice = formatPrice(opt.pricing?.completion);
-
         return (
-            <button
-                key={opt.value}
-                type="button"
-                ref={(el) => { modelItemRefs.current[idx] = el; }}
-                role="option"
-                aria-selected={isSelected}
-                onClick={() => selectModel({ ...opt, _type: type })}
-                className={rowClass}
-            >
+            <button key={opt.value} type="button" ref={(el) => { modelItemRefs.current[idx] = el; }} role="option" aria-selected={isSelected} onClick={() => selectModel({ ...opt, _type: type })} className={rowClass}>
                 <div className={`p-1.5 rounded-md flex-shrink-0 mt-0.5 ${visuals.bgClass} ${visuals.colorClass}`}>
                     <Icon className="w-4 h-4" />
                 </div>
-
                 <div className="flex flex-col min-w-0 flex-1 gap-0.5">
                     <div className="flex items-center justify-between gap-2">
-                        <span className={`font-semibold text-sm truncate ${isSelected ? (isDark ? 'text-white' : 'text-gray-900') : (isDark ? 'text-gray-200' : 'text-gray-800')}`}>
-                            {opt.label}
-                        </span>
-                        {isSelected && (
-                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-coral flex-shrink-0" aria-hidden="true" />
-                        )}
+                        <span className={`font-semibold text-sm truncate ${isSelected ? (isDark ? 'text-white' : 'text-gray-900') : (isDark ? 'text-gray-200' : 'text-gray-800')}`}>{opt.label}</span>
+                        {isSelected && <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-coral flex-shrink-0" aria-hidden="true" />}
                     </div>
-
                     <div className="flex items-center gap-2 flex-wrap">
-                        {opt.modality && (
-                            <ModularBadges modality={opt.modality} />
-                        )}
+                        {opt.modality && <ModularBadges modality={opt.modality} />}
                     </div>
-
                     {(promptPrice || completionPrice) && (
                         <div className={`flex items-center gap-2 flex-wrap text-xs font-mono px-2 py-1 rounded mt-1 ${isDark ? 'bg-gray-900/60 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
-                            {promptPrice && (
-                                <span className="flex items-center gap-1">
-                                    <span className="opacity-60">In</span>
-                                    <span className="text-emerald-400 font-semibold">{promptPrice}</span>
-                                </span>
-                            )}
-                            {promptPrice && completionPrice && (
-                                <span className="opacity-40">·</span>
-                            )}
-                            {completionPrice && (
-                                <span className="flex items-center gap-1">
-                                    <span className="opacity-60">Out</span>
-                                    <span className="text-blue-400 font-semibold">{completionPrice}</span>
-                                </span>
-                            )}
+                            {promptPrice && (<span className="flex items-center gap-1"><span className="opacity-60">In</span><span className="text-emerald-400 font-semibold">{promptPrice}</span></span>)}
+                            {promptPrice && completionPrice && (<span className="opacity-40">·</span>)}
+                            {completionPrice && (<span className="flex items-center gap-1"><span className="opacity-60">Out</span><span className="text-blue-400 font-semibold">{completionPrice}</span></span>)}
                         </div>
                     )}
                 </div>
@@ -659,199 +592,70 @@ const ChatInput = ({
     };
 
     return (
-        <div
-            className="relative p-2 rounded-none transition-colors border-t"
-            style={{ backgroundColor: 'var(--aida-input-container)', borderColor: 'var(--aida-input-border)', color: 'var(--aida-input-text)' }}
-        >
-            <div
-                className="flex items-end rounded-lg px-3 py-1 mb-2 transition-colors border"
-                style={{
-                    backgroundColor: 'var(--aida-user-msg-bg)',
-                    color: 'var(--aida-user-msg-text)',
-                    borderColor: 'var(--aida-input-border)'
-                }}
-            >
-                <textarea
+        <div className="relative p-2 rounded-none transition-colors border-t" style={{ backgroundColor: 'var(--aida-input-container)', borderColor: 'var(--aida-input-border)', color: 'var(--aida-input-text)' }}>
+            <div className="flex items-end rounded-lg px-3 py-1 mb-2 transition-colors border" style={{ backgroundColor: 'var(--aida-user-msg-bg)', color: 'var(--aida-user-msg-text)', borderColor: 'var(--aida-input-border)' }}>
+                <div
                     ref={inputRef}
-                    value={currentMessage}
-                    onChange={(e) => setCurrentMessage(e.target.value)}
+                    contentEditable="true"
+                    onInput={(e) => {
+                        e.target.style.height = 'auto';
+                        e.target.style.height = `${e.target.scrollHeight}px`;
+                    }}
                     onKeyDown={handleKeyDown}
                     onPaste={handlePaste}
-                    placeholder={translations.inputPlaceholder || 'Type your message...'}
+                    data-placeholder={translations.inputPlaceholder || 'Type your message...'}
                     dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'}
-                    rows={1}
                     className="aida-input-textarea flex-1 bg-transparent px-0 py-1 resize-none focus:outline-none custom-scrollbar overflow-y-auto whitespace-pre-wrap leading-tight min-h-[32px] max-h-[200px]"
                     style={{ overflowY: 'auto', overflowX: 'hidden', color: 'inherit' }}
                 />
             </div>
 
-            {detectedUrls.length > 0 && (
-                <div
-                    className={`flex items-center gap-1.5 px-1 pb-2 flex-wrap border-b mb-2 ${isDark ? 'border-gray-700/50' : 'border-gray-200'
-                        }`}
-                >
-                    <span
-                        className={`text-[10px] font-medium flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'
-                            }`}
-                    >
-                        Links detected:
-                    </span>
-                    {detectedUrls.map((url) => (
-                        <div
-                            key={url}
-                            className={`flex items-center gap-0 rounded-full border text-[10px] overflow-hidden flex-shrink-0 max-w-[220px] ${isDark ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300'
-                                }`}
-                            title={url}
-                        >
-                            <span
-                                className={`px-2 py-1 truncate max-w-[110px] ${isDark ? 'text-gray-300' : 'text-gray-600'
-                                    }`}
-                            >
-                                {getHostname(url)}
-                            </span>
-
-                            {onEmbedUrl && (
-                                <button
-                                    type="button"
-                                    onClick={() => onEmbedUrl(url)}
-                                    className={`px-1.5 py-1 border-l flex-shrink-0 transition-colors ${isDark
-                                        ? 'border-gray-600 text-gray-400 hover:bg-gray-700 hover:text-gray-100'
-                                        : 'border-gray-300 text-gray-500 hover:bg-gray-200 hover:text-gray-900'
-                                        }`}
-                                    title="Open here"
-                                    aria-label={`Open ${url} here`}
-                                >
-                                    <HiEye className="w-3 h-3" />
-                                </button>
-                            )}
-
-                            <button
-                                type="button"
-                                onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
-                                className={`px-1.5 py-1 border-l flex-shrink-0 transition-colors ${isDark
-                                    ? 'border-gray-600 text-gray-400 hover:bg-gray-700 hover:text-gray-100'
-                                    : 'border-gray-300 text-gray-500 hover:bg-gray-200 hover:text-gray-900'
-                                    }`}
-                                title="Open in new tab"
-                                aria-label={`Open ${url} in new tab`}
-                            >
-                                <HiArrowTopRightOnSquare className="w-3 h-3" />
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={() => onScrapeUrl(url)}
-                                className={`px-1.5 py-1 border-l flex-shrink-0 transition-colors ${isDark
-                                    ? 'border-gray-600 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300'
-                                    : 'border-gray-300 text-blue-500 hover:bg-blue-50 hover:text-blue-600'
-                                    }`}
-                                title="Fetch & attach content"
-                                aria-label={`Fetch content from ${url}`}
-                            >
-                                <HiPaperClip className="w-3 h-3" />
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            )}
+            {recordings.map(rec => {
+                const el = document.getElementById(`capsule-${rec.id}`);
+                if (!el) return null;
+                return createPortal(
+                    <AudioCapsule
+                        recording={rec}
+                        onDownload={() => {
+                            const a = document.createElement('a');
+                            a.href = rec.url;
+                            a.download = `${rec.id}.webm`;
+                            a.click();
+                        }}
+                        onRetranscribe={() => retryTranscription(rec.id)}
+                        onRemove={() => removeRecording(rec.id)}
+                    />,
+                    el
+                );
+            })}
 
             <div className="flex items-center justify-between">
                 <div className="relative flex items-center min-w-0 flex-1 mr-2 gap-2">
-
                     {features.webSearch && (
-                        <button
-                            type="button"
-                            onClick={() => setIsWebSearchEnabled((p) => !p)}
-                            className={`p-2 rounded-full disabled:opacity-50 transition-colors flex-shrink-0 ${isWebSearchEnabled
-                                ? isDark
-                                    ? 'bg-blue-500/30 text-blue-300'
-                                    : 'bg-blue-100 text-blue-600'
-                                : isDark
-                                    ? 'text-gray-300 hover:bg-gray-700'
-                                    : 'text-gray-700 hover:bg-gray-100'
-                                }`}
-                            aria-pressed={isWebSearchEnabled}
-                            aria-label="Toggle web search"
-                            title="Toggle web search"
-                        >
+                        <button type="button" onClick={() => setIsWebSearchEnabled((p) => !p)} className={`p-2 rounded-full disabled:opacity-50 transition-colors flex-shrink-0 ${isWebSearchEnabled ? isDark ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-100 text-blue-600' : isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`} aria-pressed={isWebSearchEnabled} aria-label="Toggle web search" title="Toggle web search">
                             <HiOutlineGlobeAlt className="h-6 w-6" />
                         </button>
                     )}
-
                     {features.modelSelection && (
                         <div className="relative min-w-0" ref={modelMenuRef}>
-                            <button
-                                type="button"
-                                onClick={() => (isModelMenuOpen ? closeModelMenu() : openModelMenu())}
-                                className={`flex items-center gap-2 rounded-full px-3 py-1 text-sm disabled:opacity-50 transition-colors max-w-full border ${isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-                                    } ${currentVisuals.colorClass} ${currentVisuals.borderClass} ${currentVisuals.bgClass}`}
-                                aria-haspopup="listbox"
-                                aria-expanded={isModelMenuOpen}
-                                aria-label={`Select AI model. Current: ${selectedModelLabel}. Press Tab to open.`}
-                                title={`${selectedModelLabel} (Tab)`}
-                            >
+                            <button type="button" onClick={() => (isModelMenuOpen ? closeModelMenu() : openModelMenu())} className={`flex items-center gap-2 rounded-full px-3 py-1 text-sm disabled:opacity-50 transition-colors max-w-full border ${isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} ${currentVisuals.colorClass} ${currentVisuals.borderClass} ${currentVisuals.bgClass}`} aria-haspopup="listbox" aria-expanded={isModelMenuOpen} aria-label={`Select AI model. Current: ${selectedModelLabel}. Press Tab to open.`} title={`${selectedModelLabel} (Tab)`}>
                                 <CurrentIcon className="h-4 w-4 flex-shrink-0" />
-                                <span className={`truncate ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
-                                    {selectedModelLabel}
-                                </span>
-                                <HiChevronDown
-                                    className={`h-3 w-3 flex-shrink-0 opacity-70 transition-transform duration-200 ${isModelMenuOpen ? 'rotate-180' : ''
-                                        } ${isDark ? 'text-gray-400' : 'text-gray-500'}`}
-                                />
+                                <span className={`truncate ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{selectedModelLabel}</span>
+                                <HiChevronDown className={`h-3 w-3 flex-shrink-0 opacity-70 transition-transform duration-200 ${isModelMenuOpen ? 'rotate-180' : ''} ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
                             </button>
-
                             {isModelMenuOpen && (
                                 <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4">
                                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeModelMenu} />
-                                    <div
-                                        className={`relative z-10 w-full max-w-md rounded-t-xl sm:rounded-xl shadow-2xl overflow-hidden border flex flex-col max-h-[85vh] ${
-                                            isDark
-                                                ? 'bg-gray-800 border-gray-700 text-gray-100'
-                                                : 'bg-white border-gray-200 text-gray-900'
-                                        }`}
-                                        role="listbox"
-                                        aria-label="Choose AI model"
-                                    >
-                                        <div
-                                            className={`flex items-center gap-2 px-3 py-2 border-b ${isDark
-                                                ? 'border-gray-700/80 bg-gray-900/40'
-                                                : 'border-gray-100 bg-gray-50'
-                                                }`}
-                                        >
-                                            <HiMagnifyingGlass
-                                                className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'
-                                                    }`}
-                                            />
-                                            <input
-                                                ref={modelSearchRef}
-                                                type="text"
-                                                value={modelSearchQuery}
-                                                onChange={(e) => setModelSearchQuery(e.target.value)}
-                                                onKeyDown={handleModelSearchKeyDown}
-                                                placeholder="Search models..."
-                                                autoComplete="off"
-                                                className={`flex-1 bg-transparent text-xs outline-none placeholder-gray-500 ${isDark ? 'text-gray-200' : 'text-gray-800'
-                                                    }`}
-                                                aria-label="Search AI models"
-                                            />
+                                    <div className={`relative z-10 w-full max-w-md rounded-t-xl sm:rounded-xl shadow-2xl overflow-hidden border flex flex-col max-h-[85vh] ${isDark ? 'bg-gray-800 border-gray-700 text-gray-100' : 'bg-white border-gray-200 text-gray-900'}`} role="listbox" aria-label="Choose AI model">
+                                        <div className={`flex items-center gap-2 px-3 py-2 border-b ${isDark ? 'border-gray-700/80 bg-gray-900/40' : 'border-gray-100 bg-gray-50'}`}>
+                                            <HiMagnifyingGlass className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                                            <input ref={modelSearchRef} type="text" value={modelSearchQuery} onChange={(e) => setModelSearchQuery(e.target.value)} onKeyDown={handleModelSearchKeyDown} placeholder="Search models..." autoComplete="off" className={`flex-1 bg-transparent text-xs outline-none placeholder-gray-500 ${isDark ? 'text-gray-200' : 'text-gray-800'}`} aria-label="Search AI models" />
                                             {modelSearchQuery && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setModelSearchQuery('');
-                                                        modelSearchRef.current?.focus();
-                                                    }}
-                                                    className={`flex-shrink-0 p-0.5 rounded transition-colors ${isDark
-                                                        ? 'text-gray-500 hover:text-gray-300'
-                                                        : 'text-gray-400 hover:text-gray-600'
-                                                        }`}
-                                                    aria-label="Clear search"
-                                                >
+                                                <button type="button" onClick={() => { setModelSearchQuery(''); modelSearchRef.current?.focus(); }} className={`flex-shrink-0 p-0.5 rounded transition-colors ${isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`} aria-label="Clear search">
                                                     <HiXMark className="w-3 h-3" />
                                                 </button>
                                             )}
                                         </div>
-
                                         <div className="overflow-y-auto custom-scrollbar p-2 max-h-[55vh] sm:max-h-96 space-y-1">
                                             {isSearchingModels ? (
                                                 <div className="flex items-center justify-center py-5">
@@ -859,48 +663,31 @@ const ChatInput = ({
                                                     <span className="ml-2 text-xs text-gray-500">Searching OpenRouter...</span>
                                                 </div>
                                             ) : selectableItems.length === 0 ? (
-                                                <p className={`px-3 py-5 text-xs text-center ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                                                    No models match your search
-                                                </p>
+                                                <p className={`px-3 py-5 text-xs text-center ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>No models match your search</p>
                                             ) : (
                                                 <>
-                                                    {/* ✅ NEW: Recent Models Section */}
                                                     {recentModelItems.length > 0 && (
                                                         <div className="mb-2">
-                                                            <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
-                                                                Recent Models
-                                                            </div>
+                                                            <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>Recent Models</div>
                                                             {recentModelItems.map((opt, idx) => renderModelOption(opt, idx, opt._type))}
                                                         </div>
                                                     )}
-
                                                     {filteredTextModels.length > 0 && (
                                                         <div className="mb-2">
-                                                            <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
-                                                                Text Models
-                                                            </div>
+                                                            <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>Text Models</div>
                                                             {filteredTextModels.map((opt, idx) => renderModelOption(opt, recentModelItems.length + idx, 'text'))}
                                                         </div>
                                                     )}
-
                                                     {filteredAudioModels.length > 0 && (
                                                         <div>
-                                                            <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
-                                                                Audio Models
-                                                            </div>
+                                                            <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>Audio Models</div>
                                                             {filteredAudioModels.map((opt, idx) => renderModelOption(opt, recentModelItems.length + filteredTextModels.length + idx, 'audio'))}
                                                         </div>
                                                     )}
                                                 </>
                                             )}
                                         </div>
-
-                                        <div
-                                            className={`px-3 py-2 border-t flex items-center justify-between gap-2 shrink-0 text-[10px] ${isDark
-                                                ? 'border-gray-700/80 bg-gray-900/30 text-gray-600'
-                                                : 'border-gray-100 bg-gray-50 text-gray-500'
-                                                }`}
-                                        >
+                                        <div className={`px-3 py-2 border-t flex items-center justify-between gap-2 shrink-0 text-[10px] ${isDark ? 'border-gray-700/80 bg-gray-900/30 text-gray-600' : 'border-gray-100 bg-gray-50 text-gray-500'}`}>
                                             <span className="font-mono font-bold">↑↓</span>
                                             <span>Navigate</span>
                                             <span className="font-mono font-bold">⏎</span>
@@ -913,21 +700,11 @@ const ChatInput = ({
                             )}
                         </div>
                     )}
-
-                    <ContextSelector
-                        value={contextLimit}
-                        onChange={setContextLimit}
-                        theme="dark"
-                    />
+                    <ContextSelector value={contextLimit} onChange={setContextLimit} theme="dark" />
                 </div>
-
                 <div className="flex items-center chat-action-buttons relative flex-shrink-0">
                     {features.imageUpload && (
-                        <AttachmentButton
-                            count={attachmentCount}
-                            onClick={onOpenAttachments}
-                            theme="dark"
-                        />
+                        <AttachmentButton count={attachmentCount} onClick={onOpenAttachments} theme="dark" />
                     )}
                     {features.voiceInput && renderRecordButton()}
                     {renderSendButton()}
