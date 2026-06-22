@@ -166,7 +166,7 @@ const ChatInput = ({
     const filteredTextModels = useMemo(() => {
         // If we have search results from the API, use them directly
         const sourceModels = searchedModels ? searchedModels.text : availableModels;
-        
+
         const seen = new Set();
         const unique = sourceModels.filter((m) => {
             if (seen.has(m.value)) return false;
@@ -192,7 +192,7 @@ const ChatInput = ({
 
     const filteredAudioModels = useMemo(() => {
         const sourceModels = searchedModels ? searchedModels.audio : availableAudioModels;
-        
+
         const seen = new Set();
         const unique = sourceModels.filter((m) => {
             if (seen.has(m.value)) return false;
@@ -448,15 +448,15 @@ const ChatInput = ({
                 onClick={() => handleSendMessage()}
                 disabled={isDisabled}
                 className={`ml-2 p-2 rounded-full transition-opacity disabled:opacity-50 ${isDark
-                        ? isDisabled ? 'bg-gray-600' : 'bg-gray-700 hover:bg-gray-600'
-                        : isDisabled ? 'bg-gray-300' : 'bg-gray-900 hover:bg-gray-700'
+                    ? isDisabled ? 'bg-gray-600' : 'bg-gray-700 hover:bg-gray-600'
+                    : isDisabled ? 'bg-gray-300' : 'bg-gray-900 hover:bg-gray-700'
                     } ${visibilityClass}`}
                 aria-label="Send Message"
             >
                 <HiPaperAirplane
                     className={`w-5 h-5 ${isDisabled
-                            ? isDark ? 'text-gray-300' : 'text-gray-500'
-                            : 'text-white'
+                        ? isDark ? 'text-gray-300' : 'text-gray-500'
+                        : 'text-white'
                         }`}
                 />
             </button>
@@ -494,8 +494,8 @@ const ChatInput = ({
                     <button
                         onClick={onRetryTranscription}
                         className={`p-1.5 rounded-full transition-colors !w-auto !h-auto ${isDark
-                                ? 'bg-slate-800 hover:bg-slate-700 text-gray-100'
-                                : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
+                            ? 'bg-slate-800 hover:bg-slate-700 text-gray-100'
+                            : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
                             }`}
                         aria-label="Retry transcription"
                         title="Retry"
@@ -715,8 +715,8 @@ const ChatInput = ({
                                     type="button"
                                     onClick={() => onEmbedUrl(url)}
                                     className={`px-1.5 py-1 border-l flex-shrink-0 transition-colors ${isDark
-                                            ? 'border-gray-600 text-gray-400 hover:bg-gray-700 hover:text-gray-100'
-                                            : 'border-gray-300 text-gray-500 hover:bg-gray-200 hover:text-gray-900'
+                                        ? 'border-gray-600 text-gray-400 hover:bg-gray-700 hover:text-gray-100'
+                                        : 'border-gray-300 text-gray-500 hover:bg-gray-200 hover:text-gray-900'
                                         }`}
                                     title="Open here"
                                     aria-label={`Open ${url} here`}
@@ -729,8 +729,8 @@ const ChatInput = ({
                                 type="button"
                                 onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
                                 className={`px-1.5 py-1 border-l flex-shrink-0 transition-colors ${isDark
-                                        ? 'border-gray-600 text-gray-400 hover:bg-gray-700 hover:text-gray-100'
-                                        : 'border-gray-300 text-gray-500 hover:bg-gray-200 hover:text-gray-900'
+                                    ? 'border-gray-600 text-gray-400 hover:bg-gray-700 hover:text-gray-100'
+                                    : 'border-gray-300 text-gray-500 hover:bg-gray-200 hover:text-gray-900'
                                     }`}
                                 title="Open in new tab"
                                 aria-label={`Open ${url} in new tab`}
@@ -742,8 +742,8 @@ const ChatInput = ({
                                 type="button"
                                 onClick={() => onScrapeUrl(url)}
                                 className={`px-1.5 py-1 border-l flex-shrink-0 transition-colors ${isDark
-                                        ? 'border-gray-600 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300'
-                                        : 'border-gray-300 text-blue-500 hover:bg-blue-50 hover:text-blue-600'
+                                    ? 'border-gray-600 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300'
+                                    : 'border-gray-300 text-blue-500 hover:bg-blue-50 hover:text-blue-600'
                                     }`}
                                 title="Fetch & attach content"
                                 aria-label={`Fetch content from ${url}`}
@@ -763,12 +763,12 @@ const ChatInput = ({
                             type="button"
                             onClick={() => setIsWebSearchEnabled((p) => !p)}
                             className={`p-2 rounded-full disabled:opacity-50 transition-colors flex-shrink-0 ${isWebSearchEnabled
-                                    ? isDark
-                                        ? 'bg-blue-500/30 text-blue-300'
-                                        : 'bg-blue-100 text-blue-600'
-                                    : isDark
-                                        ? 'text-gray-300 hover:bg-gray-700'
-                                        : 'text-gray-700 hover:bg-gray-100'
+                                ? isDark
+                                    ? 'bg-blue-500/30 text-blue-300'
+                                    : 'bg-blue-100 text-blue-600'
+                                : isDark
+                                    ? 'text-gray-300 hover:bg-gray-700'
+                                    : 'text-gray-700 hover:bg-gray-100'
                                 }`}
                             aria-pressed={isWebSearchEnabled}
                             aria-label="Toggle web search"
@@ -802,7 +802,10 @@ const ChatInput = ({
 
                             {isModelMenuOpen && (
                                 <div
-                                    className={`absolute z-50 left-0 bottom-full mb-2 w-96 rounded-xl shadow-2xl overflow-hidden border flex flex-col ${isDark
+                                    className={`z-50 rounded-xl shadow-2xl overflow-hidden border flex flex-col
+                                        fixed left-2 right-2 bottom-2 max-h-[85vh]
+                                        sm:absolute sm:left-0 sm:right-auto sm:bottom-full sm:mb-2 sm:w-96 sm:max-h-none
+                                        ${isDark
                                             ? 'bg-gray-800 border-gray-700 text-gray-100'
                                             : 'bg-white border-gray-200 text-gray-900'
                                         }`}
@@ -811,8 +814,8 @@ const ChatInput = ({
                                 >
                                     <div
                                         className={`flex items-center gap-2 px-3 py-2 border-b ${isDark
-                                                ? 'border-gray-700/80 bg-gray-900/40'
-                                                : 'border-gray-100 bg-gray-50'
+                                            ? 'border-gray-700/80 bg-gray-900/40'
+                                            : 'border-gray-100 bg-gray-50'
                                             }`}
                                     >
                                         <HiMagnifyingGlass
@@ -839,8 +842,8 @@ const ChatInput = ({
                                                     modelSearchRef.current?.focus();
                                                 }}
                                                 className={`flex-shrink-0 p-0.5 rounded transition-colors ${isDark
-                                                        ? 'text-gray-500 hover:text-gray-300'
-                                                        : 'text-gray-400 hover:text-gray-600'
+                                                    ? 'text-gray-500 hover:text-gray-300'
+                                                    : 'text-gray-400 hover:text-gray-600'
                                                     }`}
                                                 aria-label="Clear search"
                                             >
@@ -849,7 +852,7 @@ const ChatInput = ({
                                         )}
                                     </div>
 
-                                    <div className="overflow-y-auto custom-scrollbar p-2 max-h-96 space-y-1">
+                                    <div className="overflow-y-auto custom-scrollbar p-2 max-h-[55vh] sm:max-h-96 space-y-1">
                                         {isSearchingModels ? (
                                             <div className="flex items-center justify-center py-5">
                                                 <HiArrowPath className="w-5 h-5 animate-spin text-gray-400" />
@@ -894,8 +897,8 @@ const ChatInput = ({
 
                                     <div
                                         className={`px-3 py-2 border-t flex items-center justify-between gap-2 shrink-0 text-[10px] ${isDark
-                                                ? 'border-gray-700/80 bg-gray-900/30 text-gray-600'
-                                                : 'border-gray-100 bg-gray-50 text-gray-500'
+                                            ? 'border-gray-700/80 bg-gray-900/30 text-gray-600'
+                                            : 'border-gray-100 bg-gray-50 text-gray-500'
                                             }`}
                                     >
                                         <span className="font-mono font-bold">↑↓</span>
