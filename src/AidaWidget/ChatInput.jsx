@@ -59,15 +59,15 @@ const ModularBadges = ({ modality }) => {
     const renderBadge = (type) => {
         const { Icon, color, bg, border, label } = getIcon(type);
         return (
-            <div key={type} className={`flex items-center gap-1 px-2 py-1 rounded-md ${bg} border ${border} ${color}`}>
-                <Icon className="w-3.5 h-3.5" />
+            <div key={type} className={`flex items-center gap-1 px-1.5 py-0.5 rounded ${bg} border ${border} ${color}`}>
+                <Icon className="w-3 h-3" />
                 <span className="text-[10px] font-semibold">{label}</span>
             </div>
         );
     };
 
     return (
-        <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="flex items-center gap-1 flex-wrap">
             <div className="flex items-center gap-1 flex-wrap">
                 {inputTypes.map(renderBadge)}
             </div>
@@ -558,7 +558,7 @@ const ChatInput = ({
         const isSelected = type === 'text' ? selectedModel === opt.value : selectedAudioModel === opt.value;
         const isFocused = focusedModelIndex === idx;
 
-        let rowClass = 'w-full text-left px-3 py-3 text-sm rounded-lg flex items-start gap-3 transition-colors outline-none border ';
+        let rowClass = 'w-full text-left px-2.5 py-2 text-sm rounded-lg flex items-start gap-2.5 transition-colors outline-none border ';
 
         if (isFocused) {
             rowClass += isDark
@@ -587,46 +587,45 @@ const ChatInput = ({
                 onClick={() => selectModel({ ...opt, _type: type })}
                 className={rowClass}
             >
-                <div className={`p-2 rounded-lg flex-shrink-0 ${visuals.bgClass} ${visuals.colorClass} mt-0.5`}>
-                    <Icon className="w-5 h-5" />
+                <div className={`p-1.5 rounded-md flex-shrink-0 mt-0.5 ${visuals.bgClass} ${visuals.colorClass}`}>
+                    <Icon className="w-4 h-4" />
                 </div>
 
-                <div className="flex flex-col min-w-0 flex-1 gap-1.5">
+                <div className="flex flex-col min-w-0 flex-1 gap-0.5">
                     <div className="flex items-center justify-between gap-2">
-                        <span className={`font-semibold text-sm ${isSelected ? (isDark ? 'text-white' : 'text-gray-900') : (isDark ? 'text-gray-200' : 'text-gray-800')}`}>
+                        <span className={`font-semibold text-sm truncate ${isSelected ? (isDark ? 'text-white' : 'text-gray-900') : (isDark ? 'text-gray-200' : 'text-gray-800')}`}>
                             {opt.label}
                         </span>
                         {isSelected && (
-                            <span className="inline-block w-2 h-2 rounded-full bg-brand-coral flex-shrink-0" aria-hidden="true" />
+                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-coral flex-shrink-0" aria-hidden="true" />
                         )}
                     </div>
 
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`text-[11px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full ${isDark ? 'bg-gray-600/50 text-gray-300' : 'bg-gray-200 text-gray-700'}`}>
-                            {opt.category || 'Chat'}
-                        </span>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                        {opt.modality && (
+                            <ModularBadges modality={opt.modality} />
+                        )}
                     </div>
 
-                    {opt.modality && (
-                        <ModularBadges modality={opt.modality} isDark={isDark} />
-                    )}
-
-                    {(promptPrice || completionPrice) && (
-                        <div className={`text-xs font-mono space-y-1 mt-1 p-2 rounded-lg ${isDark ? 'bg-gray-900/50' : 'bg-gray-100'}`}>
-                            {promptPrice && (
-                                <div className="flex justify-between gap-2">
-                                    <span className="opacity-60">Input:</span>
-                                    <span className="font-semibold text-emerald-400">{promptPrice}</span>
-                                </div>
-                            )}
-                            {completionPrice && (
-                                <div className="flex justify-between gap-2">
-                                    <span className="opacity-60">Output:</span>
-                                    <span className="font-semibold text-blue-400">{completionPrice}</span>
-                                </div>
-                            )}
-                        </div>
-                    )}
+                                       {(promptPrice || completionPrice) && (
+                       <div className={`flex items-center gap-2 flex-wrap text-xs font-mono px-2 py-1 rounded mt-1 ${isDark ? 'bg-gray-900/60 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
+                           {promptPrice && (
+                               <span className="flex items-center gap-1">
+                                   <span className="opacity-60">In</span>
+                                   <span className="text-emerald-400 font-semibold">{promptPrice}</span>
+                               </span>
+                           )}
+                           {promptPrice && completionPrice && (
+                               <span className="opacity-40">·</span>
+                           )}
+                           {completionPrice && (
+                               <span className="flex items-center gap-1">
+                                   <span className="opacity-60">Out</span>
+                                   <span className="text-blue-400 font-semibold">{completionPrice}</span>
+                               </span>
+                           )}
+                       </div>
+                   )}
                 </div>
             </button>
         );
