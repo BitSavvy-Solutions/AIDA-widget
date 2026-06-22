@@ -801,112 +801,113 @@ const ChatInput = ({
                             </button>
 
                             {isModelMenuOpen && (
-                                <div
-                                    className={`z-50 rounded-xl shadow-2xl overflow-hidden border flex flex-col
-                                        fixed left-2 right-2 bottom-2 max-h-[85vh]
-                                        sm:absolute sm:left-0 sm:right-auto sm:bottom-full sm:mb-2 sm:w-96 sm:max-h-none
-                                        ${isDark
-                                            ? 'bg-gray-800 border-gray-700 text-gray-100'
-                                            : 'bg-white border-gray-200 text-gray-900'
+                                <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4">
+                                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeModelMenu} />
+                                    <div
+                                        className={`relative z-10 w-full max-w-md rounded-t-xl sm:rounded-xl shadow-2xl overflow-hidden border flex flex-col max-h-[85vh] ${
+                                            isDark
+                                                ? 'bg-gray-800 border-gray-700 text-gray-100'
+                                                : 'bg-white border-gray-200 text-gray-900'
                                         }`}
-                                    role="listbox"
-                                    aria-label="Choose AI model"
-                                >
-                                    <div
-                                        className={`flex items-center gap-2 px-3 py-2 border-b ${isDark
-                                            ? 'border-gray-700/80 bg-gray-900/40'
-                                            : 'border-gray-100 bg-gray-50'
-                                            }`}
+                                        role="listbox"
+                                        aria-label="Choose AI model"
                                     >
-                                        <HiMagnifyingGlass
-                                            className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'
+                                        <div
+                                            className={`flex items-center gap-2 px-3 py-2 border-b ${isDark
+                                                ? 'border-gray-700/80 bg-gray-900/40'
+                                                : 'border-gray-100 bg-gray-50'
                                                 }`}
-                                        />
-                                        <input
-                                            ref={modelSearchRef}
-                                            type="text"
-                                            value={modelSearchQuery}
-                                            onChange={(e) => setModelSearchQuery(e.target.value)}
-                                            onKeyDown={handleModelSearchKeyDown}
-                                            placeholder="Search models..."
-                                            autoComplete="off"
-                                            className={`flex-1 bg-transparent text-xs outline-none placeholder-gray-500 ${isDark ? 'text-gray-200' : 'text-gray-800'
-                                                }`}
-                                            aria-label="Search AI models"
-                                        />
-                                        {modelSearchQuery && (
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setModelSearchQuery('');
-                                                    modelSearchRef.current?.focus();
-                                                }}
-                                                className={`flex-shrink-0 p-0.5 rounded transition-colors ${isDark
-                                                    ? 'text-gray-500 hover:text-gray-300'
-                                                    : 'text-gray-400 hover:text-gray-600'
+                                        >
+                                            <HiMagnifyingGlass
+                                                className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'
                                                     }`}
-                                                aria-label="Clear search"
-                                            >
-                                                <HiXMark className="w-3 h-3" />
-                                            </button>
-                                        )}
-                                    </div>
+                                            />
+                                            <input
+                                                ref={modelSearchRef}
+                                                type="text"
+                                                value={modelSearchQuery}
+                                                onChange={(e) => setModelSearchQuery(e.target.value)}
+                                                onKeyDown={handleModelSearchKeyDown}
+                                                placeholder="Search models..."
+                                                autoComplete="off"
+                                                className={`flex-1 bg-transparent text-xs outline-none placeholder-gray-500 ${isDark ? 'text-gray-200' : 'text-gray-800'
+                                                    }`}
+                                                aria-label="Search AI models"
+                                            />
+                                            {modelSearchQuery && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setModelSearchQuery('');
+                                                        modelSearchRef.current?.focus();
+                                                    }}
+                                                    className={`flex-shrink-0 p-0.5 rounded transition-colors ${isDark
+                                                        ? 'text-gray-500 hover:text-gray-300'
+                                                        : 'text-gray-400 hover:text-gray-600'
+                                                        }`}
+                                                    aria-label="Clear search"
+                                                >
+                                                    <HiXMark className="w-3 h-3" />
+                                                </button>
+                                            )}
+                                        </div>
 
-                                    <div className="overflow-y-auto custom-scrollbar p-2 max-h-[55vh] sm:max-h-96 space-y-1">
-                                        {isSearchingModels ? (
-                                            <div className="flex items-center justify-center py-5">
-                                                <HiArrowPath className="w-5 h-5 animate-spin text-gray-400" />
-                                                <span className="ml-2 text-xs text-gray-500">Searching OpenRouter...</span>
-                                            </div>
-                                        ) : selectableItems.length === 0 ? (
-                                            <p className={`px-3 py-5 text-xs text-center ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                                                No models match your search
-                                            </p>
-                                        ) : (
-                                            <>
-                                                {/* ✅ NEW: Recent Models Section */}
-                                                {recentModelItems.length > 0 && (
-                                                    <div className="mb-2">
-                                                        <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
-                                                            Recent Models
+                                        <div className="overflow-y-auto custom-scrollbar p-2 max-h-[55vh] sm:max-h-96 space-y-1">
+                                            {isSearchingModels ? (
+                                                <div className="flex items-center justify-center py-5">
+                                                    <HiArrowPath className="w-5 h-5 animate-spin text-gray-400" />
+                                                    <span className="ml-2 text-xs text-gray-500">Searching OpenRouter...</span>
+                                                </div>
+                                            ) : selectableItems.length === 0 ? (
+                                                <p className={`px-3 py-5 text-xs text-center ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                                    No models match your search
+                                                </p>
+                                            ) : (
+                                                <>
+                                                    {/* ✅ NEW: Recent Models Section */}
+                                                    {recentModelItems.length > 0 && (
+                                                        <div className="mb-2">
+                                                            <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
+                                                                Recent Models
+                                                            </div>
+                                                            {recentModelItems.map((opt, idx) => renderModelOption(opt, idx, opt._type))}
                                                         </div>
-                                                        {recentModelItems.map((opt, idx) => renderModelOption(opt, idx, opt._type))}
-                                                    </div>
-                                                )}
+                                                    )}
 
-                                                {filteredTextModels.length > 0 && (
-                                                    <div className="mb-2">
-                                                        <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
-                                                            Text Models
+                                                    {filteredTextModels.length > 0 && (
+                                                        <div className="mb-2">
+                                                            <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
+                                                                Text Models
+                                                            </div>
+                                                            {filteredTextModels.map((opt, idx) => renderModelOption(opt, recentModelItems.length + idx, 'text'))}
                                                         </div>
-                                                        {filteredTextModels.map((opt, idx) => renderModelOption(opt, recentModelItems.length + idx, 'text'))}
-                                                    </div>
-                                                )}
+                                                    )}
 
-                                                {filteredAudioModels.length > 0 && (
-                                                    <div>
-                                                        <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
-                                                            Audio Models
+                                                    {filteredAudioModels.length > 0 && (
+                                                        <div>
+                                                            <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
+                                                                Audio Models
+                                                            </div>
+                                                            {filteredAudioModels.map((opt, idx) => renderModelOption(opt, recentModelItems.length + filteredTextModels.length + idx, 'audio'))}
                                                         </div>
-                                                        {filteredAudioModels.map((opt, idx) => renderModelOption(opt, recentModelItems.length + filteredTextModels.length + idx, 'audio'))}
-                                                    </div>
-                                                )}
-                                            </>
-                                        )}
-                                    </div>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
 
-                                    <div
-                                        className={`px-3 py-2 border-t flex items-center justify-between gap-2 shrink-0 text-[10px] ${isDark
-                                            ? 'border-gray-700/80 bg-gray-900/30 text-gray-600'
-                                            : 'border-gray-100 bg-gray-50 text-gray-500'
-                                            }`}
-                                    >
-                                        <span className="font-mono font-bold">↑↓</span>
-                                        <span>Navigate</span>
-                                        <span className="font-mono font-bold">⏎</span>
-                                        <span>Select</span>
-                                        <span className="font-mono font-bold">Esc</span>
-                                        <span>Close</span>
+                                        <div
+                                            className={`px-3 py-2 border-t flex items-center justify-between gap-2 shrink-0 text-[10px] ${isDark
+                                                ? 'border-gray-700/80 bg-gray-900/30 text-gray-600'
+                                                : 'border-gray-100 bg-gray-50 text-gray-500'
+                                                }`}
+                                        >
+                                            <span className="font-mono font-bold">↑↓</span>
+                                            <span>Navigate</span>
+                                            <span className="font-mono font-bold">⏎</span>
+                                            <span>Select</span>
+                                            <span className="font-mono font-bold">Esc</span>
+                                            <span>Close</span>
+                                        </div>
                                     </div>
                                 </div>
                             )}
