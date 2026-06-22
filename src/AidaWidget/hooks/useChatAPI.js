@@ -2,6 +2,32 @@
 import { useState, useCallback, useRef } from 'react';
 import { franc } from 'franc-min';
 
+// Helper to extract a clean, human-readable error message from various error formats
+const extractCleanErrorMessage = (rawError) => {
+    if (!rawError) return 'An unknown error occurred.';
+
+    // If it's already an object, try to extract the message
+    if (typeof rawError === 'object') {
+        if (rawError.message) return rawError.message;
+        if (rawError.error?.message) return rawError.error.message;
+        try { return JSON.stringify(rawError); } catch { return 'An unknown error occurred.'; }
+    }
+
+    // Try to extract message from Python-style dict: 'message': "..."
+    const msgMatch = rawError.match(/'message':\s*"((?:[^"\\]|\\.)*)"/);
+    if (msgMatch) return msgMatch[1].replace(/\\"/g, '"');
+
+    // Try: 'message': '...'
+    const msgMatch2 = rawError.match(/'message':\s*'([^']+)'/);
+    if (msgMatch2) return msgMatch2[1];
+
+    // Try standard JSON: "message": "..."
+    const msgMatch3 = rawError.match(/"message":\s*"((?:[^"\\]|\\.)*)"/);
+    if (msgMatch3) return msgMatch3[1].replace(/\\"/g, '"');
+
+    return rawError;
+};
+
 export const useChatAPI = ({
     apiConfig,
     messages,
@@ -85,6 +111,7 @@ export const useChatAPI = ({
 
         let localCost = 0;
         let localTokenUsage = null;
+        let streamError = false;
 
         const abortController = new AbortController();
         streamAbortControllerRef.current = abortController;
@@ -138,13 +165,11 @@ export const useChatAPI = ({
                     if (errorData._HttpResponse__body) {
                         try {
                             const nestedBody = JSON.parse(errorData._HttpResponse__body);
-                            // Added .detail to the fallback chain
                             errorMessage = nestedBody.error || nestedBody.message || nestedBody.detail || errorMessage;
                         } catch (e) {
                             errorMessage = errorData._HttpResponse__body;
                         }
                     } else {
-                        // Added .detail to the fallback chain
                         errorMessage = errorData.error || errorData.message || errorData.detail || errorMessage;
                     }
                 } catch (e) {
@@ -153,7 +178,7 @@ export const useChatAPI = ({
 
                 const errorObj = { message: errorMessage, status: response.status };
                 setApiError(errorObj);
-                setMessages(prev => prev.map(m => m.id === botMessageId ? { ...m, text: "An error occurred. Please check the details." } : m));
+                setMessages(prev => prev.map(m => m.id === botMessageId ? { ...m, text: "An error occurred. Please check the details.", error: errorMessage } : m));
                 throw new Error(errorMessage);
             }
 
@@ -177,6 +202,19 @@ export const useChatAPI = ({
                         try {
                             const data = JSON.parse(part.substring(6));
                             
+                            // Handle stream errors sent by the backend
+                            if (data.error) {
+                                const cleanMessage = extractCleanErrorMessage(data.error);
+                                setApiError({ message: cleanMessage, status: null });
+                                setMessages(prev => prev.map(m => 
+                                    m.id === botMessageId 
+                                        ? { ...m, text: m.text || '', error: cleanMessage }
+                                        : m
+                                ));
+                                streamError = true;
+                                break; // Break the for loop
+                            }
+
                             if (data.delta_content) {
                                 setMessages(prev => {
                                     const updated = prev.map(m => m.id === botMessageId ? { ...m, text: m.text + data.delta_content } : m);
@@ -227,6 +265,7 @@ export const useChatAPI = ({
                         } catch (e) { console.error("Stream parse error:", part, e); }
                     }
                 }
+                if (streamError) break; // Break the while loop
             }
 
             const finalMeta = {

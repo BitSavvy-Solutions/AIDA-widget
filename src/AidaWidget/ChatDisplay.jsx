@@ -2,7 +2,7 @@
 import React, { memo, useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { HiSpeakerWave, HiPlay, HiPause, HiPaperClip, HiChevronDown, HiChevronUp, HiClipboard, HiCheck, HiPencilSquare, HiInformationCircle, HiTrash } from 'react-icons/hi2';
+import { HiSpeakerWave, HiPlay, HiPause, HiPaperClip, HiChevronDown, HiChevronUp, HiClipboard, HiCheck, HiPencilSquare, HiInformationCircle, HiTrash, HiExclamationTriangle } from 'react-icons/hi2';
 import ReasoningDisplay from './ReasoningDisplay';
 import ShikiHighlighter, { isInlineCode } from 'react-shiki';
 import LinkPopover from './LinkPopover';
@@ -603,8 +603,8 @@ const ChatDisplay = ({
                 const showReasoning = hasBakedInReasoning || isLiveReasoningActive;
                 const reasoningTextToShow = hasBakedInReasoning ? message.reasoning : (liveReasoning?.text || '');
 
-                const showThinkingDots = isBotLoading && !showReasoning && trimmedText === '' && !hasImages;
-                const hideBotMessage = isBot && !isBotLoading && trimmedText === '' && !hasImages && !hasBakedInReasoning;
+                const showThinkingDots = isBotLoading && !showReasoning && trimmedText === '' && !hasImages && !message.error;
+                const hideBotMessage = isBot && !isBotLoading && trimmedText === '' && !hasImages && !hasBakedInReasoning && !message.error;
 
                 const isMessageActive = index >= activeStartIndex;
                 const opacityClass = isMessageActive ? 'opacity-100' : 'opacity-40 grayscale transition-all duration-500';
@@ -637,6 +637,21 @@ const ChatDisplay = ({
                                     finalDuration={finalReasoningDurations[message.id] ?? null}
                                 />
                             )}
+
+                            {/* Error display for stream errors */}
+                            {message.error && (
+                                <div className={`mb-2 p-3 rounded-lg border text-xs ${isDark
+                                        ? 'bg-red-900/20 border-red-700/50 text-red-300'
+                                        : 'bg-red-50 border-red-200 text-red-600'
+                                    }`}>
+                                    <div className="flex items-center gap-2 font-medium mb-1">
+                                        <HiExclamationTriangle className="w-4 h-4 shrink-0" />
+                                        <span>Error</span>
+                                    </div>
+                                    <p className="whitespace-pre-wrap break-words leading-relaxed">{message.error}</p>
+                                </div>
+                            )}
+
                             <div
                                 ref={(el) => {
                                     if (el) messageBodyRefs.current.set(message.id, el);
@@ -705,7 +720,7 @@ const ChatDisplay = ({
                                         </div>
                                     </div>
                                 ) : (
-                                          trimmedText !== '' ? (
+                                    trimmedText !== '' ? (
                                         isBotLoading ? (
                                             <SmoothMessage
                                                 text={messageText}
@@ -713,9 +728,9 @@ const ChatDisplay = ({
                                                 components={markdownComponents}
                                             />
                                         ) : (
-                                            <MemoizedMarkdown 
-                                                content={String(messageText)} 
-                                                components={markdownComponents} 
+                                            <MemoizedMarkdown
+                                                content={String(messageText)}
+                                                components={markdownComponents}
                                             />
                                         )
                                     ) : (
@@ -748,7 +763,7 @@ const ChatDisplay = ({
                             )}
 
                             {!isBotLoading && !isEditing && (
-                                <div 
+                                <div
                                     className="mt-3 flex items-center gap-2 select-none"
                                     // ✅ FIX: Force the action buttons to inherit the AI text color (or body text for user messages)
                                     style={{ color: message.sender === 'bot' ? 'var(--aida-bot-msg-text)' : 'inherit' }}
