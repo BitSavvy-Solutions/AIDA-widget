@@ -170,6 +170,8 @@ const ChatInput = ({
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
     const [isHoveringCancel, setIsHoveringCancel] = useState(false);
 
+    const [capsuleRenderTick, setCapsuleRenderTick] = useState(0);
+
     const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
     const [modelSearchQuery, setModelSearchQuery] = useState('');
     const [focusedModelIndex, setFocusedModelIndex] = useState(-1);
@@ -179,7 +181,7 @@ const ChatInput = ({
     const modelItemRefs = useRef([]);
 
     const isDark = true;
-    const isPillMode = autoRecordCountdown !== null || isRecording || isTranscribing;
+    const isPillMode = autoRecordCountdown !== null || isRecording;
 
     useEffect(() => {
         if (onSearchModels) {
@@ -386,6 +388,9 @@ const ChatInput = ({
             const lastRec = recordings[recordings.length - 1];
             if (!document.getElementById(`capsule-${lastRec.id}`)) {
                 insertCapsule(lastRec.id);
+                // The portal below needs the node to exist in the DOM.
+                // Trigger one extra render so the capsule mounts immediately.
+                setCapsuleRenderTick(t => t + 1);
             }
         }
     }, [recordings]);
