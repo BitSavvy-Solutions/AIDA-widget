@@ -3,7 +3,8 @@ import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import {
     HiPaperAirplane, HiOutlineMicrophone, HiStop, HiArrowPath, HiXMark,
     HiChevronDown, HiOutlineGlobeAlt, HiLightBulb, HiPhoto, HiChatBubbleLeftRight,
-    HiArrowTopRightOnSquare, HiPaperClip, HiEye, HiMagnifyingGlass
+    HiArrowTopRightOnSquare, HiPaperClip, HiEye, HiMagnifyingGlass,
+    HiOutlineDocument, HiOutlineRectangleStack
 } from 'react-icons/hi2';
 import AttachmentButton from './AttachmentButton';
 import ContextSelector from './ContextSelector';
@@ -20,6 +21,62 @@ const getHostname = (url) => {
     } catch {
         return url.length > 32 ? `${url.slice(0, 29)}...` : url;
     }
+};
+
+const formatPrice = (priceValue) => {
+    if (priceValue === undefined || priceValue === null) return null;
+    const n = parseFloat(priceValue);
+    if (Number.isNaN(n) || n === 0) return null;
+
+    if (n < 0.001) {
+        const perM = n * 1_000_000;
+        return `$${perM.toFixed(2)}/M`;
+    }
+
+    return `$${n.toFixed(2)}/M`;
+};
+
+const ModularBadges = ({ modality }) => {
+    if (!modality) return null;
+
+    const parts = modality.split('->');
+    if (parts.length !== 2) return <span className="text-xs opacity-60">{modality}</span>;
+
+    const [inputsRaw, outputsRaw] = parts;
+
+    const getIcon = (type) => {
+        if (type.includes('text')) return { Icon: HiOutlineDocument, color: 'text-blue-400', bg: 'bg-blue-400/10', border: 'border-blue-400/25', label: 'Text' };
+        if (type.includes('image')) return { Icon: HiPhoto, color: 'text-amber-400', bg: 'bg-amber-400/10', border: 'border-amber-400/25', label: 'Image' };
+        if (type.includes('audio')) return { Icon: HiOutlineMicrophone, color: 'text-emerald-400', bg: 'bg-emerald-400/10', border: 'border-emerald-400/25', label: 'Audio' };
+        if (type.includes('video')) return { Icon: HiOutlineRectangleStack, color: 'text-purple-400', bg: 'bg-purple-400/10', border: 'border-purple-400/25', label: 'Video' };
+        if (type.includes('file')) return { Icon: HiOutlineDocument, color: 'text-orange-400', bg: 'bg-orange-400/10', border: 'border-orange-400/25', label: 'File' };
+        return { Icon: HiOutlineDocument, color: 'text-gray-400', bg: 'bg-gray-400/10', border: 'border-gray-400/25', label: type };
+    };
+
+    const inputTypes = inputsRaw.split('+').filter(Boolean);
+    const outputTypes = outputsRaw.split('+').filter(Boolean);
+
+    const renderBadge = (type) => {
+        const { Icon, color, bg, border, label } = getIcon(type);
+        return (
+            <div key={type} className={`flex items-center gap-1 px-1.5 py-0.5 rounded ${bg} border ${border} ${color}`}>
+                <Icon className="w-3 h-3" />
+                <span className="text-[10px] font-semibold">{label}</span>
+            </div>
+        );
+    };
+
+    return (
+        <div className="flex items-center gap-1 flex-wrap">
+            <div className="flex items-center gap-1 flex-wrap">
+                {inputTypes.map(renderBadge)}
+            </div>
+            <span className="text-[10px] opacity-40 px-0.5">→</span>
+            <div className="flex items-center gap-1 flex-wrap">
+                {outputTypes.map(renderBadge)}
+            </div>
+        </div>
+    );
 };
 
 const ChatInput = ({
@@ -44,9 +101,9 @@ const ChatInput = ({
     selectedModel,
     setSelectedModel,
     availableModels = [],
-    selectedAudioModel, // ✅ NEW
-    setSelectedAudioModel, // ✅ NEW
-    availableAudioModels = [], // ✅ NEW
+    selectedAudioModel,
+    setSelectedAudioModel,
+    availableAudioModels = [],
     translations,
     attachmentCount = 0,
     onOpenAttachments,
@@ -64,6 +121,13 @@ const ChatInput = ({
     setContextLimit,
     onScrapeUrl,
     onEmbedUrl,
+    // ✅ NEW: Search props
+    onSearchModels,
+    isSearchingModels,
+    searchedModels,
+    // ✅ NEW: Recent models props
+    recentModelValues = [],
+    onModelSelected,
 }) => {
     const [isHoveringSend, setIsHoveringSend] = useState(false);
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
@@ -77,51 +141,86 @@ const ChatInput = ({
     const modelSearchRef = useRef(null);
     const modelItemRefs = useRef([]);
 
-    const isDark = true; 
+    const isDark = true;
     const isPillMode = autoRecordCountdown !== null || transcriptionError || isRecording || isTranscribing;
 
-    // ✅ MODIFIED: Filter both text and audio models
+    // ✅ NEW: Trigger API search on query change
+    useEffect(() => {
+        if (onSearchModels) {
+            onSearchModels(modelSearchQuery);
+        }
+    }, [modelSearchQuery, onSearchModels]);
+
+    // ✅ NEW: Build recent model items from stored recent values
+    const recentModelItems = useMemo(() => {
+        if (modelSearchQuery.trim() || isSearchingModels) return [];
+        return recentModelValues
+            .map(recent => {
+                const source = recent.type === 'audio' ? availableAudioModels : availableModels;
+                const found = source.find(m => m.value === recent.value);
+                return found ? { ...found, _type: recent.type } : null;
+            })
+            .filter(Boolean);
+    }, [recentModelValues, availableModels, availableAudioModels, modelSearchQuery, isSearchingModels]);
+
     const filteredTextModels = useMemo(() => {
+        // If we have search results from the API, use them directly
+        const sourceModels = searchedModels ? searchedModels.text : availableModels;
+        
         const seen = new Set();
-        const unique = availableModels.filter((m) => {
+        const unique = sourceModels.filter((m) => {
             if (seen.has(m.value)) return false;
             seen.add(m.value);
             return true;
         });
 
+        if (searchedModels) return unique;
+
         const q = modelSearchQuery.trim().toLowerCase();
-        if (!q) return unique;
+        if (!q) {
+            // ✅ Exclude recent models from the main list to avoid duplicates
+            const recentSet = new Set(recentModelValues.map(m => m.value));
+            return unique.filter(m => !recentSet.has(m.value));
+        }
 
         const words = q.split(/\s+/).filter(Boolean);
         return unique.filter((m) => {
             const searchable = `${m.label} ${m.category || ''}`.toLowerCase();
             return words.every((word) => searchable.includes(word));
         });
-    }, [availableModels, modelSearchQuery]);
+    }, [availableModels, modelSearchQuery, searchedModels, recentModelValues]);
 
     const filteredAudioModels = useMemo(() => {
+        const sourceModels = searchedModels ? searchedModels.audio : availableAudioModels;
+        
         const seen = new Set();
-        const unique = availableAudioModels.filter((m) => {
+        const unique = sourceModels.filter((m) => {
             if (seen.has(m.value)) return false;
             seen.add(m.value);
             return true;
         });
 
+        if (searchedModels) return unique;
+
         const q = modelSearchQuery.trim().toLowerCase();
-        if (!q) return unique;
+        if (!q) {
+            // ✅ Exclude recent models from the main list to avoid duplicates
+            const recentSet = new Set(recentModelValues.map(m => m.value));
+            return unique.filter(m => !recentSet.has(m.value));
+        }
 
         const words = q.split(/\s+/).filter(Boolean);
         return unique.filter((m) => {
             const searchable = `${m.label} ${m.category || ''}`.toLowerCase();
             return words.every((word) => searchable.includes(word));
         });
-    }, [availableAudioModels, modelSearchQuery]);
+    }, [availableAudioModels, modelSearchQuery, searchedModels, recentModelValues]);
 
-    // Combine for keyboard navigation
     const selectableItems = useMemo(() => [
+        ...recentModelItems,
         ...filteredTextModels.map(m => ({ ...m, _type: 'text' })),
         ...filteredAudioModels.map(m => ({ ...m, _type: 'audio' }))
-    ], [filteredTextModels, filteredAudioModels]);
+    ], [recentModelItems, filteredTextModels, filteredAudioModels]);
 
     const openModelMenu = useCallback(() => {
         modelItemRefs.current = [];
@@ -140,15 +239,17 @@ const ChatInput = ({
         }, 10);
     }, [inputRef]);
 
-    // ✅ MODIFIED: Handle selection based on type
     const selectModel = useCallback((item) => {
         if (item._type === 'text') {
             setSelectedModel(item.value);
         } else {
             setSelectedAudioModel(item.value);
         }
+        if (onModelSelected) {
+            onModelSelected(item.value, item._type);
+        }
         closeModelMenu();
-    }, [setSelectedModel, setSelectedAudioModel, closeModelMenu]);
+    }, [setSelectedModel, setSelectedAudioModel, closeModelMenu, onModelSelected]);
 
     const modelSelectionEnabled = Boolean(features?.modelSelection);
 
@@ -247,7 +348,6 @@ const ChatInput = ({
         return `${m}:${s}`;
     };
 
-    // ✅ MODIFIED: Added 'audio' category visuals
     const getModelVisuals = (category) => {
         switch (category) {
             case 'reasoning':
@@ -479,26 +579,30 @@ const ChatInput = ({
         );
     };
 
-    // ✅ NEW: Helper to render a single model option
     const renderModelOption = (opt, idx, type) => {
         const visuals = getModelVisuals(opt.category || 'chat');
         const Icon = visuals.icon;
         const isSelected = type === 'text' ? selectedModel === opt.value : selectedAudioModel === opt.value;
         const isFocused = focusedModelIndex === idx;
 
-        let rowClass = 'w-full text-left px-3 py-2.5 text-sm rounded-lg flex items-center gap-3 transition-colors outline-none ';
+        let rowClass = 'w-full text-left px-2.5 py-2 text-sm rounded-lg flex items-start gap-2.5 transition-colors outline-none border ';
 
         if (isFocused) {
             rowClass += isDark
-                ? 'bg-white/10 ring-1 ring-inset ring-brand-coral/50 '
-                : 'bg-blue-50 ring-1 ring-inset ring-blue-300 ';
+                ? 'bg-white/10 ring-1 ring-inset ring-brand-coral/50 border-brand-coral/50 '
+                : 'bg-blue-50 ring-1 ring-inset ring-blue-300 border-blue-300 ';
         } else if (isSelected) {
-            rowClass += isDark ? 'bg-gray-700 ' : 'bg-gray-100 ';
+            rowClass += isDark
+                ? 'bg-gray-700/50 border-gray-600 '
+                : 'bg-gray-100 border-gray-200 ';
         } else {
             rowClass += isDark
-                ? 'hover:bg-gray-700/50 '
-                : 'hover:bg-gray-50 ';
+                ? 'hover:bg-gray-700/30 border-gray-700/50 hover:border-gray-600 '
+                : 'hover:bg-gray-50 border-gray-200 ';
         }
+
+        const promptPrice = formatPrice(opt.pricing?.prompt);
+        const completionPrice = formatPrice(opt.pricing?.completion);
 
         return (
             <button
@@ -510,20 +614,46 @@ const ChatInput = ({
                 onClick={() => selectModel({ ...opt, _type: type })}
                 className={rowClass}
             >
-                <div className={`p-1.5 rounded-md flex-shrink-0 ${visuals.bgClass} ${visuals.colorClass}`}>
+                <div className={`p-1.5 rounded-md flex-shrink-0 mt-0.5 ${visuals.bgClass} ${visuals.colorClass}`}>
                     <Icon className="w-4 h-4" />
                 </div>
-                <div className="flex flex-col min-w-0 flex-1">
-                    <span className={`font-medium truncate ${isSelected ? (isDark ? 'text-white' : 'text-gray-900') : (isDark ? 'text-gray-300' : 'text-gray-700')}`}>
-                        {opt.label}
-                    </span>
-                    <span className="text-[10px] opacity-50 uppercase tracking-wider font-semibold">
-                        {opt.category || 'Chat'}
-                    </span>
+
+                <div className="flex flex-col min-w-0 flex-1 gap-0.5">
+                    <div className="flex items-center justify-between gap-2">
+                        <span className={`font-semibold text-sm truncate ${isSelected ? (isDark ? 'text-white' : 'text-gray-900') : (isDark ? 'text-gray-200' : 'text-gray-800')}`}>
+                            {opt.label}
+                        </span>
+                        {isSelected && (
+                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-coral flex-shrink-0" aria-hidden="true" />
+                        )}
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                        {opt.modality && (
+                            <ModularBadges modality={opt.modality} />
+                        )}
+                    </div>
+
+                    {(promptPrice || completionPrice) && (
+                        <div className={`flex items-center gap-2 flex-wrap text-xs font-mono px-2 py-1 rounded mt-1 ${isDark ? 'bg-gray-900/60 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
+                            {promptPrice && (
+                                <span className="flex items-center gap-1">
+                                    <span className="opacity-60">In</span>
+                                    <span className="text-emerald-400 font-semibold">{promptPrice}</span>
+                                </span>
+                            )}
+                            {promptPrice && completionPrice && (
+                                <span className="opacity-40">·</span>
+                            )}
+                            {completionPrice && (
+                                <span className="flex items-center gap-1">
+                                    <span className="opacity-60">Out</span>
+                                    <span className="text-blue-400 font-semibold">{completionPrice}</span>
+                                </span>
+                            )}
+                        </div>
+                    )}
                 </div>
-                {isSelected && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-brand-coral flex-shrink-0" aria-hidden="true" />
-                )}
             </button>
         );
     };
@@ -672,7 +802,7 @@ const ChatInput = ({
 
                             {isModelMenuOpen && (
                                 <div
-                                    className={`absolute z-50 left-0 bottom-full mb-2 w-64 rounded-xl shadow-2xl overflow-hidden border flex flex-col ${isDark
+                                    className={`absolute z-50 left-0 bottom-full mb-2 w-96 rounded-xl shadow-2xl overflow-hidden border flex flex-col ${isDark
                                             ? 'bg-gray-800 border-gray-700 text-gray-100'
                                             : 'bg-white border-gray-200 text-gray-900'
                                         }`}
@@ -686,7 +816,7 @@ const ChatInput = ({
                                             }`}
                                     >
                                         <HiMagnifyingGlass
-                                            className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'
+                                            className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'
                                                 }`}
                                         />
                                         <input
@@ -719,30 +849,43 @@ const ChatInput = ({
                                         )}
                                     </div>
 
-                                    <div className="overflow-y-auto custom-scrollbar p-1 max-h-60">
-                                        {selectableItems.length === 0 ? (
+                                    <div className="overflow-y-auto custom-scrollbar p-2 max-h-96 space-y-1">
+                                        {isSearchingModels ? (
+                                            <div className="flex items-center justify-center py-5">
+                                                <HiArrowPath className="w-5 h-5 animate-spin text-gray-400" />
+                                                <span className="ml-2 text-xs text-gray-500">Searching OpenRouter...</span>
+                                            </div>
+                                        ) : selectableItems.length === 0 ? (
                                             <p className={`px-3 py-5 text-xs text-center ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                                                 No models match your search
                                             </p>
                                         ) : (
                                             <>
-                                                {/* ✅ NEW: Render Text Models Section */}
-                                                {filteredTextModels.length > 0 && (
+                                                {/* ✅ NEW: Recent Models Section */}
+                                                {recentModelItems.length > 0 && (
                                                     <div className="mb-2">
-                                                        <div className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
-                                                            Text Models
+                                                        <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
+                                                            Recent Models
                                                         </div>
-                                                        {filteredTextModels.map((opt, idx) => renderModelOption(opt, idx, 'text'))}
+                                                        {recentModelItems.map((opt, idx) => renderModelOption(opt, idx, opt._type))}
                                                     </div>
                                                 )}
-                                                
-                                                {/* ✅ NEW: Render Audio Models Section */}
+
+                                                {filteredTextModels.length > 0 && (
+                                                    <div className="mb-2">
+                                                        <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
+                                                            Text Models
+                                                        </div>
+                                                        {filteredTextModels.map((opt, idx) => renderModelOption(opt, recentModelItems.length + idx, 'text'))}
+                                                    </div>
+                                                )}
+
                                                 {filteredAudioModels.length > 0 && (
                                                     <div>
-                                                        <div className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
+                                                        <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
                                                             Audio Models
                                                         </div>
-                                                        {filteredAudioModels.map((opt, idx) => renderModelOption(opt, filteredTextModels.length + idx, 'audio'))}
+                                                        {filteredAudioModels.map((opt, idx) => renderModelOption(opt, recentModelItems.length + filteredTextModels.length + idx, 'audio'))}
                                                     </div>
                                                 )}
                                             </>
@@ -750,23 +893,17 @@ const ChatInput = ({
                                     </div>
 
                                     <div
-                                        className={`px-3 py-1.5 border-t flex items-center justify-between gap-2 shrink-0 ${isDark
-                                                ? 'border-gray-700/80 bg-gray-900/30'
-                                                : 'border-gray-100 bg-gray-50'
+                                        className={`px-3 py-2 border-t flex items-center justify-between gap-2 shrink-0 text-[10px] ${isDark
+                                                ? 'border-gray-700/80 bg-gray-900/30 text-gray-600'
+                                                : 'border-gray-100 bg-gray-50 text-gray-500'
                                             }`}
                                     >
-                                        <span
-                                            className={`text-[10px] font-mono font-bold ${isDark ? 'text-gray-500' : 'text-gray-500'
-                                                }`}
-                                        >
-                                            Tab
-                                        </span>
-                                        <span
-                                            className={`text-[10px] ${isDark ? 'text-gray-600' : 'text-gray-400'
-                                                }`}
-                                        >
-                                            arrows to navigate, Enter to pick
-                                        </span>
+                                        <span className="font-mono font-bold">↑↓</span>
+                                        <span>Navigate</span>
+                                        <span className="font-mono font-bold">⏎</span>
+                                        <span>Select</span>
+                                        <span className="font-mono font-bold">Esc</span>
+                                        <span>Close</span>
                                     </div>
                                 </div>
                             )}

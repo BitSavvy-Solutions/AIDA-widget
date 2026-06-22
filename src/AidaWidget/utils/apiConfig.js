@@ -16,6 +16,7 @@ export const CHAT_URL = `${agentHost}/iverse_agent`;
 export const TRANSCRIPTION_URL = `${agentHost}/transcribe_audio`;
 // ✅ ADDED: New endpoint for the URL scraper
 export const SCRAPE_URL = `${agentHost}/scrape_url_to_markdown`;
+export const MODELS_URL = `${agentHost}/models`;
 
 
 // --- Functions API Configuration (Credits) ---

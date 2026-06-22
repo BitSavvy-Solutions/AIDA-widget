@@ -26,7 +26,7 @@ import {
     useDragAndDrop,
 } from './hooks';
 
-import { CHAT_URL, TRANSCRIPTION_URL } from './utils/apiConfig';
+import { CHAT_URL, TRANSCRIPTION_URL, MODELS_URL } from './utils/apiConfig';
 
 const DEFAULT_MODELS = [
     { value: 'deepseek/deepseek-v4-pro', label: 'Deepseek 4 Pro', category: 'reasoning' },
@@ -48,7 +48,6 @@ const DEFAULT_MODELS = [
     { value: 'xiaomi/mimo-v2.5-pro', label: 'MiMo v2.5 Pro', category: 'reasoning' },
 ];
 
-// ✅ NEW: Default Audio Models
 const DEFAULT_AUDIO_MODELS = [
     { value: 'whisper-1', label: 'OpenAI Whisper', category: 'audio' },
     { value: 'whisper-1|translate', label: 'OpenAI Whisper (Translate to EN)', category: 'audio' },
@@ -63,7 +62,7 @@ const defaultProps = {
     user: {},
     pageContext: {},
     models: [],
-    audioModels: [], // ✅ NEW
+    audioModels: [],
     features: {
         resizable: true,
         modelSelection: true,
@@ -81,8 +80,113 @@ const AidaWidget = (props) => {
     const { apiConfig, user, language, translations, pageContext, features, models, audioModels } = { ...defaultProps, ...props };
     const attachmentsEnabled = Boolean(features?.imageUpload);
 
-    const availableModels = (models && models.length > 0) ? models : DEFAULT_MODELS;
-    const availableAudioModels = (audioModels && audioModels.length > 0) ? audioModels : DEFAULT_AUDIO_MODELS;
+    const [fetchedModels, setFetchedModels] = useState([]);
+    const [fetchedAudioModels, setFetchedAudioModels] = useState([]);
+    
+    // ✅ NEW: Search state
+    const [searchedModels, setSearchedModels] = useState(null);
+    const [isSearchingModels, setIsSearchingModels] = useState(false);
+    const searchTimeoutRef = useRef(null);
+
+    // ✅ NEW: Recent models state, persisted to localStorage
+    const [recentModelValues, setRecentModelValues] = useState(() => {
+        try {
+            const saved = JSON.parse(localStorage.getItem('aida-recent-models'));
+            return Array.isArray(saved) ? saved : [];
+        } catch {
+            return [];
+        }
+    });
+
+    useEffect(() => {
+        const loadModels = async () => {
+            try {
+                const res = await fetch(MODELS_URL);
+                if (!res.ok) throw new Error('Failed to fetch models');
+                const data = await res.json();
+                
+                const normalize = (list = []) => list.map(m => ({
+                    value: m.id,
+                    label: m.name,
+                    category: m.category,
+                    modality: m.modality,
+                    pricing: m.pricing,
+                    description: m.description,
+                    available: m.available,
+                    reason: m.reason
+                }));
+
+                setFetchedModels(normalize(data.text));
+                setFetchedAudioModels(normalize(data.audio));
+            } catch (err) {
+                console.error('Failed to load models from API:', err);
+            }
+        };
+        loadModels();
+    }, []);
+
+    const availableModels = (fetchedModels.length > 0) ? fetchedModels : ((models && models.length > 0) ? models : DEFAULT_MODELS);
+    const availableAudioModels = (fetchedAudioModels.length > 0) ? fetchedAudioModels : ((audioModels && audioModels.length > 0) ? audioModels : DEFAULT_AUDIO_MODELS);
+
+    // ✅ NEW: Debounced API search function
+    const handleSearchModels = useCallback((query) => {
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+
+        if (!query.trim()) {
+            setSearchedModels(null);
+            setIsSearchingModels(false);
+            return;
+        }
+
+        setIsSearchingModels(true);
+
+        searchTimeoutRef.current = setTimeout(async () => {
+            try {
+                const res = await fetch(`${MODELS_URL}?q=${encodeURIComponent(query)}`);
+                if (!res.ok) throw new Error('Failed to search models');
+                const data = await res.json();
+                
+                const normalize = (list = []) => list.map(m => ({
+                    value: m.id,
+                    label: m.name,
+                    category: m.category,
+                    modality: m.modality,
+                    pricing: m.pricing,
+                    description: m.description,
+                    available: m.available,
+                    reason: m.reason
+                }));
+
+                setSearchedModels({
+                    text: normalize(data.text),
+                    audio: normalize(data.audio)
+                });
+            } catch (err) {
+                console.error('Failed to search models from API:', err);
+                setSearchedModels({ text: [], audio: [] });
+            } finally {
+                setIsSearchingModels(false);
+            }
+        }, 400);
+    }, []);
+
+    // ✅ NEW: Add a model to the recent list
+    const addRecentModel = useCallback((modelValue, modelType) => {
+        setRecentModelValues(prev => {
+            const next = [
+                { value: modelValue, type: modelType },
+                ...prev.filter(m => m.value !== modelValue)
+            ].slice(0, 5);
+            try {
+                localStorage.setItem('aida-recent-models', JSON.stringify(next));
+            } catch (e) {
+                console.warn('Could not save recent models to localStorage', e);
+            }
+            return next;
+        });
+    }, []);
 
     const [currentMessage, setCurrentMessage] = useState('');
 
@@ -92,7 +196,6 @@ const AidaWidget = (props) => {
         return exists ? saved : availableModels[0].value;
     });
 
-    // ✅ NEW: State for selected audio model
     const [selectedAudioModel, setSelectedAudioModel] = useState(() => {
         const saved = localStorage.getItem('aida-selected-audio-model');
         const exists = availableAudioModels.some(m => m.value === saved);
@@ -115,7 +218,7 @@ const AidaWidget = (props) => {
     const [isAppearanceModalOpen, setIsAppearanceModalOpen] = useState(false);
 
     useEffect(() => { localStorage.setItem('aida-selected-model', selectedModel); }, [selectedModel]);
-    useEffect(() => { localStorage.setItem('aida-selected-audio-model', selectedAudioModel); }, [selectedAudioModel]); // ✅ NEW
+    useEffect(() => { localStorage.setItem('aida-selected-audio-model', selectedAudioModel); }, [selectedAudioModel]);
     useEffect(() => { localStorage.setItem('aida-context-limit', contextLimit); }, [contextLimit]);
 
     useEffect(() => {
@@ -194,7 +297,6 @@ const AidaWidget = (props) => {
     const { sidebarRef, sidebarInlineStyle, resizeHandleProps, isResizing } = useResizableSidebar({ isOpen, isFullscreen, isMobileViewport, isEnabled: features.resizable, onRequestFullscreen: requestFullscreen });
     const { isLoading, lastCost, liveReasoning, streamResponse, stopStreaming, apiError, clearApiError } = useChatAPI({ apiConfig, messages, setMessages, currentSessionId, updateCurrentSession, user, pageContext, customPrompt });
     
-    // ✅ MODIFIED: Pass selectedAudioModel to useVoiceInput
     const { isRecording, isTranscribing, elapsedTime, startRecording, stopRecording, cancelTranscription, lastInputWasVoiceRef, transcriptionError, retryTranscription, clearFailedTranscription, isNearingTimeLimit } = useVoiceInput({ 
         transcriptionUrl: apiConfig.transcriptionUrl, 
         selectedAudioModel, 
@@ -562,9 +664,9 @@ const AidaWidget = (props) => {
                             selectedModel={selectedModel}
                             setSelectedModel={setSelectedModel}
                             availableModels={availableModels}
-                            selectedAudioModel={selectedAudioModel} // ✅ NEW
-                            setSelectedAudioModel={setSelectedAudioModel} // ✅ NEW
-                            availableAudioModels={availableAudioModels} // ✅ NEW
+                            selectedAudioModel={selectedAudioModel}
+                            setSelectedAudioModel={setSelectedAudioModel}
+                            availableAudioModels={availableAudioModels}
                             translations={translations}
                             attachmentCount={attachments.length}
                             onOpenAttachments={openAttachmentModal}
@@ -582,6 +684,13 @@ const AidaWidget = (props) => {
                             setContextLimit={setContextLimit}
                             onScrapeUrl={addUrlAttachment}
                             onEmbedUrl={handleOpenEmbed}
+                            // ✅ NEW: Search props
+                            onSearchModels={handleSearchModels}
+                            isSearchingModels={isSearchingModels}
+                            searchedModels={searchedModels}
+                            // ✅ NEW: Recent models props
+                            recentModelValues={recentModelValues}
+                            onModelSelected={addRecentModel}
                         />
                         <AppearanceModal
                             isOpen={isAppearanceModalOpen}
