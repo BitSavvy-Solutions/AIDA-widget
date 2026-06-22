@@ -26,7 +26,7 @@ import {
     useDragAndDrop,
 } from './hooks';
 
-import { CHAT_URL, TRANSCRIPTION_URL } from './utils/apiConfig';
+import { CHAT_URL, TRANSCRIPTION_URL, MODELS_URL } from './utils/apiConfig';
 
 const DEFAULT_MODELS = [
     { value: 'deepseek/deepseek-v4-pro', label: 'Deepseek 4 Pro', category: 'reasoning' },
@@ -81,8 +81,40 @@ const AidaWidget = (props) => {
     const { apiConfig, user, language, translations, pageContext, features, models, audioModels } = { ...defaultProps, ...props };
     const attachmentsEnabled = Boolean(features?.imageUpload);
 
-    const availableModels = (models && models.length > 0) ? models : DEFAULT_MODELS;
-    const availableAudioModels = (audioModels && audioModels.length > 0) ? audioModels : DEFAULT_AUDIO_MODELS;
+    const [fetchedModels, setFetchedModels] = useState([]);
+    const [fetchedAudioModels, setFetchedAudioModels] = useState([]);
+
+    useEffect(() => {
+        const loadModels = async () => {
+            try {
+                const res = await fetch(MODELS_URL);
+                if (!res.ok) throw new Error('Failed to fetch models');
+                const data = await res.json();
+                
+                const normalize = (list = []) => list.map(m => ({
+                    value: m.id,
+                    label: m.name,
+                    category: m.category,
+                    modality: m.modality,
+                    pricing: m.pricing,
+                    description: m.description,
+                    available: m.available,
+                    reason: m.reason
+                }));
+
+                setFetchedModels(normalize(data.text));
+                setFetchedAudioModels(normalize(data.audio));
+            } catch (err) {
+                console.error('Failed to load models from API:', err);
+                // Fallback to hardcoded models is handled below
+            }
+        };
+        loadModels();
+    }, []);
+
+    const availableModels = (fetchedModels.length > 0) ? fetchedModels : ((models && models.length > 0) ? models : DEFAULT_MODELS);
+    const availableAudioModels = (fetchedAudioModels.length > 0) ? fetchedAudioModels : ((audioModels && audioModels.length > 0) ? audioModels : DEFAULT_AUDIO_MODELS);
+
 
     const [currentMessage, setCurrentMessage] = useState('');
 
@@ -92,7 +124,6 @@ const AidaWidget = (props) => {
         return exists ? saved : availableModels[0].value;
     });
 
-    // ✅ NEW: State for selected audio model
     const [selectedAudioModel, setSelectedAudioModel] = useState(() => {
         const saved = localStorage.getItem('aida-selected-audio-model');
         const exists = availableAudioModels.some(m => m.value === saved);

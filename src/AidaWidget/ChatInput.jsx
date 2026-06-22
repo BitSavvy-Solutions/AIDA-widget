@@ -3,7 +3,8 @@ import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import {
     HiPaperAirplane, HiOutlineMicrophone, HiStop, HiArrowPath, HiXMark,
     HiChevronDown, HiOutlineGlobeAlt, HiLightBulb, HiPhoto, HiChatBubbleLeftRight,
-    HiArrowTopRightOnSquare, HiPaperClip, HiEye, HiMagnifyingGlass
+    HiArrowTopRightOnSquare, HiPaperClip, HiEye, HiMagnifyingGlass,
+    HiOutlineDocument, HiOutlineRectangleStack
 } from 'react-icons/hi2';
 import AttachmentButton from './AttachmentButton';
 import ContextSelector from './ContextSelector';
@@ -20,6 +21,65 @@ const getHostname = (url) => {
     } catch {
         return url.length > 32 ? `${url.slice(0, 29)}...` : url;
     }
+};
+
+// ✅ IMPROVED: Better price formatting (handles both per-token and per-million)
+const formatPrice = (priceValue) => {
+    if (priceValue === undefined || priceValue === null) return null;
+    const n = parseFloat(priceValue);
+    if (Number.isNaN(n) || n === 0) return null;
+
+    // If very small number (< 0.001), it's likely per-token, so multiply by 1M
+    if (n < 0.001) {
+        const perM = n * 1_000_000;
+        return `$${perM.toFixed(2)}/M`;
+    }
+
+    // Otherwise assume it's already per-million or in a readable unit
+    return `$${n.toFixed(2)}/M`;
+};
+
+const ModularBadges = ({ modality }) => {
+    if (!modality) return null;
+
+    const parts = modality.split('->');
+    if (parts.length !== 2) return <span className="text-xs opacity-60">{modality}</span>;
+
+    const [inputsRaw, outputsRaw] = parts;
+
+    const getIcon = (type) => {
+        if (type.includes('text')) return { Icon: HiOutlineDocument, color: 'text-blue-400', bg: 'bg-blue-400/10', border: 'border-blue-400/25', label: 'Text' };
+        if (type.includes('image')) return { Icon: HiPhoto, color: 'text-amber-400', bg: 'bg-amber-400/10', border: 'border-amber-400/25', label: 'Image' };
+        if (type.includes('audio')) return { Icon: HiOutlineMicrophone, color: 'text-emerald-400', bg: 'bg-emerald-400/10', border: 'border-emerald-400/25', label: 'Audio' };
+        if (type.includes('video')) return { Icon: HiOutlineRectangleStack, color: 'text-purple-400', bg: 'bg-purple-400/10', border: 'border-purple-400/25', label: 'Video' };
+        if (type.includes('file')) return { Icon: HiOutlineDocument, color: 'text-orange-400', bg: 'bg-orange-400/10', border: 'border-orange-400/25', label: 'File' };
+        return { Icon: HiOutlineDocument, color: 'text-gray-400', bg: 'bg-gray-400/10', border: 'border-gray-400/25', label: type };
+    };
+
+    const inputTypes = inputsRaw.split('+').filter(Boolean);
+    const outputTypes = outputsRaw.split('+').filter(Boolean);
+
+    const renderBadge = (type) => {
+        const { Icon, color, bg, border, label } = getIcon(type);
+        return (
+            <div key={type} className={`flex items-center gap-1 px-2 py-1 rounded-md ${bg} border ${border} ${color}`}>
+                <Icon className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-semibold">{label}</span>
+            </div>
+        );
+    };
+
+    return (
+        <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex items-center gap-1 flex-wrap">
+                {inputTypes.map(renderBadge)}
+            </div>
+            <span className="text-[10px] opacity-40 px-0.5">→</span>
+            <div className="flex items-center gap-1 flex-wrap">
+                {outputTypes.map(renderBadge)}
+            </div>
+        </div>
+    );
 };
 
 const ChatInput = ({
@@ -44,9 +104,9 @@ const ChatInput = ({
     selectedModel,
     setSelectedModel,
     availableModels = [],
-    selectedAudioModel, // ✅ NEW
-    setSelectedAudioModel, // ✅ NEW
-    availableAudioModels = [], // ✅ NEW
+    selectedAudioModel,
+    setSelectedAudioModel,
+    availableAudioModels = [],
     translations,
     attachmentCount = 0,
     onOpenAttachments,
@@ -77,10 +137,9 @@ const ChatInput = ({
     const modelSearchRef = useRef(null);
     const modelItemRefs = useRef([]);
 
-    const isDark = true; 
+    const isDark = true;
     const isPillMode = autoRecordCountdown !== null || transcriptionError || isRecording || isTranscribing;
 
-    // ✅ MODIFIED: Filter both text and audio models
     const filteredTextModels = useMemo(() => {
         const seen = new Set();
         const unique = availableModels.filter((m) => {
@@ -117,7 +176,6 @@ const ChatInput = ({
         });
     }, [availableAudioModels, modelSearchQuery]);
 
-    // Combine for keyboard navigation
     const selectableItems = useMemo(() => [
         ...filteredTextModels.map(m => ({ ...m, _type: 'text' })),
         ...filteredAudioModels.map(m => ({ ...m, _type: 'audio' }))
@@ -140,7 +198,6 @@ const ChatInput = ({
         }, 10);
     }, [inputRef]);
 
-    // ✅ MODIFIED: Handle selection based on type
     const selectModel = useCallback((item) => {
         if (item._type === 'text') {
             setSelectedModel(item.value);
@@ -247,7 +304,6 @@ const ChatInput = ({
         return `${m}:${s}`;
     };
 
-    // ✅ MODIFIED: Added 'audio' category visuals
     const getModelVisuals = (category) => {
         switch (category) {
             case 'reasoning':
@@ -479,26 +535,30 @@ const ChatInput = ({
         );
     };
 
-    // ✅ NEW: Helper to render a single model option
     const renderModelOption = (opt, idx, type) => {
         const visuals = getModelVisuals(opt.category || 'chat');
         const Icon = visuals.icon;
         const isSelected = type === 'text' ? selectedModel === opt.value : selectedAudioModel === opt.value;
         const isFocused = focusedModelIndex === idx;
 
-        let rowClass = 'w-full text-left px-3 py-2.5 text-sm rounded-lg flex items-center gap-3 transition-colors outline-none ';
+        let rowClass = 'w-full text-left px-3 py-3 text-sm rounded-lg flex items-start gap-3 transition-colors outline-none border ';
 
         if (isFocused) {
             rowClass += isDark
-                ? 'bg-white/10 ring-1 ring-inset ring-brand-coral/50 '
-                : 'bg-blue-50 ring-1 ring-inset ring-blue-300 ';
+                ? 'bg-white/10 ring-1 ring-inset ring-brand-coral/50 border-brand-coral/50 '
+                : 'bg-blue-50 ring-1 ring-inset ring-blue-300 border-blue-300 ';
         } else if (isSelected) {
-            rowClass += isDark ? 'bg-gray-700 ' : 'bg-gray-100 ';
+            rowClass += isDark
+                ? 'bg-gray-700/50 border-gray-600 '
+                : 'bg-gray-100 border-gray-200 ';
         } else {
             rowClass += isDark
-                ? 'hover:bg-gray-700/50 '
-                : 'hover:bg-gray-50 ';
+                ? 'hover:bg-gray-700/30 border-gray-700/50 hover:border-gray-600 '
+                : 'hover:bg-gray-50 border-gray-200 ';
         }
+
+        const promptPrice = formatPrice(opt.pricing?.prompt);
+        const completionPrice = formatPrice(opt.pricing?.completion);
 
         return (
             <button
@@ -510,20 +570,47 @@ const ChatInput = ({
                 onClick={() => selectModel({ ...opt, _type: type })}
                 className={rowClass}
             >
-                <div className={`p-1.5 rounded-md flex-shrink-0 ${visuals.bgClass} ${visuals.colorClass}`}>
-                    <Icon className="w-4 h-4" />
+                <div className={`p-2 rounded-lg flex-shrink-0 ${visuals.bgClass} ${visuals.colorClass} mt-0.5`}>
+                    <Icon className="w-5 h-5" />
                 </div>
-                <div className="flex flex-col min-w-0 flex-1">
-                    <span className={`font-medium truncate ${isSelected ? (isDark ? 'text-white' : 'text-gray-900') : (isDark ? 'text-gray-300' : 'text-gray-700')}`}>
-                        {opt.label}
-                    </span>
-                    <span className="text-[10px] opacity-50 uppercase tracking-wider font-semibold">
-                        {opt.category || 'Chat'}
-                    </span>
+
+                <div className="flex flex-col min-w-0 flex-1 gap-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                        <span className={`font-semibold text-sm ${isSelected ? (isDark ? 'text-white' : 'text-gray-900') : (isDark ? 'text-gray-200' : 'text-gray-800')}`}>
+                            {opt.label}
+                        </span>
+                        {isSelected && (
+                            <span className="inline-block w-2 h-2 rounded-full bg-brand-coral flex-shrink-0" aria-hidden="true" />
+                        )}
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-[11px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full ${isDark ? 'bg-gray-600/50 text-gray-300' : 'bg-gray-200 text-gray-700'}`}>
+                            {opt.category || 'Chat'}
+                        </span>
+                    </div>
+
+                    {opt.modality && (
+                        <ModularBadges modality={opt.modality} isDark={isDark} />
+                    )}
+
+                    {(promptPrice || completionPrice) && (
+                        <div className={`text-xs font-mono space-y-1 mt-1 p-2 rounded-lg ${isDark ? 'bg-gray-900/50' : 'bg-gray-100'}`}>
+                            {promptPrice && (
+                                <div className="flex justify-between gap-2">
+                                    <span className="opacity-60">Input:</span>
+                                    <span className="font-semibold text-emerald-400">{promptPrice}</span>
+                                </div>
+                            )}
+                            {completionPrice && (
+                                <div className="flex justify-between gap-2">
+                                    <span className="opacity-60">Output:</span>
+                                    <span className="font-semibold text-blue-400">{completionPrice}</span>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
-                {isSelected && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-brand-coral flex-shrink-0" aria-hidden="true" />
-                )}
             </button>
         );
     };
@@ -672,7 +759,7 @@ const ChatInput = ({
 
                             {isModelMenuOpen && (
                                 <div
-                                    className={`absolute z-50 left-0 bottom-full mb-2 w-64 rounded-xl shadow-2xl overflow-hidden border flex flex-col ${isDark
+                                    className={`absolute z-50 left-0 bottom-full mb-2 w-96 rounded-xl shadow-2xl overflow-hidden border flex flex-col ${isDark
                                             ? 'bg-gray-800 border-gray-700 text-gray-100'
                                             : 'bg-white border-gray-200 text-gray-900'
                                         }`}
@@ -686,7 +773,7 @@ const ChatInput = ({
                                             }`}
                                     >
                                         <HiMagnifyingGlass
-                                            className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'
+                                            className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'
                                                 }`}
                                         />
                                         <input
@@ -719,27 +806,25 @@ const ChatInput = ({
                                         )}
                                     </div>
 
-                                    <div className="overflow-y-auto custom-scrollbar p-1 max-h-60">
+                                    <div className="overflow-y-auto custom-scrollbar p-2 max-h-96 space-y-1">
                                         {selectableItems.length === 0 ? (
                                             <p className={`px-3 py-5 text-xs text-center ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                                                 No models match your search
                                             </p>
                                         ) : (
                                             <>
-                                                {/* ✅ NEW: Render Text Models Section */}
                                                 {filteredTextModels.length > 0 && (
                                                     <div className="mb-2">
-                                                        <div className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
+                                                        <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
                                                             Text Models
                                                         </div>
                                                         {filteredTextModels.map((opt, idx) => renderModelOption(opt, idx, 'text'))}
                                                     </div>
                                                 )}
-                                                
-                                                {/* ✅ NEW: Render Audio Models Section */}
+
                                                 {filteredAudioModels.length > 0 && (
                                                     <div>
-                                                        <div className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
+                                                        <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
                                                             Audio Models
                                                         </div>
                                                         {filteredAudioModels.map((opt, idx) => renderModelOption(opt, filteredTextModels.length + idx, 'audio'))}
@@ -750,23 +835,17 @@ const ChatInput = ({
                                     </div>
 
                                     <div
-                                        className={`px-3 py-1.5 border-t flex items-center justify-between gap-2 shrink-0 ${isDark
-                                                ? 'border-gray-700/80 bg-gray-900/30'
-                                                : 'border-gray-100 bg-gray-50'
+                                        className={`px-3 py-2 border-t flex items-center justify-between gap-2 shrink-0 text-[10px] ${isDark
+                                                ? 'border-gray-700/80 bg-gray-900/30 text-gray-600'
+                                                : 'border-gray-100 bg-gray-50 text-gray-500'
                                             }`}
                                     >
-                                        <span
-                                            className={`text-[10px] font-mono font-bold ${isDark ? 'text-gray-500' : 'text-gray-500'
-                                                }`}
-                                        >
-                                            Tab
-                                        </span>
-                                        <span
-                                            className={`text-[10px] ${isDark ? 'text-gray-600' : 'text-gray-400'
-                                                }`}
-                                        >
-                                            arrows to navigate, Enter to pick
-                                        </span>
+                                        <span className="font-mono font-bold">↑↓</span>
+                                        <span>Navigate</span>
+                                        <span className="font-mono font-bold">⏎</span>
+                                        <span>Select</span>
+                                        <span className="font-mono font-bold">Esc</span>
+                                        <span>Close</span>
                                     </div>
                                 </div>
                             )}
