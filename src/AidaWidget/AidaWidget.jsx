@@ -88,6 +88,16 @@ const AidaWidget = (props) => {
     const [isSearchingModels, setIsSearchingModels] = useState(false);
     const searchTimeoutRef = useRef(null);
 
+    // ✅ NEW: Recent models state, persisted to localStorage
+    const [recentModelValues, setRecentModelValues] = useState(() => {
+        try {
+            const saved = JSON.parse(localStorage.getItem('aida-recent-models'));
+            return Array.isArray(saved) ? saved : [];
+        } catch {
+            return [];
+        }
+    });
+
     useEffect(() => {
         const loadModels = async () => {
             try {
@@ -160,6 +170,22 @@ const AidaWidget = (props) => {
                 setIsSearchingModels(false);
             }
         }, 400);
+    }, []);
+
+    // ✅ NEW: Add a model to the recent list
+    const addRecentModel = useCallback((modelValue, modelType) => {
+        setRecentModelValues(prev => {
+            const next = [
+                { value: modelValue, type: modelType },
+                ...prev.filter(m => m.value !== modelValue)
+            ].slice(0, 5);
+            try {
+                localStorage.setItem('aida-recent-models', JSON.stringify(next));
+            } catch (e) {
+                console.warn('Could not save recent models to localStorage', e);
+            }
+            return next;
+        });
     }, []);
 
     const [currentMessage, setCurrentMessage] = useState('');
@@ -658,10 +684,13 @@ const AidaWidget = (props) => {
                             setContextLimit={setContextLimit}
                             onScrapeUrl={addUrlAttachment}
                             onEmbedUrl={handleOpenEmbed}
-                            // ✅ NEW: Pass search props
+                            // ✅ NEW: Search props
                             onSearchModels={handleSearchModels}
                             isSearchingModels={isSearchingModels}
                             searchedModels={searchedModels}
+                            // ✅ NEW: Recent models props
+                            recentModelValues={recentModelValues}
+                            onModelSelected={addRecentModel}
                         />
                         <AppearanceModal
                             isOpen={isAppearanceModalOpen}

@@ -125,6 +125,9 @@ const ChatInput = ({
     onSearchModels,
     isSearchingModels,
     searchedModels,
+    // ✅ NEW: Recent models props
+    recentModelValues = [],
+    onModelSelected,
 }) => {
     const [isHoveringSend, setIsHoveringSend] = useState(false);
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
@@ -148,6 +151,18 @@ const ChatInput = ({
         }
     }, [modelSearchQuery, onSearchModels]);
 
+    // ✅ NEW: Build recent model items from stored recent values
+    const recentModelItems = useMemo(() => {
+        if (modelSearchQuery.trim() || isSearchingModels) return [];
+        return recentModelValues
+            .map(recent => {
+                const source = recent.type === 'audio' ? availableAudioModels : availableModels;
+                const found = source.find(m => m.value === recent.value);
+                return found ? { ...found, _type: recent.type } : null;
+            })
+            .filter(Boolean);
+    }, [recentModelValues, availableModels, availableAudioModels, modelSearchQuery, isSearchingModels]);
+
     const filteredTextModels = useMemo(() => {
         // If we have search results from the API, use them directly
         const sourceModels = searchedModels ? searchedModels.text : availableModels;
@@ -162,14 +177,18 @@ const ChatInput = ({
         if (searchedModels) return unique;
 
         const q = modelSearchQuery.trim().toLowerCase();
-        if (!q) return unique;
+        if (!q) {
+            // ✅ Exclude recent models from the main list to avoid duplicates
+            const recentSet = new Set(recentModelValues.map(m => m.value));
+            return unique.filter(m => !recentSet.has(m.value));
+        }
 
         const words = q.split(/\s+/).filter(Boolean);
         return unique.filter((m) => {
             const searchable = `${m.label} ${m.category || ''}`.toLowerCase();
             return words.every((word) => searchable.includes(word));
         });
-    }, [availableModels, modelSearchQuery, searchedModels]);
+    }, [availableModels, modelSearchQuery, searchedModels, recentModelValues]);
 
     const filteredAudioModels = useMemo(() => {
         const sourceModels = searchedModels ? searchedModels.audio : availableAudioModels;
@@ -184,19 +203,24 @@ const ChatInput = ({
         if (searchedModels) return unique;
 
         const q = modelSearchQuery.trim().toLowerCase();
-        if (!q) return unique;
+        if (!q) {
+            // ✅ Exclude recent models from the main list to avoid duplicates
+            const recentSet = new Set(recentModelValues.map(m => m.value));
+            return unique.filter(m => !recentSet.has(m.value));
+        }
 
         const words = q.split(/\s+/).filter(Boolean);
         return unique.filter((m) => {
             const searchable = `${m.label} ${m.category || ''}`.toLowerCase();
             return words.every((word) => searchable.includes(word));
         });
-    }, [availableAudioModels, modelSearchQuery, searchedModels]);
+    }, [availableAudioModels, modelSearchQuery, searchedModels, recentModelValues]);
 
     const selectableItems = useMemo(() => [
+        ...recentModelItems,
         ...filteredTextModels.map(m => ({ ...m, _type: 'text' })),
         ...filteredAudioModels.map(m => ({ ...m, _type: 'audio' }))
-    ], [filteredTextModels, filteredAudioModels]);
+    ], [recentModelItems, filteredTextModels, filteredAudioModels]);
 
     const openModelMenu = useCallback(() => {
         modelItemRefs.current = [];
@@ -221,8 +245,11 @@ const ChatInput = ({
         } else {
             setSelectedAudioModel(item.value);
         }
+        if (onModelSelected) {
+            onModelSelected(item.value, item._type);
+        }
         closeModelMenu();
-    }, [setSelectedModel, setSelectedAudioModel, closeModelMenu]);
+    }, [setSelectedModel, setSelectedAudioModel, closeModelMenu, onModelSelected]);
 
     const modelSelectionEnabled = Boolean(features?.modelSelection);
 
@@ -601,31 +628,31 @@ const ChatInput = ({
                         )}
                     </div>
 
-                                        <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
                         {opt.modality && (
                             <ModularBadges modality={opt.modality} />
                         )}
                     </div>
 
-                                       {(promptPrice || completionPrice) && (
-                       <div className={`flex items-center gap-2 flex-wrap text-xs font-mono px-2 py-1 rounded mt-1 ${isDark ? 'bg-gray-900/60 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
-                           {promptPrice && (
-                               <span className="flex items-center gap-1">
-                                   <span className="opacity-60">In</span>
-                                   <span className="text-emerald-400 font-semibold">{promptPrice}</span>
-                               </span>
-                           )}
-                           {promptPrice && completionPrice && (
-                               <span className="opacity-40">·</span>
-                           )}
-                           {completionPrice && (
-                               <span className="flex items-center gap-1">
-                                   <span className="opacity-60">Out</span>
-                                   <span className="text-blue-400 font-semibold">{completionPrice}</span>
-                               </span>
-                           )}
-                       </div>
-                   )}
+                    {(promptPrice || completionPrice) && (
+                        <div className={`flex items-center gap-2 flex-wrap text-xs font-mono px-2 py-1 rounded mt-1 ${isDark ? 'bg-gray-900/60 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
+                            {promptPrice && (
+                                <span className="flex items-center gap-1">
+                                    <span className="opacity-60">In</span>
+                                    <span className="text-emerald-400 font-semibold">{promptPrice}</span>
+                                </span>
+                            )}
+                            {promptPrice && completionPrice && (
+                                <span className="opacity-40">·</span>
+                            )}
+                            {completionPrice && (
+                                <span className="flex items-center gap-1">
+                                    <span className="opacity-60">Out</span>
+                                    <span className="text-blue-400 font-semibold">{completionPrice}</span>
+                                </span>
+                            )}
+                        </div>
+                    )}
                 </div>
             </button>
         );
@@ -834,12 +861,22 @@ const ChatInput = ({
                                             </p>
                                         ) : (
                                             <>
+                                                {/* ✅ NEW: Recent Models Section */}
+                                                {recentModelItems.length > 0 && (
+                                                    <div className="mb-2">
+                                                        <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
+                                                            Recent Models
+                                                        </div>
+                                                        {recentModelItems.map((opt, idx) => renderModelOption(opt, idx, opt._type))}
+                                                    </div>
+                                                )}
+
                                                 {filteredTextModels.length > 0 && (
                                                     <div className="mb-2">
                                                         <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
                                                             Text Models
                                                         </div>
-                                                        {filteredTextModels.map((opt, idx) => renderModelOption(opt, idx, 'text'))}
+                                                        {filteredTextModels.map((opt, idx) => renderModelOption(opt, recentModelItems.length + idx, 'text'))}
                                                     </div>
                                                 )}
 
@@ -848,7 +885,7 @@ const ChatInput = ({
                                                         <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
                                                             Audio Models
                                                         </div>
-                                                        {filteredAudioModels.map((opt, idx) => renderModelOption(opt, filteredTextModels.length + idx, 'audio'))}
+                                                        {filteredAudioModels.map((opt, idx) => renderModelOption(opt, recentModelItems.length + filteredTextModels.length + idx, 'audio'))}
                                                     </div>
                                                 )}
                                             </>
