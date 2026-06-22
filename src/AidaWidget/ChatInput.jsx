@@ -392,18 +392,38 @@ const ChatInput = ({
         }
     }, [recordings]);
 
-    // ✅ NEW: Insert transcription as normal text in front of the pill
     useEffect(() => {
-        if (recordings.length > 0) {
-            for (const rec of recordings) {
-                if (rec.transcription) {
-                    const capsuleEl = document.getElementById(`capsule-${rec.id}`);
-                    if (capsuleEl && capsuleEl.dataset.transcribed !== 'true') {
-                        capsuleEl.dataset.transcribed = 'true';
-                        const textNode = document.createTextNode(' ' + rec.transcription);
-                        capsuleEl.parentNode.insertBefore(textNode, capsuleEl.nextSibling);
-                    }
+        if (recordings.length === 0) return;
+
+        for (const rec of recordings) {
+            if (!rec.transcription) continue;
+
+            const capsuleEl = document.getElementById(`capsule-${rec.id}`);
+            if (!capsuleEl) continue;
+
+            // Collect the plain text that appears after this capsule
+            let textAfter = '';
+            let sibling = capsuleEl.nextSibling;
+            while (sibling) {
+                if (sibling.nodeType === Node.TEXT_NODE) {
+                    textAfter += sibling.textContent;
+                } else if (sibling.nodeType === Node.ELEMENT_NODE && !sibling.id?.startsWith('capsule-')) {
+                    textAfter += sibling.innerText || '';
                 }
+                sibling = sibling.nextSibling;
+            }
+
+            const incomingWords = rec.transcription.trim().split(/\s+/).filter(Boolean);
+            const afterWords = textAfter.trim().split(/\s+/).filter(Boolean);
+
+            // Compare the first few words after the capsule with the transcription
+            const checkCount = Math.min(3, incomingWords.length);
+            const alreadyPresent = afterWords.length >= checkCount &&
+                incomingWords.slice(0, checkCount).every((word, i) => word === afterWords[i]);
+
+            if (!alreadyPresent) {
+                const textNode = document.createTextNode(' ' + rec.transcription);
+                capsuleEl.parentNode.insertBefore(textNode, capsuleEl.nextSibling);
             }
         }
     }, [recordings]);
