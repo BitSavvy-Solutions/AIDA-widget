@@ -42,7 +42,7 @@ const formatTime = (seconds) => {
 };
 
 const AudioCapsule = ({ recording, onDownload, onRetranscribe, onRemove }) => {
-    const { url, duration, transcription, isTranscribing, error } = recording;
+    const { url, duration, isTranscribing, error } = recording;
     const [isPlaying, setIsPlaying] = useState(false);
     const audioRef = useRef(null);
 
@@ -75,7 +75,6 @@ const AudioCapsule = ({ recording, onDownload, onRetranscribe, onRemove }) => {
             <button onClick={onRemove} className="capsule-btn" title="Remove">
                 <HiXMark className="w-3 h-3" />
             </button>
-            {transcription && <span className="capsule-text">{transcription}</span>}
             {error && <span className="capsule-error">{error}</span>}
         </span>
     );
@@ -388,9 +387,23 @@ const ChatInput = ({
             const lastRec = recordings[recordings.length - 1];
             if (!document.getElementById(`capsule-${lastRec.id}`)) {
                 insertCapsule(lastRec.id);
-                // The portal below needs the node to exist in the DOM.
-                // Trigger one extra render so the capsule mounts immediately.
                 setCapsuleRenderTick(t => t + 1);
+            }
+        }
+    }, [recordings]);
+
+    // ✅ NEW: Insert transcription as normal text in front of the pill
+    useEffect(() => {
+        if (recordings.length > 0) {
+            for (const rec of recordings) {
+                if (rec.transcription) {
+                    const capsuleEl = document.getElementById(`capsule-${rec.id}`);
+                    if (capsuleEl && capsuleEl.dataset.transcribed !== 'true') {
+                        capsuleEl.dataset.transcribed = 'true';
+                        const textNode = document.createTextNode(' ' + rec.transcription);
+                        capsuleEl.parentNode.insertBefore(textNode, capsuleEl.nextSibling);
+                    }
+                }
             }
         }
     }, [recordings]);
@@ -404,9 +417,7 @@ const ChatInput = ({
                 text += node.textContent;
             } else if (node.nodeType === Node.ELEMENT_NODE) {
                 if (node.id.startsWith('capsule-')) {
-                    const recId = node.id.replace('capsule-', '');
-                    const rec = recordings.find(r => r.id === recId);
-                    if (rec?.transcription) text += rec.transcription;
+                    // Transcription is now inserted as a text node before the capsule
                 } else {
                     text += node.innerText;
                 }
