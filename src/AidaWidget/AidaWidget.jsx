@@ -48,7 +48,6 @@ const DEFAULT_MODELS = [
     { value: 'xiaomi/mimo-v2.5-pro', label: 'MiMo v2.5 Pro', category: 'reasoning' },
 ];
 
-// ✅ NEW: Default Audio Models
 const DEFAULT_AUDIO_MODELS = [
     { value: 'whisper-1', label: 'OpenAI Whisper', category: 'audio' },
     { value: 'whisper-1|translate', label: 'OpenAI Whisper (Translate to EN)', category: 'audio' },
@@ -63,7 +62,7 @@ const defaultProps = {
     user: {},
     pageContext: {},
     models: [],
-    audioModels: [], // ✅ NEW
+    audioModels: [],
     features: {
         resizable: true,
         modelSelection: true,
@@ -83,6 +82,11 @@ const AidaWidget = (props) => {
 
     const [fetchedModels, setFetchedModels] = useState([]);
     const [fetchedAudioModels, setFetchedAudioModels] = useState([]);
+    
+    // ✅ NEW: Search state
+    const [searchedModels, setSearchedModels] = useState(null);
+    const [isSearchingModels, setIsSearchingModels] = useState(false);
+    const searchTimeoutRef = useRef(null);
 
     useEffect(() => {
         const loadModels = async () => {
@@ -106,7 +110,6 @@ const AidaWidget = (props) => {
                 setFetchedAudioModels(normalize(data.audio));
             } catch (err) {
                 console.error('Failed to load models from API:', err);
-                // Fallback to hardcoded models is handled below
             }
         };
         loadModels();
@@ -115,6 +118,49 @@ const AidaWidget = (props) => {
     const availableModels = (fetchedModels.length > 0) ? fetchedModels : ((models && models.length > 0) ? models : DEFAULT_MODELS);
     const availableAudioModels = (fetchedAudioModels.length > 0) ? fetchedAudioModels : ((audioModels && audioModels.length > 0) ? audioModels : DEFAULT_AUDIO_MODELS);
 
+    // ✅ NEW: Debounced API search function
+    const handleSearchModels = useCallback((query) => {
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+
+        if (!query.trim()) {
+            setSearchedModels(null);
+            setIsSearchingModels(false);
+            return;
+        }
+
+        setIsSearchingModels(true);
+
+        searchTimeoutRef.current = setTimeout(async () => {
+            try {
+                const res = await fetch(`${MODELS_URL}?q=${encodeURIComponent(query)}`);
+                if (!res.ok) throw new Error('Failed to search models');
+                const data = await res.json();
+                
+                const normalize = (list = []) => list.map(m => ({
+                    value: m.id,
+                    label: m.name,
+                    category: m.category,
+                    modality: m.modality,
+                    pricing: m.pricing,
+                    description: m.description,
+                    available: m.available,
+                    reason: m.reason
+                }));
+
+                setSearchedModels({
+                    text: normalize(data.text),
+                    audio: normalize(data.audio)
+                });
+            } catch (err) {
+                console.error('Failed to search models from API:', err);
+                setSearchedModels({ text: [], audio: [] });
+            } finally {
+                setIsSearchingModels(false);
+            }
+        }, 400);
+    }, []);
 
     const [currentMessage, setCurrentMessage] = useState('');
 
@@ -146,7 +192,7 @@ const AidaWidget = (props) => {
     const [isAppearanceModalOpen, setIsAppearanceModalOpen] = useState(false);
 
     useEffect(() => { localStorage.setItem('aida-selected-model', selectedModel); }, [selectedModel]);
-    useEffect(() => { localStorage.setItem('aida-selected-audio-model', selectedAudioModel); }, [selectedAudioModel]); // ✅ NEW
+    useEffect(() => { localStorage.setItem('aida-selected-audio-model', selectedAudioModel); }, [selectedAudioModel]);
     useEffect(() => { localStorage.setItem('aida-context-limit', contextLimit); }, [contextLimit]);
 
     useEffect(() => {
@@ -225,7 +271,6 @@ const AidaWidget = (props) => {
     const { sidebarRef, sidebarInlineStyle, resizeHandleProps, isResizing } = useResizableSidebar({ isOpen, isFullscreen, isMobileViewport, isEnabled: features.resizable, onRequestFullscreen: requestFullscreen });
     const { isLoading, lastCost, liveReasoning, streamResponse, stopStreaming, apiError, clearApiError } = useChatAPI({ apiConfig, messages, setMessages, currentSessionId, updateCurrentSession, user, pageContext, customPrompt });
     
-    // ✅ MODIFIED: Pass selectedAudioModel to useVoiceInput
     const { isRecording, isTranscribing, elapsedTime, startRecording, stopRecording, cancelTranscription, lastInputWasVoiceRef, transcriptionError, retryTranscription, clearFailedTranscription, isNearingTimeLimit } = useVoiceInput({ 
         transcriptionUrl: apiConfig.transcriptionUrl, 
         selectedAudioModel, 
@@ -593,9 +638,9 @@ const AidaWidget = (props) => {
                             selectedModel={selectedModel}
                             setSelectedModel={setSelectedModel}
                             availableModels={availableModels}
-                            selectedAudioModel={selectedAudioModel} // ✅ NEW
-                            setSelectedAudioModel={setSelectedAudioModel} // ✅ NEW
-                            availableAudioModels={availableAudioModels} // ✅ NEW
+                            selectedAudioModel={selectedAudioModel}
+                            setSelectedAudioModel={setSelectedAudioModel}
+                            availableAudioModels={availableAudioModels}
                             translations={translations}
                             attachmentCount={attachments.length}
                             onOpenAttachments={openAttachmentModal}
@@ -613,6 +658,10 @@ const AidaWidget = (props) => {
                             setContextLimit={setContextLimit}
                             onScrapeUrl={addUrlAttachment}
                             onEmbedUrl={handleOpenEmbed}
+                            // ✅ NEW: Pass search props
+                            onSearchModels={handleSearchModels}
+                            isSearchingModels={isSearchingModels}
+                            searchedModels={searchedModels}
                         />
                         <AppearanceModal
                             isOpen={isAppearanceModalOpen}

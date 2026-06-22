@@ -23,19 +23,16 @@ const getHostname = (url) => {
     }
 };
 
-// ✅ IMPROVED: Better price formatting (handles both per-token and per-million)
 const formatPrice = (priceValue) => {
     if (priceValue === undefined || priceValue === null) return null;
     const n = parseFloat(priceValue);
     if (Number.isNaN(n) || n === 0) return null;
 
-    // If very small number (< 0.001), it's likely per-token, so multiply by 1M
     if (n < 0.001) {
         const perM = n * 1_000_000;
         return `$${perM.toFixed(2)}/M`;
     }
 
-    // Otherwise assume it's already per-million or in a readable unit
     return `$${n.toFixed(2)}/M`;
 };
 
@@ -124,6 +121,10 @@ const ChatInput = ({
     setContextLimit,
     onScrapeUrl,
     onEmbedUrl,
+    // ✅ NEW: Search props
+    onSearchModels,
+    isSearchingModels,
+    searchedModels,
 }) => {
     const [isHoveringSend, setIsHoveringSend] = useState(false);
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
@@ -140,13 +141,25 @@ const ChatInput = ({
     const isDark = true;
     const isPillMode = autoRecordCountdown !== null || transcriptionError || isRecording || isTranscribing;
 
+    // ✅ NEW: Trigger API search on query change
+    useEffect(() => {
+        if (onSearchModels) {
+            onSearchModels(modelSearchQuery);
+        }
+    }, [modelSearchQuery, onSearchModels]);
+
     const filteredTextModels = useMemo(() => {
+        // If we have search results from the API, use them directly
+        const sourceModels = searchedModels ? searchedModels.text : availableModels;
+        
         const seen = new Set();
-        const unique = availableModels.filter((m) => {
+        const unique = sourceModels.filter((m) => {
             if (seen.has(m.value)) return false;
             seen.add(m.value);
             return true;
         });
+
+        if (searchedModels) return unique;
 
         const q = modelSearchQuery.trim().toLowerCase();
         if (!q) return unique;
@@ -156,15 +169,19 @@ const ChatInput = ({
             const searchable = `${m.label} ${m.category || ''}`.toLowerCase();
             return words.every((word) => searchable.includes(word));
         });
-    }, [availableModels, modelSearchQuery]);
+    }, [availableModels, modelSearchQuery, searchedModels]);
 
     const filteredAudioModels = useMemo(() => {
+        const sourceModels = searchedModels ? searchedModels.audio : availableAudioModels;
+        
         const seen = new Set();
-        const unique = availableAudioModels.filter((m) => {
+        const unique = sourceModels.filter((m) => {
             if (seen.has(m.value)) return false;
             seen.add(m.value);
             return true;
         });
+
+        if (searchedModels) return unique;
 
         const q = modelSearchQuery.trim().toLowerCase();
         if (!q) return unique;
@@ -174,7 +191,7 @@ const ChatInput = ({
             const searchable = `${m.label} ${m.category || ''}`.toLowerCase();
             return words.every((word) => searchable.includes(word));
         });
-    }, [availableAudioModels, modelSearchQuery]);
+    }, [availableAudioModels, modelSearchQuery, searchedModels]);
 
     const selectableItems = useMemo(() => [
         ...filteredTextModels.map(m => ({ ...m, _type: 'text' })),
@@ -807,7 +824,12 @@ const ChatInput = ({
                                     </div>
 
                                     <div className="overflow-y-auto custom-scrollbar p-2 max-h-96 space-y-1">
-                                        {selectableItems.length === 0 ? (
+                                        {isSearchingModels ? (
+                                            <div className="flex items-center justify-center py-5">
+                                                <HiArrowPath className="w-5 h-5 animate-spin text-gray-400" />
+                                                <span className="ml-2 text-xs text-gray-500">Searching OpenRouter...</span>
+                                            </div>
+                                        ) : selectableItems.length === 0 ? (
                                             <p className={`px-3 py-5 text-xs text-center ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                                                 No models match your search
                                             </p>
