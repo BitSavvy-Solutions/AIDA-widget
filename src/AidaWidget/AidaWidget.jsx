@@ -357,7 +357,10 @@ const AidaWidget = (props) => {
         const text = getMessageText();
         if (text.trim() || attachments.length > 0) {
             stableHandleSendMessage(text);
-            if (inputRef.current) inputRef.current.innerHTML = '';
+            if (inputRef.current) {
+                inputRef.current.innerHTML = '';
+                inputRef.current.dispatchEvent(new Event('input', { bubbles: true }));
+            }
         }
     }, [getMessageText, stableHandleSendMessage, attachments.length]);
 

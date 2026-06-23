@@ -356,6 +356,14 @@ const ChatInput = ({
         [selectableItems, focusedModelIndex, selectModel, closeModelMenu]
     );
 
+    const adjustInputHeight = useCallback(() => {
+        const el = inputRef.current;
+        if (el) {
+            el.style.height = 'auto';
+            el.style.height = `${el.scrollHeight}px`;
+        }
+    }, [inputRef]);
+
     const insertCapsule = (recordingId) => {
         const div = inputRef.current;
         if (!div) return;
@@ -381,6 +389,7 @@ const ChatInput = ({
         range.setEndAfter(space);
         sel.removeAllRanges();
         sel.addRange(range);
+        adjustInputHeight();
     };
 
     useEffect(() => {
@@ -425,9 +434,10 @@ const ChatInput = ({
             if (!alreadyPresent) {
                 const textNode = document.createTextNode(' ' + rec.transcription);
                 capsuleEl.parentNode.insertBefore(textNode, capsuleEl.nextSibling);
+                adjustInputHeight();
             }
         }
-    }, [recordings]);
+    }, [recordings, adjustInputHeight]);
 
     const getMessageText = () => {
         const div = inputRef.current;
@@ -450,7 +460,10 @@ const ChatInput = ({
     const onSend = () => {
         const text = getMessageText();
         handleSendMessage(text);
-        if (inputRef.current) inputRef.current.innerHTML = '';
+        if (inputRef.current) {
+            inputRef.current.innerHTML = '';
+            adjustInputHeight();
+        }
     };
 
     const handleKeyDown = (e) => {
@@ -598,10 +611,7 @@ const ChatInput = ({
                 <div
                     ref={inputRef}
                     contentEditable="true"
-                    onInput={(e) => {
-                        e.target.style.height = 'auto';
-                        e.target.style.height = `${e.target.scrollHeight}px`;
-                    }}
+                    onInput={adjustInputHeight}
                     onKeyDown={handleKeyDown}
                     onPaste={handlePaste}
                     data-placeholder={translations.inputPlaceholder || 'Type your message...'}
