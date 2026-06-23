@@ -1,3 +1,4 @@
+// src/AidaWidget/ChatInput.jsx
 /* src/AidaWidget/ChatInput.jsx */
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
@@ -510,7 +511,7 @@ const ChatInput = ({
                 </button>
             );
         }
-        const isDisabled = isRecording;
+        const isDisabled = isRecording || isTranscribing;
         return (
             <button type="button" onClick={onSend} disabled={isDisabled} className={`ml-2 p-2 rounded-full transition-opacity disabled:opacity-50 ${isDark ? isDisabled ? 'bg-gray-600' : 'bg-gray-700 hover:bg-gray-600' : isDisabled ? 'bg-gray-300' : 'bg-gray-900 hover:bg-gray-700'} ${visibilityClass}`} aria-label="Send Message">
                 <HiPaperAirplane className={`w-5 h-5 ${isDisabled ? isDark ? 'text-gray-300' : 'text-gray-500' : 'text-white'}`} />

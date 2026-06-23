@@ -1,3 +1,4 @@
+// src/AidaWidget/AidaWidget.jsx
 /* src/AidaWidget/AidaWidget.jsx */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import SevenSegmentDisplay from './SevenSegmentDisplay';
@@ -290,10 +291,115 @@ const AidaWidget = (props) => {
         transcriptionUrl: apiConfig.transcriptionUrl, 
         selectedAudioModel
     });
-    
-    const { countdown: autoSendCountdown, start: startAutoSendTimer, cancel: cancelAutoSendTimer, setIsPaused: setIsSendTimerPaused } = useCountdown(() => stableHandleSendMessage(), 3);
+
+    const isTranscribing = recordings.some(r => r.isTranscribing);
+
+    const getMessageText = useCallback(() => {
+        const div = inputRef.current;
+        if (!div) return '';
+        let text = '';
+        div.childNodes.forEach(node => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                text += node.textContent;
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+                if (node.id.startsWith('capsule-')) {
+                    // skip
+                } else {
+                    text += node.innerText;
+                }
+            }
+        });
+        return text;
+    }, []);
+
+    const autoSendCallbackRef = useRef(() => {});
+
+    const { countdown: autoSendCountdown, start: startAutoSendTimer, cancel: cancelAutoSendTimer, setIsPaused: setIsSendTimerPaused } = useCountdown(() => autoSendCallbackRef.current(), 3);
     const { countdown: autoRecordCountdown, start: startAutoRecordTimer, cancel: cancelAutoRecordTimer, setIsPaused: setIsRecordTimerPaused } = useCountdown(startRecording, 3);
+
+    const stableHandleSendMessage = useCallback(async (messageTextOverride = null) => {
+        const text = messageTextOverride ?? '';
+        if ((!text.trim() && attachments.length === 0) || isLoading) return;
+        cancelAutoSendTimer();
+        cancelAutoRecordTimer();
+        const botMessageId = `bot-${Date.now()}`;
+        const finalModelName = isWebSearchEnabled ? `${selectedModel}:online` : selectedModel;
+        const imageAttachments = attachments.filter(a => a.type === 'image');
+        let nextMessages = [];
+        let activeSessionId = currentSessionId;
+
+        const userMessage = {
+            id: `user-${Date.now()}`,
+            sender: 'user',
+            text: text.trim(),
+            model: finalModelName,
+            webSearchEnabled: isWebSearchEnabled,
+            attachments,
+            images: imageAttachments
+        };
+        nextMessages = [...messages, userMessage, { id: botMessageId, sender: 'bot', text: '' }];
+        setMessages(nextMessages);
+        if (!activeSessionId) {
+            activeSessionId = createNewSession(nextMessages);
+        } else {
+            updateCurrentSession(nextMessages);
+        }
+
+        clearAttachments();
+        setEditingMessageId(null);
+        if (isWebSearchEnabled) setIsWebSearchEnabled(false);
+
+        const historyForPayload = nextMessages.slice(0, -1);
+        await streamResponse({ userMessage, botMessageId, historyForPayload, sessionId: activeSessionId, contextLimit });
+    }, [attachments, isLoading, selectedModel, isWebSearchEnabled, messages, currentSessionId, streamResponse, setMessages, createNewSession, updateCurrentSession, cancelAutoSendTimer, cancelAutoRecordTimer, clearAttachments, contextLimit]);
+
+    const handleAutoSend = useCallback(() => {
+        const text = getMessageText();
+        if (text.trim() || attachments.length > 0) {
+            stableHandleSendMessage(text);
+            if (inputRef.current) inputRef.current.innerHTML = '';
+        }
+    }, [getMessageText, stableHandleSendMessage, attachments.length]);
+
+    useEffect(() => {
+        autoSendCallbackRef.current = handleAutoSend;
+    }, [handleAutoSend]);
+
     const displayText = useDisplayAnimation({ isOpen, isLoading });
+
+    const prevIsTranscribingRef = useRef(false);
+
+    useEffect(() => {
+        if (prevIsTranscribingRef.current && !isTranscribing && !isRecording) {
+            const text = getMessageText();
+            if (text.trim() || attachments.length > 0) {
+                startAutoSendTimer();
+            }
+        }
+        prevIsTranscribingRef.current = isTranscribing;
+    }, [isTranscribing, isRecording, attachments.length, startAutoSendTimer, getMessageText]);
+
+    useEffect(() => {
+        if (autoSendCountdown === null) return;
+
+        const cancelTimer = () => {
+            cancelAutoSendTimer();
+        };
+
+        window.addEventListener('mousemove', cancelTimer);
+        window.addEventListener('mousedown', cancelTimer);
+        window.addEventListener('keydown', cancelTimer);
+        window.addEventListener('touchstart', cancelTimer);
+        window.addEventListener('wheel', cancelTimer);
+
+        return () => {
+            window.removeEventListener('mousemove', cancelTimer);
+            window.removeEventListener('mousedown', cancelTimer);
+            window.removeEventListener('keydown', cancelTimer);
+            window.removeEventListener('touchstart', cancelTimer);
+            window.removeEventListener('wheel', cancelTimer);
+        };
+    }, [autoSendCountdown, cancelAutoSendTimer]);
 
     useEffect(() => {
         if (theme === 'custom') {
@@ -410,42 +516,6 @@ const AidaWidget = (props) => {
 
     const resetChat = () => { saveCurrentChatToHistory(); setMessages([]); setCurrentSessionId(null); clearAttachments(); };
     const handleRecordButtonClick = useCallback(() => { if (isLoading) return; cancelAutoRecordTimer(); isRecording ? stopRecording() : startRecording(); }, [isRecording, isLoading, stopRecording, startRecording, cancelAutoRecordTimer]);
-
-    const stableHandleSendMessage = useCallback(async (messageTextOverride = null) => {
-        const text = messageTextOverride ?? '';
-        if ((!text.trim() && attachments.length === 0) || isLoading) return;
-        cancelAutoSendTimer();
-        cancelAutoRecordTimer();
-        const botMessageId = `bot-${Date.now()}`;
-        const finalModelName = isWebSearchEnabled ? `${selectedModel}:online` : selectedModel;
-        const imageAttachments = attachments.filter(a => a.type === 'image');
-        let nextMessages = [];
-        let activeSessionId = currentSessionId;
-
-        const userMessage = {
-            id: `user-${Date.now()}`,
-            sender: 'user',
-            text: text.trim(),
-            model: finalModelName,
-            webSearchEnabled: isWebSearchEnabled,
-            attachments,
-            images: imageAttachments
-        };
-        nextMessages = [...messages, userMessage, { id: botMessageId, sender: 'bot', text: '' }];
-        setMessages(nextMessages);
-        if (!activeSessionId) {
-            activeSessionId = createNewSession(nextMessages);
-        } else {
-            updateCurrentSession(nextMessages);
-        }
-
-        clearAttachments();
-        setEditingMessageId(null);
-        if (isWebSearchEnabled) setIsWebSearchEnabled(false);
-
-        const historyForPayload = nextMessages.slice(0, -1);
-        await streamResponse({ userMessage, botMessageId, historyForPayload, sessionId: activeSessionId, contextLimit });
-    }, [attachments, isLoading, selectedModel, isWebSearchEnabled, messages, currentSessionId, streamResponse, setMessages, createNewSession, updateCurrentSession, cancelAutoSendTimer, cancelAutoRecordTimer, clearAttachments, contextLimit]);
 
     const handleRetry = useCallback(async (botMessageId) => {
         if (isLoading) return;
@@ -628,7 +698,7 @@ const AidaWidget = (props) => {
                             handleRecordButtonClick={handleRecordButtonClick}
                             inputRef={inputRef}
                             isLoading={isLoading}
-                            isTranscribing={recordings.some(r => r.isTranscribing)}
+                            isTranscribing={isTranscribing}
                             isRecording={isRecording}
                             elapsedTime={elapsedTime}
                             siteLanguage={siteLanguage}
