@@ -492,7 +492,22 @@ const ChatInput = ({
         const plainText = e.clipboardData?.getData('text/plain');
         if (plainText) {
             e.preventDefault();
-            document.execCommand('insertText', false, plainText);
+
+            const selection = window.getSelection();
+            if (selection && selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                range.deleteContents();
+
+                const textNode = document.createTextNode(plainText);
+                range.insertNode(textNode);
+
+                // Move cursor to the end of inserted text
+                range.setStartAfter(textNode);
+                range.setEndAfter(textNode);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }
+
             adjustInputHeight();
         }
     };
