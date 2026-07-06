@@ -487,6 +487,14 @@ const ChatInput = ({
             e.preventDefault();
             onAddImages(imageFiles);
         }
+
+        // Strip formatting from text paste
+        const plainText = e.clipboardData?.getData('text/plain');
+        if (plainText) {
+            e.preventDefault();
+            document.execCommand('insertText', false, plainText);
+            adjustInputHeight();
+        }
     };
 
     const getModelVisuals = (category) => {
