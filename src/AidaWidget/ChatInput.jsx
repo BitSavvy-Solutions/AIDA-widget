@@ -6,7 +6,8 @@ import {
     HiPaperAirplane, HiOutlineMicrophone, HiStop, HiArrowPath, HiXMark,
     HiChevronDown, HiOutlineGlobeAlt, HiLightBulb, HiPhoto, HiChatBubbleLeftRight,
     HiArrowTopRightOnSquare, HiPaperClip, HiEye, HiMagnifyingGlass,
-    HiOutlineDocument, HiOutlineRectangleStack, HiPlay, HiPause, HiArrowDownTray
+    HiOutlineDocument, HiOutlineRectangleStack, HiPlay, HiPause, HiArrowDownTray,
+    HiOutlineCpuChip, HiOutlineCog6Tooth,
 } from 'react-icons/hi2';
 import AttachmentButton from './AttachmentButton';
 import ContextSelector from './ContextSelector';
@@ -165,6 +166,11 @@ const ChatInput = ({
     searchedModels,
     recentModelValues = [],
     onModelSelected,
+    ollamaModels = [],
+    ollamaStatus = 'disconnected',
+    isOllamaModalOpen = false,
+    onOllamaRefresh,
+    onOpenOllamaSettings,
 }) => {
     const [isHoveringSend, setIsHoveringSend] = useState(false);
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
@@ -182,6 +188,14 @@ const ChatInput = ({
 
     const isDark = true;
     const isPillMode = autoRecordCountdown !== null || isRecording;
+    const isOllamaSelected = selectedModel?.startsWith('ollama:');
+
+    const ollamaStatusDot = {
+        disconnected: 'bg-gray-500',
+        connecting: 'bg-amber-400 animate-pulse',
+        connected: 'bg-emerald-400',
+        error: 'bg-red-400',
+    }[ollamaStatus] || 'bg-gray-500';
 
     useEffect(() => {
         if (onSearchModels) {
@@ -189,16 +203,24 @@ const ChatInput = ({
         }
     }, [modelSearchQuery, onSearchModels]);
 
+    const filteredOllamaModels = useMemo(() => {
+        const q = modelSearchQuery.trim().toLowerCase();
+        if (!q) return ollamaModels;
+        return ollamaModels.filter(m =>
+            m.label.toLowerCase().includes(q) || m.value.toLowerCase().includes(q)
+        );
+    }, [ollamaModels, modelSearchQuery]);
+
     const recentModelItems = useMemo(() => {
         if (modelSearchQuery.trim() || isSearchingModels) return [];
         return recentModelValues
             .map(recent => {
-                const source = recent.type === 'audio' ? availableAudioModels : availableModels;
+                const source = recent.type === 'audio' ? availableAudioModels : [...ollamaModels, ...availableModels];
                 const found = source.find(m => m.value === recent.value);
                 return found ? { ...found, _type: recent.type } : null;
             })
             .filter(Boolean);
-    }, [recentModelValues, availableModels, availableAudioModels, modelSearchQuery, isSearchingModels]);
+    }, [recentModelValues, availableModels, availableAudioModels, ollamaModels, modelSearchQuery, isSearchingModels]);
 
     const filteredTextModels = useMemo(() => {
         const sourceModels = searchedModels ? searchedModels.text : availableModels;
@@ -250,9 +272,10 @@ const ChatInput = ({
 
     const selectableItems = useMemo(() => [
         ...recentModelItems,
+        ...filteredOllamaModels.map(m => ({ ...m, _type: 'text' })),
         ...filteredTextModels.map(m => ({ ...m, _type: 'text' })),
         ...filteredAudioModels.map(m => ({ ...m, _type: 'audio' }))
-    ], [recentModelItems, filteredTextModels, filteredAudioModels]);
+    ], [recentModelItems, filteredOllamaModels, filteredTextModels, filteredAudioModels]);
 
     const openModelMenu = useCallback(() => {
         modelItemRefs.current = [];
@@ -287,6 +310,7 @@ const ChatInput = ({
     useEffect(() => {
         if (!modelSelectionEnabled) return;
         const onKeyDown = (e) => {
+            if (isOllamaModalOpen) return;
             if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
                 const isInputFocused = document.activeElement === inputRef.current;
                 const isSearchFocused = document.activeElement === modelSearchRef.current;
@@ -302,7 +326,7 @@ const ChatInput = ({
         };
         document.addEventListener('keydown', onKeyDown);
         return () => document.removeEventListener('keydown', onKeyDown);
-    }, [modelSelectionEnabled, isModelMenuOpen, openModelMenu, closeModelMenu, inputRef]);
+    }, [modelSelectionEnabled, isModelMenuOpen, openModelMenu, closeModelMenu, inputRef, isOllamaModalOpen]);
 
     useEffect(() => {
         if (!isModelMenuOpen) return;
@@ -520,13 +544,15 @@ const ChatInput = ({
                 return { icon: HiPhoto, colorClass: 'text-pink-500', bgClass: isDark ? 'bg-pink-500/10' : 'bg-pink-50', borderClass: 'border-pink-500/30' };
             case 'audio':
                 return { icon: HiOutlineMicrophone, colorClass: 'text-green-500', bgClass: isDark ? 'bg-green-500/10' : 'bg-green-50', borderClass: 'border-green-500/30' };
+            case 'local':
+                return { icon: HiOutlineCpuChip, colorClass: 'text-teal-400', bgClass: isDark ? 'bg-teal-500/10' : 'bg-teal-50', borderClass: 'border-teal-500/30' };
             case 'chat':
             default:
                 return { icon: HiChatBubbleLeftRight, colorClass: 'text-blue-500', bgClass: isDark ? 'bg-blue-500/10' : 'bg-blue-50', borderClass: 'border-blue-500/30' };
         }
     };
 
-    const currentModelObj = availableModels.find((m) => m.value === selectedModel);
+    const currentModelObj = [...ollamaModels, ...availableModels].find((m) => m.value === selectedModel);
     const selectedModelLabel = currentModelObj?.label || selectedModel;
     const currentVisuals = getModelVisuals(currentModelObj?.category || 'chat');
     const CurrentIcon = currentVisuals.icon;
@@ -666,7 +692,7 @@ const ChatInput = ({
             <div className="flex items-center justify-between">
                 <div className="relative flex items-center min-w-0 flex-1 mr-2 gap-2">
                     {features.webSearch && (
-                        <button type="button" onClick={() => setIsWebSearchEnabled((p) => !p)} className={`p-2 rounded-full disabled:opacity-50 transition-colors flex-shrink-0 ${isWebSearchEnabled ? isDark ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-100 text-blue-600' : isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`} aria-pressed={isWebSearchEnabled} aria-label="Toggle web search" title="Toggle web search">
+                        <button type="button" onClick={() => setIsWebSearchEnabled((p) => !p)} disabled={isOllamaSelected} className={`p-2 rounded-full disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0 ${isWebSearchEnabled && !isOllamaSelected ? isDark ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-100 text-blue-600' : isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`} aria-pressed={isWebSearchEnabled && !isOllamaSelected} aria-label="Toggle web search" title={isOllamaSelected ? 'Web search is not available for local models' : 'Toggle web search'}>
                             <HiOutlineGlobeAlt className="h-6 w-6" />
                         </button>
                     )}
@@ -706,16 +732,70 @@ const ChatInput = ({
                                                             {recentModelItems.map((opt, idx) => renderModelOption(opt, idx, opt._type))}
                                                         </div>
                                                     )}
+
+                                                    {/* Local Models (Ollama) */}
+                                                    <div className="mb-2">
+                                                        <div className={`px-3 py-2 flex items-center justify-between gap-2 ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
+                                                            <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
+                                                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${ollamaStatusDot}`} />
+                                                                Local Models
+                                                            </span>
+                                                            <span className="flex items-center gap-0.5">
+                                                                {ollamaStatus === 'connected' && (
+                                                                    <button type="button" onClick={onOllamaRefresh} className={`p-1 rounded transition-colors ${isDark ? 'hover:bg-white/10 text-gray-400 hover:text-gray-200' : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'}`} title="Refresh local models" aria-label="Refresh local models">
+                                                                        <HiArrowPath className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                )}
+                                                                <button type="button" onClick={onOpenOllamaSettings} className={`p-1 rounded transition-colors ${isDark ? 'hover:bg-white/10 text-gray-400 hover:text-gray-200' : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'}`} title="Ollama connection settings" aria-label="Ollama connection settings">
+                                                                    <HiOutlineCog6Tooth className="w-3.5 h-3.5" />
+                                                                </button>
+                                                            </span>
+                                                        </div>
+
+                                                        {ollamaStatus === 'connecting' && (
+                                                            <div className="flex items-center gap-2 px-3 py-3 text-xs text-gray-500">
+                                                                <HiArrowPath className="w-4 h-4 animate-spin" />
+                                                                Connecting to Ollama...
+                                                            </div>
+                                                        )}
+
+                                                        {ollamaStatus === 'connected' && filteredOllamaModels.length === 0 && !modelSearchQuery && (
+                                                            <p className={`px-3 py-2.5 text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                                                Connected, but no models installed. Pull one with <code className="font-mono">ollama pull llama3.2</code>.
+                                                            </p>
+                                                        )}
+
+                                                        {ollamaStatus === 'connected' && filteredOllamaModels.map((opt, idx) =>
+                                                            renderModelOption(opt, recentModelItems.length + idx, 'text')
+                                                        )}
+
+                                                        {ollamaStatus === 'error' && (
+                                                            <div className={`mx-2 my-1.5 px-2.5 py-2 rounded-lg text-xs flex items-center justify-between gap-2 ${isDark ? 'bg-red-500/10 text-red-300' : 'bg-red-50 text-red-600'}`}>
+                                                                <span>Connection failed</span>
+                                                                <button type="button" onClick={onOpenOllamaSettings} className="font-semibold underline underline-offset-2 hover:opacity-80">
+                                                                    Retry
+                                                                </button>
+                                                            </div>
+                                                        )}
+
+                                                        {ollamaStatus === 'disconnected' && (
+                                                            <button type="button" onClick={onOpenOllamaSettings} className={`w-full flex items-center gap-2.5 px-2.5 py-2 text-sm rounded-lg border border-dashed transition-colors ${isDark ? 'border-gray-700 text-gray-400 hover:border-teal-500/50 hover:text-teal-300' : 'border-gray-300 text-gray-500 hover:border-teal-500/60 hover:text-teal-600'}`}>
+                                                                <HiOutlineCpuChip className="w-4 h-4 flex-shrink-0" />
+                                                                <span className="text-xs font-medium">Connect to Ollama</span>
+                                                            </button>
+                                                        )}
+                                                    </div>
+
                                                     {filteredTextModels.length > 0 && (
                                                         <div className="mb-2">
                                                             <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>Text Models</div>
-                                                            {filteredTextModels.map((opt, idx) => renderModelOption(opt, recentModelItems.length + idx, 'text'))}
+                                                            {filteredTextModels.map((opt, idx) => renderModelOption(opt, recentModelItems.length + filteredOllamaModels.length + idx, 'text'))}
                                                         </div>
                                                     )}
                                                     {filteredAudioModels.length > 0 && (
                                                         <div>
                                                             <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>Audio Models</div>
-                                                            {filteredAudioModels.map((opt, idx) => renderModelOption(opt, recentModelItems.length + filteredTextModels.length + idx, 'audio'))}
+                                                            {filteredAudioModels.map((opt, idx) => renderModelOption(opt, recentModelItems.length + filteredOllamaModels.length + filteredTextModels.length + idx, 'audio'))}
                                                         </div>
                                                     )}
                                                 </>

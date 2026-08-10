@@ -28,6 +28,54 @@ const extractCleanErrorMessage = (rawError) => {
     return rawError;
 };
 
+// --- Ollama helpers ---------------------------------------------------------
+const THINK_OPEN = ' <think>';
+const THINK_CLOSE = '</think>';
+const DEFAULT_OLLAMA_URL = 'http://localhost:11434';
+
+// Ollama expects raw base64, not data URLs
+const stripDataUrlPrefix = (dataUrl) => {
+    const str = String(dataUrl || '');
+    const idx = str.indexOf(',');
+    return idx >= 0 ? str.slice(idx + 1) : str;
+};
+
+// Detects a trailing partial tag so it never flashes in the UI
+const longestPartialTagSuffix = (str) => {
+    for (const tag of [THINK_OPEN, THINK_CLOSE]) {
+        const max = Math.min(tag.length - 1, str.length);
+        for (let len = max; len > 0; len--) {
+            if (str.endsWith(tag.slice(0, len))) return len;
+        }
+    }
+    return 0;
+};
+
+// Splits accumulated model output into reasoning (think blocks) and visible content.
+// Re-parsing the full string on every chunk keeps the result idempotent.
+const parseThinkContent = (raw) => {
+    let reasoning = '';
+    let content = '';
+    let rest = raw;
+    let guard = 0;
+    while (rest && guard++ < 200) {
+        const start = rest.indexOf(THINK_OPEN);
+        if (start === -1) { content += rest; break; }
+        content += rest.slice(0, start);
+        const end = rest.indexOf(THINK_CLOSE, start + THINK_OPEN.length);
+        if (end === -1) {
+            reasoning += rest.slice(start + THINK_OPEN.length);
+            break;
+        }
+        reasoning += rest.slice(start + THINK_OPEN.length, end);
+        rest = rest.slice(end + THINK_CLOSE.length);
+    }
+    const holdback = longestPartialTagSuffix(content);
+    if (holdback > 0) content = content.slice(0, -holdback);
+    return { reasoning: reasoning.trim(), content };
+};
+// ----------------------------------------------------------------------------
+
 export const useChatAPI = ({
     apiConfig,
     messages,
@@ -36,13 +84,14 @@ export const useChatAPI = ({
     updateCurrentSession,
     user,
     pageContext,
-    customPrompt
+    customPrompt,
+    ollama = null,
 }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [lastCost, setLastCost] = useState(0);
     const [liveReasoning, setLiveReasoning] = useState({ text: '', botId: null, contentHasStarted: false });
     const [apiError, setApiError] = useState(null);
-    
+
     const liveReasoningTextRef = useRef('');
     const streamAbortControllerRef = useRef(null);
 
@@ -84,7 +133,7 @@ export const useChatAPI = ({
         if ((customPrompt || '').trim()) {
             messageHistory.push({ type: 'human', content: customPrompt.trim() });
         }
-        
+
         (history || []).forEach(m => {
             const messagePayload = {
                 type: m.sender === 'user' ? 'human' : 'ai',
@@ -102,11 +151,219 @@ export const useChatAPI = ({
         return messageHistory;
     }, [customPrompt, pageContext, formatMessageContent]);
 
-    const streamResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit = 10 }) => {
+    // Builds the message array Ollama expects: system + user/assistant pairs.
+    const buildOllamaMessages = useCallback((history = []) => {
+        const result = [];
+        const systemParts = [];
+        if (pageContext && Object.keys(pageContext).length > 0) {
+            systemParts.push(`<PageContext>\n${JSON.stringify(pageContext, null, 2)}\n</PageContext>`);
+        }
+        if ((customPrompt || '').trim()) {
+            systemParts.push(customPrompt.trim());
+        }
+        if (systemParts.length > 0) {
+            result.push({ role: 'system', content: systemParts.join('\n\n') });
+        }
+
+        (history || []).forEach(m => {
+            const content = formatMessageContent(m);
+            if (m.sender === 'user') {
+                const msg = { role: 'user', content };
+                const images = (m.images || []).map(img => stripDataUrlPrefix(img.src)).filter(Boolean);
+                if (images.length > 0) msg.images = images;
+                result.push(msg);
+            } else if ((content || '').trim()) {
+                result.push({ role: 'assistant', content });
+            }
+        });
+        return result;
+    }, [pageContext, customPrompt, formatMessageContent]);
+
+    // Streams a chat completion from an Ollama server (NDJSON over /api/chat).
+    const streamOllamaResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit = 10 }) => {
         setIsLoading(true);
         setLastCost(0);
         setLiveReasoning({ text: '', botId: botMessageId, contentHasStarted: false });
-        setApiError(null); 
+        setApiError(null);
+        liveReasoningTextRef.current = '';
+
+        const modelName = userMessage.model.replace(/^ollama:/, '');
+        const ollamaBase = (ollama?.baseUrl || DEFAULT_OLLAMA_URL).replace(/\/+$/, '');
+
+        const abortController = new AbortController();
+        streamAbortControllerRef.current = abortController;
+
+        let limitedHistory = historyForPayload;
+        if (typeof contextLimit === 'number' && contextLimit > 0) {
+            limitedHistory = historyForPayload.slice(-contextLimit);
+        }
+
+        let localTokenUsage = null;
+        let accumulated = '';
+        let finalMessages = null;
+        let streamError = false;
+
+        try {
+            const response = await fetch(`${ollamaBase}/api/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: modelName,
+                    messages: buildOllamaMessages(limitedHistory),
+                    stream: true,
+                }),
+                signal: abortController.signal,
+            });
+
+            if (!response.ok) {
+                let errorMessage = `Ollama request failed (HTTP ${response.status})`;
+                try {
+                    const errData = await response.json();
+                    if (errData?.error) errorMessage = errData.error;
+                } catch { /* ignore */ }
+                if (response.status === 404) {
+                    errorMessage = `Model "${modelName}" was not found on this Ollama server. Pull it or refresh the model list.`;
+                }
+                const errorObj = { message: errorMessage, status: response.status };
+                setApiError(errorObj);
+                setMessages(prev => prev.map(m => m.id === botMessageId ? { ...m, text: '', error: errorMessage } : m));
+                throw new Error(errorMessage);
+            }
+
+            if (!response.body) {
+                throw new Error('Ollama returned an empty response body.');
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed) continue;
+                    try {
+                        const data = JSON.parse(trimmed);
+
+                        if (data.error) {
+                            const msg = typeof data.error === 'string' ? data.error : 'Ollama stream error';
+                            setApiError({ message: msg });
+                            ollama?.reportRuntimeError?.(msg);
+                            setMessages(prev => prev.map(m => m.id === botMessageId ? { ...m, error: msg } : m));
+                            streamError = true;
+                            break;
+                        }
+
+                        const contentChunk = data?.message?.content || '';
+                        const thinkingChunk = data?.message?.thinking || '';
+
+                        if (thinkingChunk) {
+                            liveReasoningTextRef.current += thinkingChunk;
+                        }
+
+                        if (contentChunk) {
+                            accumulated += contentChunk;
+                        }
+
+                        if (contentChunk || thinkingChunk) {
+                            const { reasoning: embeddedReasoning, content } = parseThinkContent(accumulated);
+                            const combinedReasoning = (
+                                liveReasoningTextRef.current +
+                                (embeddedReasoning ? '\n\n' + embeddedReasoning : '')
+                            ).trim();
+
+                            setLiveReasoning(prev => ({
+                                text: combinedReasoning,
+                                botId: botMessageId,
+                                contentHasStarted: prev.contentHasStarted || content.length > 0,
+                            }));
+                            setMessages(prev => {
+                                const updated = prev.map(m =>
+                                    m.id === botMessageId ? { ...m, text: content } : m
+                                );
+                                finalMessages = updated;
+                                return updated;
+                            });
+                        }
+
+                        if (data.done) {
+                            const input = data.prompt_eval_count ?? 0;
+                            const output = data.eval_count ?? 0;
+                            if (input || output) {
+                                localTokenUsage = {
+                                    input_tokens: input,
+                                    output_tokens: output,
+                                    total_tokens: input + output,
+                                };
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Ollama stream parse error:', trimmed, e);
+                    }
+                }
+                if (streamError) break;
+            }
+
+            const finalMeta = {
+                model: userMessage.model,
+                webSearchEnabled: false,
+                tokenUsage: localTokenUsage,
+                cost: null,
+            };
+
+            setMessages(prev => {
+                const updated = prev.map(m => {
+                    if (m.id !== botMessageId) return m;
+                    return {
+                        ...m,
+                        ...(liveReasoningTextRef.current ? { reasoning: liveReasoningTextRef.current } : {}),
+                        meta: finalMeta,
+                    };
+                });
+                finalMessages = updated;
+                return updated;
+            });
+
+            const targetSessionId = sessionId || currentSessionId;
+            if (targetSessionId && finalMessages) {
+                updateCurrentSession(finalMessages, targetSessionId);
+            }
+        } catch (error) {
+            if (error?.name === 'AbortError') {
+                console.info('Ollama streaming was stopped by the user.');
+            } else {
+                console.error('Ollama API error:', error);
+                const friendly = /failed to fetch|networkerror/i.test(error?.message || '')
+                    ? `Cannot reach Ollama at ${ollamaBase}. Make sure it is running and allows this origin.`
+                    : (error.message || 'Ollama request failed.');
+                setApiError(prev => prev || { message: friendly });
+                if (!streamError) ollama?.reportRuntimeError?.(friendly);
+            }
+        } finally {
+            if (streamAbortControllerRef.current === abortController) {
+                streamAbortControllerRef.current = null;
+            }
+            setIsLoading(false);
+            setLiveReasoning({ text: '', botId: null, contentHasStarted: false });
+        }
+    };
+
+    const streamResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit = 10 }) => {
+        // Local Ollama models use a completely different API shape
+        if (userMessage?.model?.startsWith('ollama:')) {
+            return streamOllamaResponse({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit });
+        }
+
+        setIsLoading(true);
+        setLastCost(0);
+        setLiveReasoning({ text: '', botId: botMessageId, contentHasStarted: false });
+        setApiError(null);
         liveReasoningTextRef.current = '';
 
         let localCost = 0;
@@ -201,13 +458,13 @@ export const useChatAPI = ({
                     if (part.startsWith('data: ')) {
                         try {
                             const data = JSON.parse(part.substring(6));
-                            
+
                             // Handle stream errors sent by the backend
                             if (data.error) {
                                 const cleanMessage = extractCleanErrorMessage(data.error);
                                 setApiError({ message: cleanMessage, status: null });
-                                setMessages(prev => prev.map(m => 
-                                    m.id === botMessageId 
+                                setMessages(prev => prev.map(m =>
+                                    m.id === botMessageId
                                         ? { ...m, text: m.text || '', error: cleanMessage }
                                         : m
                                 ));
@@ -218,7 +475,7 @@ export const useChatAPI = ({
                             if (data.delta_content) {
                                 setMessages(prev => {
                                     const updated = prev.map(m => m.id === botMessageId ? { ...m, text: m.text + data.delta_content } : m);
-                                    finalMessages = updated; 
+                                    finalMessages = updated;
                                     return updated;
                                 });
                                 setLiveReasoning(prev => {
@@ -287,7 +544,7 @@ export const useChatAPI = ({
                 finalMessages = updated;
                 return updated;
             });
-            
+
             const targetSessionId = sessionId || currentSessionId;
             if (targetSessionId && finalMessages) {
                 updateCurrentSession(finalMessages, targetSessionId);
@@ -308,7 +565,7 @@ export const useChatAPI = ({
             setLiveReasoning({ text: '', botId: null, contentHasStarted: false });
         }
     };
-    
+
     const stopStreaming = useCallback(() => {
         if (streamAbortControllerRef.current) {
             streamAbortControllerRef.current.abort();
@@ -322,13 +579,13 @@ export const useChatAPI = ({
         }
     }, [setMessages, updateCurrentSession, currentSessionId]);
 
-    return { 
-        isLoading, 
-        lastCost, 
-        liveReasoning, 
-        streamResponse, 
-        stopStreaming, 
-        apiError, 
-        clearApiError: () => setApiError(null) 
+    return {
+        isLoading,
+        lastCost,
+        liveReasoning,
+        streamResponse,
+        stopStreaming,
+        apiError,
+        clearApiError: () => setApiError(null)
     };
 };
