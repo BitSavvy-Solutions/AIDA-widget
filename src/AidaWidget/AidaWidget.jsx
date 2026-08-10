@@ -12,6 +12,7 @@ import ShareModal from './ShareModal';
 import './AidaWidget.css';
 import ChatInput from './ChatInput';
 import AppearanceModal, { THEMES } from './AppearanceModal';
+import OllamaModal from './OllamaModal';
 
 import {
     useWidgetState,
@@ -25,6 +26,7 @@ import {
     useAttachments,
     useDisplayAnimation,
     useDragAndDrop,
+    useOllama,
 } from './hooks';
 
 import { CHAT_URL, TRANSCRIPTION_URL, MODELS_URL } from './utils/apiConfig';
@@ -83,7 +85,7 @@ const AidaWidget = (props) => {
 
     const [fetchedModels, setFetchedModels] = useState([]);
     const [fetchedAudioModels, setFetchedAudioModels] = useState([]);
-    
+
     const [searchedModels, setSearchedModels] = useState(null);
     const [isSearchingModels, setIsSearchingModels] = useState(false);
     const searchTimeoutRef = useRef(null);
@@ -103,7 +105,7 @@ const AidaWidget = (props) => {
                 const res = await fetch(MODELS_URL);
                 if (!res.ok) throw new Error('Failed to fetch models');
                 const data = await res.json();
-                
+
                 const normalize = (list = []) => list.map(m => ({
                     value: m.id,
                     label: m.name,
@@ -182,6 +184,7 @@ const AidaWidget = (props) => {
 
     const [selectedModel, setSelectedModel] = useState(() => {
         const saved = localStorage.getItem('aida-selected-model');
+        if (saved?.startsWith('ollama:')) return saved;
         const exists = availableModels.some(m => m.value === saved);
         return exists ? saved : availableModels[0].value;
     });
@@ -239,6 +242,8 @@ const AidaWidget = (props) => {
     const { isPanelOpen, openPanel, closePanel, historyItems, projects, currentSessionId, setCurrentSessionId, createNewSession, updateCurrentSession, saveCurrentChatToHistory, historyHandlers } = useChatHistory(getSanitizedMessages);
     const { isOpen: isPromptModalOpen, open: openPromptModal, close: closePromptModal } = useModal();
     const { isOpen: isShareModalOpen, open: openShareModal, close: closeShareModal } = useModal();
+    const ollama = useOllama();
+    const [isOllamaModalOpen, setIsOllamaModalOpen] = useState(false);
     const {
         attachments, setAttachments, addImageAttachments, addTextAttachment, addFolderAttachments,
         addUrlAttachment, addContextAttachment,
@@ -285,10 +290,10 @@ const AidaWidget = (props) => {
 
     const requestFullscreen = useCallback(() => setIsFullscreen(true), [setIsFullscreen]);
     const { sidebarRef, sidebarInlineStyle, resizeHandleProps, isResizing } = useResizableSidebar({ isOpen, isFullscreen, isMobileViewport, isEnabled: features.resizable, onRequestFullscreen: requestFullscreen });
-    const { isLoading, lastCost, liveReasoning, streamResponse, stopStreaming, apiError, clearApiError } = useChatAPI({ apiConfig, messages, setMessages, currentSessionId, updateCurrentSession, user, pageContext, customPrompt });
-    
-    const { isRecording, elapsedTime, recordings, startRecording, stopRecording, retryTranscription, removeRecording, isNearingTimeLimit } = useVoiceInput({ 
-        transcriptionUrl: apiConfig.transcriptionUrl, 
+    const { isLoading, lastCost, liveReasoning, streamResponse, stopStreaming, apiError, clearApiError } = useChatAPI({ apiConfig, messages, setMessages, currentSessionId, updateCurrentSession, user, pageContext, customPrompt, ollama });
+
+    const { isRecording, elapsedTime, recordings, startRecording, stopRecording, retryTranscription, removeRecording, isNearingTimeLimit } = useVoiceInput({
+        transcriptionUrl: apiConfig.transcriptionUrl,
         selectedAudioModel
     });
 
@@ -312,10 +317,14 @@ const AidaWidget = (props) => {
         return text;
     }, []);
 
-    const autoSendCallbackRef = useRef(() => {});
+    const autoSendCallbackRef = useRef(() => { });
 
     const { countdown: autoSendCountdown, start: startAutoSendTimer, cancel: cancelAutoSendTimer, setIsPaused: setIsSendTimerPaused } = useCountdown(() => autoSendCallbackRef.current(), 3);
     const { countdown: autoRecordCountdown, start: startAutoRecordTimer, cancel: cancelAutoRecordTimer, setIsPaused: setIsRecordTimerPaused } = useCountdown(startRecording, 3);
+
+    const resolveModelName = useCallback((model) => (
+        isWebSearchEnabled && !model?.startsWith('ollama:') ? `${model}:online` : model
+    ), [isWebSearchEnabled]);
 
     const stableHandleSendMessage = useCallback(async (messageTextOverride = null) => {
         const text = messageTextOverride ?? '';
@@ -323,7 +332,7 @@ const AidaWidget = (props) => {
         cancelAutoSendTimer();
         cancelAutoRecordTimer();
         const botMessageId = `bot-${Date.now()}`;
-        const finalModelName = isWebSearchEnabled ? `${selectedModel}:online` : selectedModel;
+        const finalModelName = resolveModelName(selectedModel);
         const imageAttachments = attachments.filter(a => a.type === 'image');
         let nextMessages = [];
         let activeSessionId = currentSessionId;
@@ -351,7 +360,7 @@ const AidaWidget = (props) => {
 
         const historyForPayload = nextMessages.slice(0, -1);
         await streamResponse({ userMessage, botMessageId, historyForPayload, sessionId: activeSessionId, contextLimit });
-    }, [attachments, isLoading, selectedModel, isWebSearchEnabled, messages, currentSessionId, streamResponse, setMessages, createNewSession, updateCurrentSession, cancelAutoSendTimer, cancelAutoRecordTimer, clearAttachments, contextLimit]);
+    }, [attachments, isLoading, selectedModel, isWebSearchEnabled, messages, currentSessionId, streamResponse, setMessages, createNewSession, updateCurrentSession, cancelAutoSendTimer, cancelAutoRecordTimer, clearAttachments, contextLimit, resolveModelName]);
 
     const handleAutoSend = useCallback(() => {
         const text = getMessageText();
@@ -529,7 +538,7 @@ const AidaWidget = (props) => {
             if (messages[i].sender === 'user' && (messages[i].text || messages[i].attachments?.length > 0)) { userIndex = i; break; }
         }
         if (userIndex === -1) return;
-        const finalModelName = isWebSearchEnabled ? `${selectedModel}:online` : selectedModel;
+        const finalModelName = resolveModelName(selectedModel);
         const userMessageToRetry = { ...messages[userIndex], model: finalModelName, webSearchEnabled: isWebSearchEnabled };
         const previousHistory = messages.slice(0, userIndex);
         const historyForPayload = [...previousHistory, userMessageToRetry];
@@ -538,13 +547,13 @@ const AidaWidget = (props) => {
         setMessages(nextMessages);
         if (currentSessionId) updateCurrentSession(nextMessages);
         await streamResponse({ userMessage: userMessageToRetry, botMessageId: newBotMessageId, historyForPayload, sessionId: currentSessionId, contextLimit });
-    }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession, selectedModel, isWebSearchEnabled, contextLimit]);
+    }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession, selectedModel, isWebSearchEnabled, contextLimit, resolveModelName]);
 
     const handleRegenerate = useCallback(async (userMessageId) => {
         if (isLoading) return;
         const userIndex = messages.findIndex(m => m.id === userMessageId);
         if (userIndex === -1) return;
-        const finalModelName = isWebSearchEnabled ? `${selectedModel}:online` : selectedModel;
+        const finalModelName = resolveModelName(selectedModel);
         const userMessageToRegenerate = { ...messages[userIndex], model: finalModelName, webSearchEnabled: isWebSearchEnabled };
         const previousHistory = messages.slice(0, userIndex);
         const historyForPayload = [...previousHistory, userMessageToRegenerate];
@@ -553,7 +562,7 @@ const AidaWidget = (props) => {
         setMessages(nextMessages);
         if (currentSessionId) updateCurrentSession(nextMessages);
         await streamResponse({ userMessage: userMessageToRegenerate, botMessageId: newBotMessageId, historyForPayload, sessionId: currentSessionId, contextLimit });
-    }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession, selectedModel, isWebSearchEnabled, contextLimit]);
+    }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession, selectedModel, isWebSearchEnabled, contextLimit, resolveModelName]);
 
     const handleHistorySelect = useCallback((session) => {
         setCurrentSessionId(session.id);
@@ -739,6 +748,11 @@ const AidaWidget = (props) => {
                             searchedModels={searchedModels}
                             recentModelValues={recentModelValues}
                             onModelSelected={addRecentModel}
+                            ollamaModels={ollama.models}
+                            ollamaStatus={ollama.status}
+                            isOllamaModalOpen={isOllamaModalOpen}
+                            onOllamaRefresh={() => ollama.fetchModels()}
+                            onOpenOllamaSettings={() => setIsOllamaModalOpen(true)}
                         />
                         <AppearanceModal
                             isOpen={isAppearanceModalOpen}
@@ -827,6 +841,25 @@ const AidaWidget = (props) => {
                 }}
                 messages={sessionToShare ? sessionToShare.messages : messages}
                 sessionTitle={sessionToShare ? sessionToShare.title : currentSessionTitle}
+                theme={baseTheme}
+            />
+
+            <OllamaModal
+                isOpen={isOllamaModalOpen}
+                onClose={() => setIsOllamaModalOpen(false)}
+                baseUrl={ollama.baseUrl}
+                setBaseUrl={ollama.setBaseUrl}
+                status={ollama.status}
+                models={ollama.models}
+                error={ollama.error}
+                lastFetchedAt={ollama.lastFetchedAt}
+                onConnect={(url) => ollama.fetchModels(url)}
+                onDisconnect={ollama.disconnect}
+                onRefresh={() => ollama.fetchModels()}
+                pullState={ollama.pullState}
+                onPullModel={ollama.pullModel}
+                onCancelPull={ollama.cancelPull}
+                onClearPullState={ollama.clearPullState}
                 theme={baseTheme}
             />
 

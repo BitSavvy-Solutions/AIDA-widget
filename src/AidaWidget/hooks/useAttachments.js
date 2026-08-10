@@ -108,7 +108,11 @@ export const useAttachments = (setSelectedModel) => {
                     'deepseek/deepseek-v3.2',
                     'deepseek/deepseek-chat-v3-0324',
                 ]);
-                setSelectedModel(prevModel => visionlessModels.has(prevModel) ? 'google/gemini-3.1-flash-lite-preview' : prevModel);
+                setSelectedModel(prevModel =>
+                    prevModel?.startsWith('ollama:')
+                        ? prevModel
+                        : visionlessModels.has(prevModel) ? 'google/gemini-3.1-flash-lite-preview' : prevModel
+                );
             }
         } catch (e) {
             console.error('Failed to process image(s)', e);
@@ -132,7 +136,7 @@ export const useAttachments = (setSelectedModel) => {
         }
     }, []);
 
-    // ✅ MODIFIED: Accepts an array of `{file, path}` objects.
+    // Modified: Accepts an array of `{file, path}` objects.
     const addFolderAttachments = useCallback(async (filesWithPaths) => {
         if (!filesWithPaths || filesWithPaths.length === 0) return;
 
@@ -269,7 +273,7 @@ export const useAttachments = (setSelectedModel) => {
 
     return {
         attachments,
-        setAttachments, // ✅ ADDED: Expose setter for editing functionality
+        setAttachments, // Expose setter for editing functionality
         addImageAttachments,
         addTextAttachment,
         addFolderAttachments,

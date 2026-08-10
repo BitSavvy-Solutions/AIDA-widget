@@ -197,9 +197,9 @@ const cleanTextForSpeech = (text) => {
     return text.replace(EMOJI_REGEX, '').replace(/\s+/g, ' ').trim();
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ------------------------------------------------------------------------------
 // Response metadata info popover
-// ─────────────────────────────────────────────────────────────────────────────
+// ------------------------------------------------------------------------------
 const formatCost = (cost) => {
     if (!cost || cost <= 0) return null;
     if (cost < 0.001) return `$${cost.toFixed(6)}`;
@@ -229,7 +229,7 @@ const MessageInfoPopover = ({ meta, theme }) => {
     if (!meta) return null;
 
     const rawModel = meta.model || '';
-    const modelDisplay = rawModel.replace(':online', '').split('/').pop() || null;
+    const modelDisplay = rawModel.replace(':online', '').replace(/^ollama:/, '').split('/').pop() || null;
     const isWebSearch = meta.webSearchEnabled || rawModel.includes(':online');
 
     const tu = meta.tokenUsage;
@@ -351,7 +351,7 @@ const MessageInfoPopover = ({ meta, theme }) => {
         </div>
     );
 };
-// ─────────────────────────────────────────────────────────────────────────────
+// ------------------------------------------------------------------------------
 
 
 const ChatDisplay = ({
@@ -385,7 +385,7 @@ const ChatDisplay = ({
     const messageBodyRefs = useRef(new Map());
     const editInputRef = useRef(null);
 
-    // ── Two-click delete confirmation ─────────────────────────────────────────
+    // --- Two-click delete confirmation ----------------------------------------
     const [pendingDeleteId, setPendingDeleteId] = useState(null);
 
     // Auto-reset pending state after 3 seconds of inactivity
@@ -406,7 +406,7 @@ const ChatDisplay = ({
         document.addEventListener('pointerdown', handlePointerDown);
         return () => document.removeEventListener('pointerdown', handlePointerDown);
     }, [pendingDeleteId]);
-    // ─────────────────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------------------
 
     const [speakingMessageId, setSpeakingMessageId] = useState(null);
     const [speechStatus, setSpeechStatus] = useState('idle');
@@ -622,7 +622,7 @@ const ChatDisplay = ({
 
                 if (hideBotMessage) return null;
 
-                // ── Delete button state for this message ───────────────────
+                // --- Delete button state for this message --------------------
                 const isPendingDelete = pendingDeleteId === message.id;
 
                 return (
@@ -765,7 +765,7 @@ const ChatDisplay = ({
                             {!isBotLoading && !isEditing && (
                                 <div
                                     className="mt-3 flex items-center gap-2 select-none"
-                                    // ✅ FIX: Force the action buttons to inherit the AI text color (or body text for user messages)
+                                    // Force the action buttons to inherit the AI text color (or body text for user messages)
                                     style={{ color: message.sender === 'bot' ? 'var(--aida-bot-msg-text)' : 'inherit' }}
                                 >
                                     {/* Copy */}
@@ -851,17 +851,17 @@ const ChatDisplay = ({
                                         </button>
                                     )}
 
-                                    {/* ── Delete: two-click confirmation ───────────────── */}
+                                    {/* --- Delete: two-click confirmation ---------------- */}
                                     {onDeleteMessage && (
                                         <button
                                             type="button"
                                             onClick={() => {
                                                 if (isPendingDelete) {
-                                                    // Second click → actually delete
+                                                    // Second click -> actually delete
                                                     onDeleteMessage(message.id);
                                                     setPendingDeleteId(null);
                                                 } else {
-                                                    // First click → arm the button
+                                                    // First click -> arm the button
                                                     setPendingDeleteId(message.id);
                                                 }
                                             }}
@@ -876,7 +876,7 @@ const ChatDisplay = ({
                                             <HiTrash className="w-4 h-4" />
                                         </button>
                                     )}
-                                    {/* ─────────────────────────────────────────────────── */}
+                                    {/* -------------------------------------------------- */}
 
                                     {/* Response metadata info (bot messages only) */}
                                     {message.sender === 'bot' && message.meta && (

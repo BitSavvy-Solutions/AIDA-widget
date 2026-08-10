@@ -10,3 +10,4 @@ export { useCountdown } from './useTimers';
 export { useAttachments } from './useAttachments';
 export * from './useDisplayAnimation';
 export { useDragAndDrop } from './useDragAndDrop';
+export { useOllama } from './useOllama';
