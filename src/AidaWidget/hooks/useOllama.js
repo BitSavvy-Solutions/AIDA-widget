@@ -18,7 +18,7 @@ const prettifyName = (name = '') => {
     return `${prettyFamily}${version}`.trim();
 };
 
-const formatSize = (bytes) => {
+export const formatSize = (bytes) => {
     if (!bytes) return null;
     const gb = bytes / (1024 ** 3);
     return gb >= 1 ? `${gb.toFixed(1)} GB` : `${Math.round(bytes / (1024 ** 2))} MB`;
@@ -34,6 +34,12 @@ const normalizeOllamaModel = (raw) => {
         modality: hasVision ? 'text+image->text' : 'text->text',
         description: formatSize(raw.size),
         ollama: true,
+        // Extra metadata for the settings screen
+        name: raw.name,
+        sizeBytes: raw.size ?? 0,
+        modifiedAt: raw.modified_at || null,
+        parameterSize: raw?.details?.parameter_size || null,
+        quantization: raw?.details?.quantization_level || null,
     };
 };
 
@@ -49,7 +55,7 @@ const friendlyError = (err, url) => {
 
 /**
  * Manages the connection to a local (or remote) Ollama server:
- * host configuration, model listing, status, and refresh.
+ * host configuration, model listing, model pulling, status, and refresh.
  */
 export const useOllama = () => {
     const [baseUrl, setBaseUrlState] = useState(() => {
@@ -60,9 +66,17 @@ export const useOllama = () => {
     const [models, setModels] = useState([]);
     const [error, setError] = useState(null);
     const [lastFetchedAt, setLastFetchedAt] = useState(null);
-    const mountedRef = useRef(true);
 
-    useEffect(() => () => { mountedRef.current = false; }, []);
+    // Pull state: { name, status, completed, total, percent, phase: 'pulling'|'success'|'error', error }
+    const [pullState, setPullState] = useState(null);
+
+    const mountedRef = useRef(true);
+    const pullAbortRef = useRef(null);
+
+    useEffect(() => () => {
+        mountedRef.current = false;
+        pullAbortRef.current?.abort();
+    }, []);
 
     const setBaseUrl = useCallback((url) => {
         const cleaned = (url || '').trim().replace(/\/+$/, '') || DEFAULT_OLLAMA_URL;
@@ -104,6 +118,8 @@ export const useOllama = () => {
     }, [baseUrl]);
 
     const disconnect = useCallback(() => {
+        pullAbortRef.current?.abort();
+        setPullState(null);
         setStatus('disconnected');
         setModels([]);
         setError(null);
@@ -116,6 +132,129 @@ export const useOllama = () => {
         setStatus('error');
         setError(message || 'The Ollama request failed. Try refreshing the model list.');
     }, []);
+
+    /**
+     * Downloads a model via POST /api/pull and tracks aggregate progress.
+     * Ollama streams one JSON line per status update; download layers report
+     * { digest, completed, total }, so we sum across layers for a stable percent.
+     */
+    const pullModel = useCallback(async (name) => {
+        const modelName = (name || '').trim();
+        if (!modelName || pullAbortRef.current) return; // already pulling
+
+        const url = baseUrl.trim().replace(/\/+$/, '');
+        const controller = new AbortController();
+        pullAbortRef.current = controller;
+        const layers = new Map();
+
+        setPullState({
+            name: modelName,
+            status: 'Connecting...',
+            completed: 0,
+            total: 0,
+            percent: null,
+            phase: 'pulling',
+            error: null,
+        });
+
+        try {
+            const res = await fetch(`${url}/api/pull`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: modelName, stream: true }),
+                signal: controller.signal,
+            });
+
+            if (!res.ok) {
+                let msg = `Pull failed (HTTP ${res.status})`;
+                try {
+                    const errData = await res.json();
+                    if (errData?.error) msg = errData.error;
+                } catch { /* ignore */ }
+                throw new Error(msg);
+            }
+
+            if (!res.body) throw new Error('Ollama returned an empty response body.');
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed) continue;
+
+                    let data;
+                    try { data = JSON.parse(trimmed); } catch { continue; }
+
+                    if (data.error) {
+                        throw new Error(typeof data.error === 'string' ? data.error : 'Pull failed.');
+                    }
+
+                    // Track per-layer progress so the total percent is smooth
+                    if (data.digest && typeof data.total === 'number') {
+                        const prev = layers.get(data.digest) || { completed: 0, total: 0 };
+                        layers.set(data.digest, {
+                            completed: Math.max(prev.completed, data.completed ?? 0),
+                            total: Math.max(prev.total, data.total),
+                        });
+                    }
+
+                    let completed = 0;
+                    let total = 0;
+                    for (const layer of layers.values()) {
+                        completed += layer.completed;
+                        total += layer.total;
+                    }
+
+                    const isSuccess = data.status === 'success';
+                    const percent = total > 0
+                        ? Math.min(100, Math.floor((completed / total) * 100))
+                        : (isSuccess ? 100 : null);
+
+                    if (!mountedRef.current) return;
+
+                    setPullState({
+                        name: modelName,
+                        status: isSuccess ? 'Download complete' : (data.status || 'Downloading...'),
+                        completed,
+                        total,
+                        percent,
+                        phase: isSuccess ? 'success' : 'pulling',
+                        error: null,
+                    });
+                }
+            }
+
+            // Refresh the installed model list once the stream ends
+            await fetchModels();
+        } catch (err) {
+            if (!mountedRef.current) return;
+            if (err?.name === 'AbortError') {
+                setPullState(prev => prev ? { ...prev, phase: 'error', status: 'Cancelled', error: 'Download cancelled.' } : null);
+            } else {
+                const msg = /failed to fetch|networkerror/i.test(err?.message || '')
+                    ? `Lost connection to Ollama at ${url}.`
+                    : (err?.message || 'Pull failed.');
+                setPullState(prev => prev ? { ...prev, phase: 'error', status: 'Failed', error: msg } : null);
+            }
+        } finally {
+            pullAbortRef.current = null;
+        }
+    }, [baseUrl, fetchModels]);
+
+    const cancelPull = useCallback(() => {
+        pullAbortRef.current?.abort();
+    }, []);
+
+    const clearPullState = useCallback(() => setPullState(null), []);
 
     // Silently reconnect on load if the user was connected last time
     useEffect(() => {
@@ -135,5 +274,9 @@ export const useOllama = () => {
         fetchModels,
         disconnect,
         reportRuntimeError,
+        pullState,
+        pullModel,
+        cancelPull,
+        clearPullState,
     };
 };

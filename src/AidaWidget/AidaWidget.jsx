@@ -317,7 +317,7 @@ const AidaWidget = (props) => {
         return text;
     }, []);
 
-    const autoSendCallbackRef = useRef(() => {});
+    const autoSendCallbackRef = useRef(() => { });
 
     const { countdown: autoSendCountdown, start: startAutoSendTimer, cancel: cancelAutoSendTimer, setIsPaused: setIsSendTimerPaused } = useCountdown(() => autoSendCallbackRef.current(), 3);
     const { countdown: autoRecordCountdown, start: startAutoRecordTimer, cancel: cancelAutoRecordTimer, setIsPaused: setIsRecordTimerPaused } = useCountdown(startRecording, 3);
@@ -856,6 +856,10 @@ const AidaWidget = (props) => {
                 onConnect={(url) => ollama.fetchModels(url)}
                 onDisconnect={ollama.disconnect}
                 onRefresh={() => ollama.fetchModels()}
+                pullState={ollama.pullState}
+                onPullModel={ollama.pullModel}
+                onCancelPull={ollama.cancelPull}
+                onClearPullState={ollama.clearPullState}
                 theme={baseTheme}
             />
 
