@@ -44,13 +44,29 @@ const normalizeOllamaModel = (raw) => {
 };
 
 const friendlyError = (err, url) => {
+    const raw =
+        err?.name || err?.message
+            ? `${err.name || 'Error'}: ${err.message || ''}`
+            : String(err || '');
+
     if (err?.name === 'AbortError' || err?.name === 'TimeoutError') {
-        return `Connection timed out. Is Ollama running at ${url}?`;
+        return {
+            message: `Connection timed out. Is Ollama running at ${url}?`,
+            raw,
+        };
     }
+
     if (/failed to fetch|networkerror/i.test(err?.message || '')) {
-        return `Cannot reach Ollama at ${url}. Make sure it is running and allows this origin.`;
+        return {
+            message: `Cannot reach Ollama at ${url}. Make sure it is running and allows this origin.`,
+            raw,
+        };
     }
-    return err?.message || 'Unknown connection error.';
+
+    return {
+        message: err?.message || 'Unknown connection error.',
+        raw,
+    };
 };
 
 /**

@@ -94,6 +94,10 @@ const OllamaModal = ({
         isDark ? 'border-gray-700 hover:bg-gray-800 text-gray-300' : 'border-gray-300 hover:bg-gray-100 text-gray-600'
     }`;
 
+    // Support both the new object shape { message, raw } and old string errors
+    const errorMessage = typeof error === 'object' ? error?.message : error;
+    const errorRaw = typeof error === 'object' ? error?.raw : null;
+
     return (
         <div
             className="fixed inset-0 z-[70] flex items-center justify-center px-4"
@@ -164,14 +168,23 @@ const OllamaModal = ({
                     </div>
 
                     {/* Error */}
-                    {status === 'error' && error && (
+                    {status === 'error' && errorMessage && (
                         <div className={`rounded-lg border p-3 text-xs leading-relaxed ${
                             isDark ? 'bg-red-500/5 border-red-500/30 text-red-300' : 'bg-red-50 border-red-200 text-red-600'
                         }`}>
                             <div className="flex items-start gap-2">
                                 <HiExclamationTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                                 <div className="min-w-0">
-                                    <p className="font-medium break-words">{error}</p>
+                                    <p className="font-medium break-words">{errorMessage}</p>
+
+                                    {errorRaw && (
+                                        <div className={`mt-2 rounded p-2 text-[10px] font-mono break-all ${
+                                            isDark ? 'bg-gray-950 text-gray-400' : 'bg-gray-100 text-gray-600'
+                                        }`}>
+                                            {errorRaw}
+                                        </div>
+                                    )}
+
                                     <p className="mt-1.5 opacity-70">
                                         If Ollama is running, allow browser access by starting it with{' '}
                                         <code className="font-mono">OLLAMA_ORIGINS=*</code>.
@@ -185,7 +198,17 @@ const OllamaModal = ({
                         <>
                             {/* Install a model */}
                             <div className={`space-y-2 pt-4 border-t ${isDark ? 'border-gray-800' : 'border-gray-100'}`}>
-                                <label className={sectionLabelClass}>Install a model</label>
+                                <label className={sectionLabelClass}>
+                                    Install a{' '}
+                                        <a
+                                            href="https://ollama.com/search"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="underline hover:opacity-80"
+                                        >
+                                            model
+                                        </a>
+                                </label>
 
                                 {isPulling ? (
                                     <div className={`rounded-lg border p-3 space-y-2 ${
