@@ -1,13 +1,14 @@
 /* src/AidaWidget/hooks/useChromeAI.js */
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 
 /**
  * Chrome Built-in AI (Gemini Nano + expert models).
  *
- * Tracks support, availability and download progress for each local API.
- * Nothing runs until asked: availability checks only happen while `isActive`
- * is true, and model downloads only start from an explicit user action.
- * Sessions are destroyed right after enable/test so no memory is held.
+ * Single source of truth for support, availability and download progress.
+ * Lives at the widget level so the model selector, the chat pipeline and the
+ * management panel all read the same state. Availability sweeps are cheap
+ * (one parallel batch per activation) and sessions are destroyed immediately
+ * after enable/test so no memory is held.
  */
 
 const TRANSLATOR_TARGETS = [
@@ -127,7 +128,7 @@ const normalizeAvailability = (raw) => {
     }
 };
 
-// Synchronous support probe, safe to call anywhere (tab badge, gating).
+// Synchronous support probe, safe to call anywhere (tab badges, gating).
 export const getChromeAISupport = () => {
     const apis = {};
     let supported = false;
@@ -181,8 +182,8 @@ export const useChromeAI = (isActive) => {
         }));
     }, [translatorTarget, setStatus]);
 
-    // Checks only run while the Chrome tab is visible. Translator pair changes
-    // re-trigger a check because checkAll depends on translatorTarget.
+    // One sweep per activation. Translator pair changes re-trigger a check
+    // because checkAll depends on translatorTarget.
     useEffect(() => {
         if (isActive) checkAll();
     }, [isActive, checkAll]);
@@ -226,10 +227,27 @@ export const useChromeAI = (isActive) => {
         }
     }, [translatorTarget, setStatus]);
 
+    // Selector-ready view of the Prompt API. This is the only Chrome API that
+    // makes sense as a chat model; the experts stay in the management panel.
+    const chatModels = useMemo(() => {
+        const phase = statuses.prompt?.phase || 'checking';
+        return [{
+            value: 'chrome:nano',
+            label: 'Gemini Nano',
+            category: 'local',
+            modality: 'text->text',
+            description: 'Chrome built-in',
+            chrome: true,
+            status: phase,
+            selectable: phase === 'available',
+        }];
+    }, [statuses.prompt?.phase]);
+
     return {
         defs: API_DEFS,
         statuses,
         support: getChromeAISupport(),
+        chatModels,
         translatorTarget,
         setTranslatorTarget,
         translatorTargets: TRANSLATOR_TARGETS,

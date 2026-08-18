@@ -168,9 +168,11 @@ const ChatInput = ({
     onModelSelected,
     ollamaModels = [],
     ollamaStatus = 'disconnected',
-    isOllamaModalOpen = false,
+    chromeModels = [],
+    isLocalModelsModalOpen = false,
     onOllamaRefresh,
     onOpenOllamaSettings,
+    onOpenChromeAISettings,
 }) => {
     const [isHoveringSend, setIsHoveringSend] = useState(false);
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
@@ -189,6 +191,8 @@ const ChatInput = ({
     const isDark = true;
     const isPillMode = autoRecordCountdown !== null || isRecording;
     const isOllamaSelected = selectedModel?.startsWith('ollama:');
+    const isChromeSelected = selectedModel?.startsWith('chrome:');
+    const isLocalModelSelected = isOllamaSelected || isChromeSelected;
 
     const ollamaStatusDot = {
         disconnected: 'bg-gray-500',
@@ -196,6 +200,25 @@ const ChatInput = ({
         connected: 'bg-emerald-400',
         error: 'bg-red-400',
     }[ollamaStatus] || 'bg-gray-500';
+
+    const chromeStatus = chromeModels[0]?.status || 'checking';
+    const chromeStatusDot = {
+        available: 'bg-emerald-400',
+        downloadable: 'bg-amber-400',
+        downloading: 'bg-blue-400 animate-pulse',
+        checking: 'bg-gray-400 animate-pulse',
+        error: 'bg-red-400',
+    }[chromeStatus] || 'bg-gray-500';
+
+    const CHROME_STATUS_LABELS = {
+        checking: 'Checking',
+        available: 'Ready',
+        downloadable: 'Needs download',
+        downloading: 'Downloading',
+        unavailable: 'Unavailable',
+        unsupported: 'Not supported',
+        error: 'Error',
+    };
 
     useEffect(() => {
         if (onSearchModels) {
@@ -211,16 +234,34 @@ const ChatInput = ({
         );
     }, [ollamaModels, modelSearchQuery]);
 
+    const filteredChromeModels = useMemo(() => {
+        const q = modelSearchQuery.trim().toLowerCase();
+        if (!q) {
+            const recentSet = new Set(recentModelValues.map(m => m.value));
+            return chromeModels.filter(m => !recentSet.has(m.value));
+        }
+        return chromeModels.filter(m => m.label.toLowerCase().includes(q));
+    }, [chromeModels, modelSearchQuery, recentModelValues]);
+
+    const selectableChromeModels = useMemo(
+        () => filteredChromeModels.filter(m => m.selectable),
+        [filteredChromeModels]
+    );
+    const disabledChromeModels = useMemo(
+        () => filteredChromeModels.filter(m => !m.selectable),
+        [filteredChromeModels]
+    );
+
     const recentModelItems = useMemo(() => {
         if (modelSearchQuery.trim() || isSearchingModels) return [];
         return recentModelValues
             .map(recent => {
-                const source = recent.type === 'audio' ? availableAudioModels : [...ollamaModels, ...availableModels];
+                const source = recent.type === 'audio' ? availableAudioModels : [...ollamaModels, ...chromeModels, ...availableModels];
                 const found = source.find(m => m.value === recent.value);
                 return found ? { ...found, _type: recent.type } : null;
             })
             .filter(Boolean);
-    }, [recentModelValues, availableModels, availableAudioModels, ollamaModels, modelSearchQuery, isSearchingModels]);
+    }, [recentModelValues, availableModels, availableAudioModels, ollamaModels, chromeModels, modelSearchQuery, isSearchingModels]);
 
     const filteredTextModels = useMemo(() => {
         const sourceModels = searchedModels ? searchedModels.text : availableModels;
@@ -273,9 +314,10 @@ const ChatInput = ({
     const selectableItems = useMemo(() => [
         ...recentModelItems,
         ...filteredOllamaModels.map(m => ({ ...m, _type: 'text' })),
+        ...selectableChromeModels.map(m => ({ ...m, _type: 'text' })),
         ...filteredTextModels.map(m => ({ ...m, _type: 'text' })),
         ...filteredAudioModels.map(m => ({ ...m, _type: 'audio' }))
-    ], [recentModelItems, filteredOllamaModels, filteredTextModels, filteredAudioModels]);
+    ], [recentModelItems, filteredOllamaModels, selectableChromeModels, filteredTextModels, filteredAudioModels]);
 
     const openModelMenu = useCallback(() => {
         modelItemRefs.current = [];
@@ -310,7 +352,7 @@ const ChatInput = ({
     useEffect(() => {
         if (!modelSelectionEnabled) return;
         const onKeyDown = (e) => {
-            if (isOllamaModalOpen) return;
+            if (isLocalModelsModalOpen) return;
             if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
                 const isInputFocused = document.activeElement === inputRef.current;
                 const isSearchFocused = document.activeElement === modelSearchRef.current;
@@ -326,7 +368,7 @@ const ChatInput = ({
         };
         document.addEventListener('keydown', onKeyDown);
         return () => document.removeEventListener('keydown', onKeyDown);
-    }, [modelSelectionEnabled, isModelMenuOpen, openModelMenu, closeModelMenu, inputRef, isOllamaModalOpen]);
+    }, [modelSelectionEnabled, isModelMenuOpen, openModelMenu, closeModelMenu, inputRef, isLocalModelsModalOpen]);
 
     useEffect(() => {
         if (!isModelMenuOpen) return;
@@ -552,7 +594,7 @@ const ChatInput = ({
         }
     };
 
-    const currentModelObj = [...ollamaModels, ...availableModels].find((m) => m.value === selectedModel);
+    const currentModelObj = [...ollamaModels, ...chromeModels, ...availableModels].find((m) => m.value === selectedModel);
     const selectedModelLabel = currentModelObj?.label || selectedModel;
     const currentVisuals = getModelVisuals(currentModelObj?.category || 'chat');
     const CurrentIcon = currentVisuals.icon;
@@ -613,6 +655,29 @@ const ChatInput = ({
             </>
         );
     };
+
+    const renderDisabledChromeOption = (opt) => (
+        <button
+            key={opt.value}
+            type="button"
+            onClick={onOpenChromeAISettings}
+            className={`w-full text-left px-2.5 py-2 text-sm rounded-lg flex items-start gap-2.5 transition-colors border border-dashed ${
+                isDark
+                    ? 'border-gray-700 text-gray-400 hover:border-teal-500/50 hover:text-teal-300'
+                    : 'border-gray-300 text-gray-500 hover:border-teal-500/60 hover:text-teal-600'
+            }`}
+        >
+            <div className={`p-1.5 rounded-md flex-shrink-0 mt-0.5 ${isDark ? 'bg-teal-500/10 text-teal-400' : 'bg-teal-50 text-teal-600'}`}>
+                <HiOutlineCpuChip className="w-4 h-4" />
+            </div>
+            <div className="flex flex-col min-w-0 flex-1 gap-0.5">
+                <span className="font-semibold text-sm truncate">{opt.label}</span>
+                <span className="text-[11px] opacity-80">
+                    {CHROME_STATUS_LABELS[opt.status] || 'Unavailable'} · Manage
+                </span>
+            </div>
+        </button>
+    );
 
     const renderModelOption = (opt, idx, type) => {
         const visuals = getModelVisuals(opt.category || 'chat');
@@ -692,7 +757,7 @@ const ChatInput = ({
             <div className="flex items-center justify-between">
                 <div className="relative flex items-center min-w-0 flex-1 mr-2 gap-2">
                     {features.webSearch && (
-                        <button type="button" onClick={() => setIsWebSearchEnabled((p) => !p)} disabled={isOllamaSelected} className={`p-2 rounded-full disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0 ${isWebSearchEnabled && !isOllamaSelected ? isDark ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-100 text-blue-600' : isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`} aria-pressed={isWebSearchEnabled && !isOllamaSelected} aria-label="Toggle web search" title={isOllamaSelected ? 'Web search is not available for local models' : 'Toggle web search'}>
+                        <button type="button" onClick={() => setIsWebSearchEnabled((p) => !p)} disabled={isLocalModelSelected} className={`p-2 rounded-full disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0 ${isWebSearchEnabled && !isLocalModelSelected ? isDark ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-100 text-blue-600' : isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`} aria-pressed={isWebSearchEnabled && !isLocalModelSelected} aria-label="Toggle web search" title={isLocalModelSelected ? 'Web search is not available for local models' : 'Toggle web search'}>
                             <HiOutlineGlobeAlt className="h-6 w-6" />
                         </button>
                     )}
@@ -738,7 +803,7 @@ const ChatInput = ({
                                                         <div className={`px-3 py-2 flex items-center justify-between gap-2 ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
                                                             <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
                                                                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${ollamaStatusDot}`} />
-                                                                Local Models
+                                                                Ollama
                                                             </span>
                                                             <span className="flex items-center gap-0.5">
                                                                 {ollamaStatus === 'connected' && (
@@ -786,16 +851,39 @@ const ChatInput = ({
                                                         )}
                                                     </div>
 
+                                                    {/* Chrome Built-in AI */}
+                                                    <div className="mb-2">
+                                                        <div className={`px-3 py-2 flex items-center justify-between gap-2 ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
+                                                            <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
+                                                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${chromeStatusDot}`} />
+                                                                Chrome AI
+                                                            </span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={onOpenChromeAISettings}
+                                                                className={`p-1 rounded transition-colors ${isDark ? 'hover:bg-white/10 text-gray-400 hover:text-gray-200' : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'}`}
+                                                                title="Manage Chrome built-in models"
+                                                                aria-label="Manage Chrome built-in models"
+                                                            >
+                                                                <HiOutlineCog6Tooth className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        </div>
+                                                        {selectableChromeModels.map((opt, idx) =>
+                                                            renderModelOption(opt, recentModelItems.length + filteredOllamaModels.length + idx, 'text')
+                                                        )}
+                                                        {disabledChromeModels.map(renderDisabledChromeOption)}
+                                                    </div>
+
                                                     {filteredTextModels.length > 0 && (
                                                         <div className="mb-2">
                                                             <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>Text Models</div>
-                                                            {filteredTextModels.map((opt, idx) => renderModelOption(opt, recentModelItems.length + filteredOllamaModels.length + idx, 'text'))}
+                                                            {filteredTextModels.map((opt, idx) => renderModelOption(opt, recentModelItems.length + filteredOllamaModels.length + selectableChromeModels.length + idx, 'text'))}
                                                         </div>
                                                     )}
                                                     {filteredAudioModels.length > 0 && (
                                                         <div>
                                                             <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>Audio Models</div>
-                                                            {filteredAudioModels.map((opt, idx) => renderModelOption(opt, recentModelItems.length + filteredOllamaModels.length + filteredTextModels.length + idx, 'audio'))}
+                                                            {filteredAudioModels.map((opt, idx) => renderModelOption(opt, recentModelItems.length + filteredOllamaModels.length + selectableChromeModels.length + filteredTextModels.length + idx, 'audio'))}
                                                         </div>
                                                     )}
                                                 </>

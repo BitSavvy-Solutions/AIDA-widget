@@ -29,8 +29,7 @@ const extractCleanErrorMessage = (rawError) => {
 };
 
 // --- Ollama helpers ---------------------------------------------------------
-const THINK_OPEN = ' <think>';
-const THINK_CLOSE = '</think>';
+const THINK_OPEN = '  ';
 const DEFAULT_OLLAMA_URL = 'http://localhost:11434';
 
 // Ollama expects raw base64, not data URLs
@@ -354,10 +353,129 @@ export const useChatAPI = ({
         }
     };
 
+    // Streams a completion from Chrome's built-in Gemini Nano (Prompt API).
+    const streamChromeResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit = 10 }) => {
+        setIsLoading(true);
+        setLastCost(0);
+        setLiveReasoning({ text: '', botId: botMessageId, contentHasStarted: false });
+        setApiError(null);
+        liveReasoningTextRef.current = '';
+
+        const abortController = new AbortController();
+        streamAbortControllerRef.current = abortController;
+
+        let finalMessages = null;
+        let lmSession = null;
+
+        try {
+            if (!('LanguageModel' in window)) {
+                throw new Error('Chrome Built-in AI is not available in this browser.');
+            }
+
+            const availability = await LanguageModel.availability();
+            if (availability !== 'available' && availability !== 'readily') {
+                throw new Error(`Gemini Nano is not ready (status: ${availability}). Enable it from Local Models, Chrome tab.`);
+            }
+
+            if ((userMessage.images || []).length > 0 || (userMessage.attachments || []).some(a => a.type === 'image')) {
+                throw new Error('Gemini Nano in Chrome is text-only here. Remove the image or choose a vision model.');
+            }
+
+            let limitedHistory = historyForPayload;
+            if (typeof contextLimit === 'number' && contextLimit > 0) {
+                limitedHistory = historyForPayload.slice(-contextLimit);
+            }
+
+            const systemParts = [];
+            if (pageContext && Object.keys(pageContext).length > 0) {
+                systemParts.push(`<PageContext>\n${JSON.stringify(pageContext, null, 2)}\n</PageContext>`);
+            }
+            if ((customPrompt || '').trim()) {
+                systemParts.push(customPrompt.trim());
+            }
+
+            const initialPrompts = [];
+            if (systemParts.length > 0) {
+                initialPrompts.push({ role: 'system', content: systemParts.join('\n\n') });
+            }
+            // Everything except the latest user message becomes session context
+            for (const m of limitedHistory.slice(0, -1)) {
+                const content = formatMessageContent(m);
+                if (!content.trim()) continue;
+                initialPrompts.push({ role: m.sender === 'user' ? 'user' : 'assistant', content });
+            }
+
+            lmSession = await LanguageModel.create({ initialPrompts, signal: abortController.signal });
+
+            const currentUserInput = formatMessageContent(userMessage);
+            const stream = await lmSession.promptStreaming(currentUserInput, { signal: abortController.signal });
+
+            let fullText = '';
+            for await (const chunk of stream) {
+                const piece = String(chunk ?? '');
+                // Some Chrome builds stream deltas, others cumulative snapshots
+                fullText = piece.startsWith(fullText) ? piece : fullText + piece;
+
+                setMessages(prev => {
+                    const updated = prev.map(m => m.id === botMessageId ? { ...m, text: fullText } : m);
+                    finalMessages = updated;
+                    return updated;
+                });
+                setLiveReasoning(prev => prev.contentHasStarted ? prev : { ...prev, contentHasStarted: true });
+            }
+
+            const tokenUsage =
+                (typeof lmSession.inputUsage === 'number' && lmSession.inputUsage > 0)
+                    ? { input_tokens: lmSession.inputUsage, total_tokens: lmSession.inputUsage }
+                    : null;
+
+            const finalMeta = {
+                model: userMessage.model,
+                webSearchEnabled: false,
+                tokenUsage,
+                cost: null,
+            };
+
+            setMessages(prev => {
+                const updated = prev.map(m => m.id === botMessageId ? { ...m, meta: finalMeta } : m);
+                finalMessages = updated;
+                return updated;
+            });
+
+            const targetSessionId = sessionId || currentSessionId;
+            if (targetSessionId && finalMessages) {
+                updateCurrentSession(finalMessages, targetSessionId);
+            }
+        } catch (error) {
+            if (error?.name === 'AbortError') {
+                console.info('Chrome AI streaming was stopped by the user.');
+            } else {
+                console.error('Chrome AI error:', error);
+                const message = error?.message || 'Gemini Nano request failed.';
+                setApiError(prev => prev || { message });
+                setMessages(prev => prev.map(m =>
+                    m.id === botMessageId && !m.text ? { ...m, error: message } : m
+                ));
+            }
+        } finally {
+            try { lmSession?.destroy?.(); } catch { /* ignore */ }
+            if (streamAbortControllerRef.current === abortController) {
+                streamAbortControllerRef.current = null;
+            }
+            setIsLoading(false);
+            setLiveReasoning({ text: '', botId: null, contentHasStarted: false });
+        }
+    };
+
     const streamResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit = 10 }) => {
         // Local Ollama models use a completely different API shape
         if (userMessage?.model?.startsWith('ollama:')) {
             return streamOllamaResponse({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit });
+        }
+
+        // Chrome built-in Gemini Nano uses the LanguageModel API
+        if (userMessage?.model?.startsWith('chrome:')) {
+            return streamChromeResponse({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit });
         }
 
         setIsLoading(true);
