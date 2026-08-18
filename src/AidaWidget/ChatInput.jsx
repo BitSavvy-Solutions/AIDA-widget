@@ -856,7 +856,7 @@ const ChatInput = ({
                                                         <div className={`px-3 py-2 flex items-center justify-between gap-2 ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
                                                             <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
                                                                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${chromeStatusDot}`} />
-                                                                Chrome AI
+                                                                Chromium AI
                                                             </span>
                                                             <button
                                                                 type="button"

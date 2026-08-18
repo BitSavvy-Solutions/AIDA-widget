@@ -353,7 +353,7 @@ export const useChatAPI = ({
         }
     };
 
-    // Streams a completion from Chrome's built-in Gemini Nano (Prompt API).
+    // Streams a completion from Chrome's built-in Browser Local AI (Prompt API).
     const streamChromeResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit = 10 }) => {
         setIsLoading(true);
         setLastCost(0);
@@ -369,16 +369,16 @@ export const useChatAPI = ({
 
         try {
             if (!('LanguageModel' in window)) {
-                throw new Error('Chrome Built-in AI is not available in this browser.');
+                throw new Error('Chromium Local AI is not available in this browser.');
             }
 
             const availability = await LanguageModel.availability();
             if (availability !== 'available' && availability !== 'readily') {
-                throw new Error(`Gemini Nano is not ready (status: ${availability}). Enable it from Local Models, Chrome tab.`);
+                throw new Error(`Browser Local AI is not ready (status: ${availability}). Enable it from Local Models, Chrome tab.`);
             }
 
             if ((userMessage.images || []).length > 0 || (userMessage.attachments || []).some(a => a.type === 'image')) {
-                throw new Error('Gemini Nano in Chrome is text-only here. Remove the image or choose a vision model.');
+                throw new Error('Chromium Local AI is text-only here. Remove the image or choose a vision model.');
             }
 
             let limitedHistory = historyForPayload;
@@ -451,7 +451,7 @@ export const useChatAPI = ({
                 console.info('Chrome AI streaming was stopped by the user.');
             } else {
                 console.error('Chrome AI error:', error);
-                const message = error?.message || 'Gemini Nano request failed.';
+                const message = error?.message || 'Browser Local AI request failed.';
                 setApiError(prev => prev || { message });
                 setMessages(prev => prev.map(m =>
                     m.id === botMessageId && !m.text ? { ...m, error: message } : m
@@ -473,7 +473,7 @@ export const useChatAPI = ({
             return streamOllamaResponse({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit });
         }
 
-        // Chrome built-in Gemini Nano uses the LanguageModel API
+        // Chrome built-in Browser Local AI uses the LanguageModel API
         if (userMessage?.model?.startsWith('chrome:')) {
             return streamChromeResponse({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit });
         }

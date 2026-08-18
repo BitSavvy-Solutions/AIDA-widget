@@ -2,20 +2,8 @@
 import React, { useEffect } from 'react';
 import {
     HiArrowPath, HiCheckCircle, HiExclamationTriangle, HiOutlineSparkles,
-    HiOutlineDocumentText, HiOutlineGlobeAlt, HiOutlineMagnifyingGlass,
-    HiOutlinePencilSquare, HiOutlineAcademicCap,
     HiOutlineArrowDownTray,
 } from 'react-icons/hi2';
-
-const ICONS = {
-    prompt: HiOutlineSparkles,
-    summarizer: HiOutlineDocumentText,
-    translator: HiOutlineGlobeAlt,
-    detector: HiOutlineMagnifyingGlass,
-    writer: HiOutlinePencilSquare,
-    rewriter: HiOutlinePencilSquare,
-    proofreader: HiOutlineAcademicCap,
-};
 
 const badgeFor = (phase, isDark) => {
     const map = {
@@ -33,7 +21,6 @@ const badgeFor = (phase, isDark) => {
 const ChromeAIPanel = ({ chromeAI, theme = 'dark', onClose }) => {
     const {
         defs, statuses, support,
-        translatorTarget, setTranslatorTarget, translatorTargets,
         checkAll, enableApi, testApi,
     } = chromeAI;
 
@@ -58,7 +45,6 @@ const ChromeAIPanel = ({ chromeAI, theme = 'dark', onClose }) => {
         const state = statuses[def.key] || { phase: 'checking' };
         const { phase, progress, error, testing, testResult } = state;
         const badge = badgeFor(phase, isDark);
-        const Icon = ICONS[def.key] || HiOutlineSparkles;
         const isDead = phase === 'unavailable' || phase === 'unsupported';
         const isBusy = phase === 'checking' || phase === 'downloading' || testing;
 
@@ -71,7 +57,7 @@ const ChromeAIPanel = ({ chromeAI, theme = 'dark', onClose }) => {
             >
                 <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
-                        <Icon className={`w-4 h-4 shrink-0 ${isDead ? 'opacity-50' : 'text-teal-400'}`} />
+                        <HiOutlineSparkles className={`w-4 h-4 shrink-0 ${isDead ? 'opacity-50' : 'text-teal-400'}`} />
                         <span className={`text-xs font-semibold truncate ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>
                             {def.label}
                         </span>
@@ -82,24 +68,6 @@ const ChromeAIPanel = ({ chromeAI, theme = 'dark', onClose }) => {
                 </div>
 
                 <p className={`mt-1 text-[11px] ${subText}`}>{def.tagline}</p>
-
-                {def.key === 'translator' && !isDead && (
-                    <div className="mt-2 flex items-center gap-2">
-                        <span className={`text-[10px] uppercase tracking-wider font-semibold ${subText}`}>en →</span>
-                        <select
-                            value={translatorTarget}
-                            onChange={(e) => setTranslatorTarget(e.target.value)}
-                            disabled={isBusy}
-                            className={`text-xs px-2 py-1 rounded-md border outline-none disabled:opacity-50 ${
-                                isDark ? 'bg-gray-900 border-gray-700 text-gray-200' : 'bg-white border-gray-300 text-gray-700'
-                            }`}
-                        >
-                            {translatorTargets.map(t => (
-                                <option key={t.code} value={t.code}>{t.label}</option>
-                            ))}
-                        </select>
-                    </div>
-                )}
 
                 {phase === 'downloading' && (
                     <div className={`mt-2 h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-gray-800' : 'bg-gray-200'}`}>
@@ -157,7 +125,7 @@ const ChromeAIPanel = ({ chromeAI, theme = 'dark', onClose }) => {
                 {/* Summary row */}
                 <div className="flex items-center justify-between gap-2">
                     <p className={`text-[11px] leading-snug ${subText}`}>
-                        Runs fully on-device via Gemini Nano and expert models.
+                        Runs fully on-device via Browser Local AI.
                     </p>
                     <div className="flex items-center gap-2 shrink-0">
                         <span className={`text-[10px] font-semibold ${readyCount > 0 ? (isDark ? 'text-emerald-300' : 'text-emerald-600') : subText}`}>
@@ -178,7 +146,7 @@ const ChromeAIPanel = ({ chromeAI, theme = 'dark', onClose }) => {
                     </div>
                 </div>
 
-                {/* Unsupported banner: features stay visible but greyed out */}
+                {/* Unsupported banner: feature stays visible but greyed out */}
                 {!support.supported && (
                     <div className={`rounded-lg border p-3 text-xs leading-relaxed ${
                         isDark ? 'bg-amber-500/5 border-amber-500/30 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-700'
@@ -186,9 +154,9 @@ const ChromeAIPanel = ({ chromeAI, theme = 'dark', onClose }) => {
                         <div className="flex items-start gap-2">
                             <HiExclamationTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                             <p>
-                                This browser does not expose Chrome's Built-in AI APIs. Update Chrome and enable
-                                the Gemini Nano flags at <code className="font-mono">chrome://flags</code>,
-                                then relaunch. Features below are shown but cannot be enabled here.
+                                This browser does not expose Chrome's Built-in AI Prompt API. Update Chrome and
+                                enable the Prompt API flags at <code className="font-mono">chrome://flags</code>,
+                                then relaunch. Browser Local AI is shown below but cannot be enabled here.
                             </p>
                         </div>
                     </div>

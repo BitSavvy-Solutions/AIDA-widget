@@ -157,7 +157,7 @@ const ChromeAIPanel = ({ chromeAI, theme = 'dark', onClose }) => {
                 {/* Summary row */}
                 <div className="flex items-center justify-between gap-2">
                     <p className={`text-[11px] leading-snug ${subText}`}>
-                        Runs fully on-device via Gemini Nano and expert models.
+                        Runs fully on-device via Browser Local AI and expert models.
                     </p>
                     <div className="flex items-center gap-2 shrink-0">
                         <span className={`text-[10px] font-semibold ${readyCount > 0 ? (isDark ? 'text-emerald-300' : 'text-emerald-600') : subText}`}>
@@ -187,7 +187,7 @@ const ChromeAIPanel = ({ chromeAI, theme = 'dark', onClose }) => {
                             <HiExclamationTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                             <p>
                                 This browser does not expose Chrome's Built-in AI APIs. Update Chrome and enable
-                                the Gemini Nano flags at <code className="font-mono">chrome://flags</code>,
+                                the Browser Local AI flags at <code className="font-mono">chrome://flags</code>,
                                 then relaunch. Features below are shown but cannot be enabled here.
                             </p>
                         </div>
