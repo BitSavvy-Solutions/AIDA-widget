@@ -1,0 +1,198 @@
+/* src/AidaWidget/ChromeAIPanel.jsx */
+import React from 'react';
+import {
+    HiArrowPath, HiCheckCircle, HiExclamationTriangle, HiOutlineSparkles,
+    HiOutlineDocumentText, HiOutlineGlobeAlt, HiOutlineMagnifyingGlass,
+    HiOutlinePencilSquare, HiOutlineArrowPathRoundedSquare, HiOutlineAcademicCap,
+    HiOutlineArrowDownTray,
+} from 'react-icons/hi2';
+import { useChromeAI } from './hooks';
+
+const ICONS = {
+    prompt: HiOutlineSparkles,
+    summarizer: HiOutlineDocumentText,
+    translator: HiOutlineGlobeAlt,
+    detector: HiOutlineMagnifyingGlass,
+    writer: HiOutlinePencilSquare,
+    rewriter: HiOutlineArrowPathRoundedSquare,
+    proofreader: HiOutlineAcademicCap,
+};
+
+const badgeFor = (phase, isDark) => {
+    const map = {
+        checking:     { label: 'Checking', cls: isDark ? 'bg-gray-700/60 text-gray-400' : 'bg-gray-100 text-gray-500', pulse: true },
+        available:    { label: 'Ready', cls: isDark ? 'bg-emerald-500/15 text-emerald-300' : 'bg-emerald-50 text-emerald-600' },
+        downloadable: { label: 'Needs download', cls: isDark ? 'bg-amber-500/15 text-amber-300' : 'bg-amber-50 text-amber-600' },
+        downloading:  { label: 'Downloading', cls: isDark ? 'bg-blue-500/15 text-blue-300' : 'bg-blue-50 text-blue-600' },
+        unavailable:  { label: 'Unavailable', cls: isDark ? 'bg-gray-700/60 text-gray-500' : 'bg-gray-100 text-gray-400' },
+        unsupported:  { label: 'Not in this Chrome', cls: isDark ? 'bg-gray-700/60 text-gray-500' : 'bg-gray-100 text-gray-400' },
+        error:        { label: 'Error', cls: isDark ? 'bg-red-500/15 text-red-300' : 'bg-red-50 text-red-600' },
+    };
+    return map[phase] || map.checking;
+};
+
+const ChromeAIPanel = ({ theme = 'dark', isActive = false }) => {
+    const {
+        defs, statuses, support,
+        translatorTarget, setTranslatorTarget, translatorTargets,
+        checkAll, enableApi, testApi,
+    } = useChromeAI(isActive);
+
+    const isDark = theme === 'dark';
+    const readyCount = defs.filter(d => statuses[d.key]?.phase === 'available').length;
+    const anyChecking = defs.some(d => statuses[d.key]?.phase === 'checking');
+
+    const subText = isDark ? 'text-gray-500' : 'text-gray-400';
+    const tealBtn = 'flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-teal-600 hover:bg-teal-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+    const ghostBtn = `flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+        isDark ? 'border-gray-700 hover:bg-gray-800 text-gray-300' : 'border-gray-300 hover:bg-gray-100 text-gray-600'
+    }`;
+
+    const renderCard = (def) => {
+        const state = statuses[def.key] || { phase: 'checking' };
+        const { phase, progress, error, testing, testResult } = state;
+        const badge = badgeFor(phase, isDark);
+        const Icon = ICONS[def.key] || HiOutlineSparkles;
+        const isDead = phase === 'unavailable' || phase === 'unsupported';
+        const isBusy = phase === 'checking' || phase === 'downloading' || testing;
+
+        return (
+            <div
+                key={def.key}
+                className={`rounded-lg border p-3 transition-opacity ${
+                    isDark ? 'bg-gray-950 border-gray-700' : 'bg-gray-50 border-gray-200'
+                } ${isDead ? 'opacity-60' : ''}`}
+            >
+                <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <Icon className={`w-4 h-4 shrink-0 ${isDead ? 'opacity-50' : 'text-teal-400'}`} />
+                        <span className={`text-xs font-semibold truncate ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>
+                            {def.label}
+                        </span>
+                    </div>
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${badge.cls} ${badge.pulse ? 'animate-pulse' : ''}`}>
+                        {phase === 'downloading' && typeof progress === 'number' ? `Downloading ${progress}%` : badge.label}
+                    </span>
+                </div>
+
+                <p className={`mt-1 text-[11px] ${subText}`}>{def.tagline}</p>
+
+                {def.key === 'translator' && !isDead && (
+                    <div className="mt-2 flex items-center gap-2">
+                        <span className={`text-[10px] uppercase tracking-wider font-semibold ${subText}`}>en →</span>
+                        <select
+                            value={translatorTarget}
+                            onChange={(e) => setTranslatorTarget(e.target.value)}
+                            disabled={isBusy}
+                            className={`text-xs px-2 py-1 rounded-md border outline-none disabled:opacity-50 ${
+                                isDark ? 'bg-gray-900 border-gray-700 text-gray-200' : 'bg-white border-gray-300 text-gray-700'
+                            }`}
+                        >
+                            {translatorTargets.map(t => (
+                                <option key={t.code} value={t.code}>{t.label}</option>
+                            ))}
+                        </select>
+                    </div>
+                )}
+
+                {phase === 'downloading' && (
+                    <div className={`mt-2 h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-gray-800' : 'bg-gray-200'}`}>
+                        {typeof progress === 'number' ? (
+                            <div className="h-full rounded-full bg-teal-500 transition-all duration-300" style={{ width: `${progress}%` }} />
+                        ) : (
+                            <div className="h-full w-full rounded-full bg-teal-500/40 animate-pulse" />
+                        )}
+                    </div>
+                )}
+
+                {phase === 'error' && error && (
+                    <p className={`mt-2 text-[11px] break-words ${isDark ? 'text-red-300' : 'text-red-600'}`}>{error}</p>
+                )}
+
+                {testResult && (
+                    <p className={`mt-2 text-[11px] font-mono break-words ${isDark ? 'text-emerald-300/90' : 'text-emerald-600'}`}>
+                        {testResult}
+                    </p>
+                )}
+
+                <div className="mt-2.5 flex justify-end gap-2">
+                    {phase === 'available' && (
+                        <button type="button" onClick={() => testApi(def.key)} disabled={testing} className={ghostBtn}>
+                            {testing ? <HiArrowPath className="w-3.5 h-3.5 animate-spin" /> : <HiCheckCircle className="w-3.5 h-3.5" />}
+                            {testing ? 'Testing' : 'Test'}
+                        </button>
+                    )}
+                    {phase === 'downloadable' && (
+                        <button type="button" onClick={() => enableApi(def.key)} className={tealBtn}>
+                            <HiOutlineArrowDownTray className="w-3.5 h-3.5" />
+                            Enable
+                        </button>
+                    )}
+                    {phase === 'error' && (
+                        <button type="button" onClick={() => enableApi(def.key)} className={tealBtn}>
+                            <HiArrowPath className="w-3.5 h-3.5" />
+                            Retry
+                        </button>
+                    )}
+                    {(isDead || phase === 'checking' || phase === 'downloading') && (
+                        <button type="button" disabled className={ghostBtn}>
+                            {phase === 'checking' ? '...' : phase === 'downloading' ? 'Downloading' : badge.label}
+                        </button>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    return (
+        <div className="space-y-3">
+            {/* Summary row */}
+            <div className="flex items-center justify-between gap-2">
+                <p className={`text-[11px] leading-snug ${subText}`}>
+                    Runs fully on-device via Gemini Nano and expert models.
+                </p>
+                <div className="flex items-center gap-2 shrink-0">
+                    <span className={`text-[10px] font-semibold ${readyCount > 0 ? (isDark ? 'text-emerald-300' : 'text-emerald-600') : subText}`}>
+                        {readyCount}/{defs.length} ready
+                    </span>
+                    <button
+                        type="button"
+                        onClick={checkAll}
+                        disabled={anyChecking}
+                        className={`p-1.5 rounded-lg transition-colors disabled:opacity-50 ${
+                            isDark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
+                        }`}
+                        title="Re-check availability"
+                        aria-label="Re-check availability"
+                    >
+                        <HiArrowPath className={`w-3.5 h-3.5 ${anyChecking ? 'animate-spin' : ''}`} />
+                    </button>
+                </div>
+            </div>
+
+            {/* Unsupported banner: features stay visible but greyed out */}
+            {!support.supported && (
+                <div className={`rounded-lg border p-3 text-xs leading-relaxed ${
+                    isDark ? 'bg-amber-500/5 border-amber-500/30 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-700'
+                }`}>
+                    <div className="flex items-start gap-2">
+                        <HiExclamationTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                        <p>
+                            This browser does not expose Chrome's Built-in AI APIs. Update Chrome and enable
+                            the Gemini Nano flags at <code className="font-mono">chrome://flags</code>,
+                            then relaunch. Features below are shown but cannot be enabled here.
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {defs.map(renderCard)}
+
+            <p className={`text-[10px] text-center ${subText}`}>
+                Model files are managed by Chrome at chrome://on-device-internals
+            </p>
+        </div>
+    );
+};
+
+export default ChromeAIPanel;

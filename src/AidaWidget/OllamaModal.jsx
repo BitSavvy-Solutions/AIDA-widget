@@ -1,10 +1,12 @@
 /* src/AidaWidget/OllamaModal.jsx */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     HiXMark, HiArrowPath, HiOutlineCpuChip, HiExclamationTriangle,
     HiCheckCircle, HiOutlineArrowDownTray,
 } from 'react-icons/hi2';
 import { formatSize } from './hooks/useOllama';
+import { getChromeAISupport } from './hooks';
+import ChromeAIPanel from './ChromeAIPanel';
 
 const STATUS_META = {
     disconnected: { dot: 'bg-gray-500', label: 'Not connected', labelClass: 'text-gray-400' },
@@ -12,6 +14,8 @@ const STATUS_META = {
     connected:    { dot: 'bg-emerald-400', label: 'Connected', labelClass: 'text-emerald-400' },
     error:        { dot: 'bg-red-400', label: 'Connection failed', labelClass: 'text-red-400' },
 };
+
+const TAB_STORAGE_KEY = 'aida-local-models-tab';
 
 const OllamaModal = ({
     isOpen,
@@ -33,6 +37,19 @@ const OllamaModal = ({
 }) => {
     const [draftUrl, setDraftUrl] = useState(baseUrl);
     const [pullName, setPullName] = useState('');
+
+    // NEW: tab state, persisted so the user lands where they left off
+    const [activeTab, setActiveTab] = useState(() => {
+        try { return localStorage.getItem(TAB_STORAGE_KEY) || 'ollama'; }
+        catch { return 'ollama'; }
+    });
+
+    // NEW: sync support probe for the tab badge (no async work here)
+    const chromeSupport = useMemo(() => getChromeAISupport(), []);
+
+    useEffect(() => {
+        try { localStorage.setItem(TAB_STORAGE_KEY, activeTab); } catch { /* ignore */ }
+    }, [activeTab]);
 
     useEffect(() => {
         if (isOpen) setDraftUrl(baseUrl);
@@ -73,7 +90,6 @@ const OllamaModal = ({
 
     const handlePullInputChange = (e) => {
         setPullName(e.target.value);
-        // Typing a new name dismisses the previous success/error banner
         if (pullState && pullState.phase !== 'pulling') onClearPullState?.();
     };
 
@@ -94,17 +110,42 @@ const OllamaModal = ({
         isDark ? 'border-gray-700 hover:bg-gray-800 text-gray-300' : 'border-gray-300 hover:bg-gray-100 text-gray-600'
     }`;
 
-    // Support both the new object shape { message, raw } and old string errors
     const errorMessage = typeof error === 'object' ? error?.message : error;
     const errorRaw = typeof error === 'object' ? error?.raw : null;
+
+    // NEW: shared tab button renderer
+    const renderTab = (id, label, dotClass, badgeText) => {
+        const active = activeTab === id;
+        return (
+            <button
+                key={id}
+                type="button"
+                onClick={() => setActiveTab(id)}
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-t-lg border-b-2 transition-colors ${
+                    active
+                        ? (isDark ? 'border-teal-500 text-teal-300 bg-gray-800/60' : 'border-teal-500 text-teal-600 bg-teal-50/60')
+                        : (isDark ? 'border-transparent text-gray-500 hover:text-gray-300 hover:bg-gray-800/40' : 'border-transparent text-gray-400 hover:text-gray-600 hover:bg-gray-50')
+                }`}
+                aria-selected={active}
+                role="tab"
+            >
+                {dotClass && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass}`} />}
+                {label}
+                {badgeText && (
+                    <span className={`text-[9px] font-bold px-1 py-px rounded ${isDark ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500'}`}>
+                        {badgeText}
+                    </span>
+                )}
+            </button>
+        );
+    };
 
     return (
         <div
             className="fixed inset-0 z-[70] flex items-center justify-center px-4"
             role="dialog"
             aria-modal="true"
-            aria-label="Ollama connection"
-            // Keep the model selector underneath from closing while interacting here
+            aria-label="Local models"
             onPointerDown={(e) => e.stopPropagation()}
         >
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
@@ -118,7 +159,7 @@ const OllamaModal = ({
                         <div className={`p-1.5 rounded-lg ${isDark ? 'bg-teal-500/10 text-teal-400' : 'bg-teal-50 text-teal-600'}`}>
                             <HiOutlineCpuChip className="w-4 h-4" />
                         </div>
-                        <h3 className="text-sm font-semibold">Ollama · Local Models</h3>
+                        <h3 className="text-sm font-semibold">Local Models</h3>
                     </div>
                     <button
                         type="button"
@@ -130,7 +171,18 @@ const OllamaModal = ({
                     </button>
                 </div>
 
-                <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                {/* NEW: Tab bar */}
+                <div className={`flex gap-1 px-4 pt-2 border-b ${isDark ? 'border-gray-800' : 'border-gray-100'}`} role="tablist">
+                    {renderTab('ollama', 'Ollama', meta.dot, null)}
+                    {renderTab('chrome', 'Chrome', null, chromeSupport.supported ? null : 'N/A')}
+                </div>
+
+                {/* Body */}
+                <div className="px-5 py-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                    {activeTab === 'chrome' ? (
+                        <ChromeAIPanel theme={theme} isActive={activeTab === 'chrome'} />
+                    ) : (
+                    <div className="space-y-4">
                     {/* Status row */}
                     <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
@@ -223,7 +275,6 @@ const OllamaModal = ({
                                             </span>
                                         </div>
 
-                                        {/* Progress bar (indeterminate while fetching the manifest) */}
                                         <div className={`h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-gray-800' : 'bg-gray-200'}`}>
                                             {pullPercent !== null ? (
                                                 <div
@@ -280,7 +331,6 @@ const OllamaModal = ({
                                     </div>
                                 )}
 
-                                {/* Pull result banners */}
                                 {pullState?.phase === 'success' && (
                                     <div className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 ${
                                         isDark ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-emerald-50 border-emerald-200'
@@ -370,9 +420,22 @@ const OllamaModal = ({
                             </div>
                         </>
                     )}
+                    </div>
+                    )}
                 </div>
 
                 {/* Footer */}
+                {activeTab === 'chrome' ? (
+                    <div className={`flex items-center gap-2 px-5 py-3.5 border-t ${isDark ? 'border-gray-800' : 'border-gray-100'}`}>
+                        <span className={`text-[10px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                            Managed by Chrome
+                        </span>
+                        <div className="flex-1" />
+                        <button type="button" onClick={onClose} className={primaryBtnClass}>
+                            Done
+                        </button>
+                    </div>
+                ) : (
                 <div className={`flex items-center gap-2 px-5 py-3.5 border-t ${isDark ? 'border-gray-800' : 'border-gray-100'}`}>
                     {isConnected && (
                         <button
@@ -408,6 +471,7 @@ const OllamaModal = ({
                         </button>
                     )}
                 </div>
+                )}
             </div>
         </div>
     );
