@@ -190,6 +190,7 @@ const AidaWidget = (props) => {
 
     const [selectedAudioModel, setSelectedAudioModel] = useState(() => {
         const saved = localStorage.getItem('aida-selected-audio-model');
+        if (saved?.startsWith('chrome:')) return saved;
         const exists = availableAudioModels.some(m => m.value === saved);
         return exists ? saved : availableAudioModels[0].value;
     });
@@ -351,7 +352,7 @@ const AidaWidget = (props) => {
         nextMessages = [...messages, userMessage, { id: botMessageId, sender: 'bot', text: '' }];
         setMessages(nextMessages);
         if (!activeSessionId) {
-            activeSessionId = createNewSession(nextMessages);
+            activeSessionId = await createNewSession(nextMessages);
         } else {
             updateCurrentSession(nextMessages);
         }
@@ -707,7 +708,7 @@ const AidaWidget = (props) => {
                             onEmbedUrl={handleOpenEmbed}
                             onDeleteMessage={handleDeleteMessage}
                         />
-                        <ChatInput
+                                                <ChatInput
                             handleSendMessage={stableHandleSendMessage}
                             handleRecordButtonClick={handleRecordButtonClick}
                             inputRef={inputRef}
@@ -753,6 +754,7 @@ const AidaWidget = (props) => {
                             ollamaModels={ollama.models}
                             ollamaStatus={ollama.status}
                             chromeModels={chromeAI.chatModels}
+                            chromeAudioModels={chromeAI.audioModels}
                             isLocalModelsModalOpen={isLocalModelsModalOpen}
                             onOllamaRefresh={() => ollama.fetchModels()}
                             onOpenOllamaSettings={() => { setLocalModelsTab('ollama'); setIsLocalModelsModalOpen(true); }}

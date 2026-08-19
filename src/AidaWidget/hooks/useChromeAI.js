@@ -5,10 +5,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
  * Chrome Built-in AI (Browser Local AI via the Prompt API).
  *
  * Single source of truth for support, availability and download progress.
- * Lives at the widget level so the model selector, the chat pipeline and the
- * management panel all read the same state. Availability sweeps are cheap
- * (one call per activation) and sessions are destroyed immediately after
- * enable/test so no memory is held.
+ * Multimodal capabilities (image input, audio input) are probed independently
+ * because a given Chromium build can support one but not the other.
  */
 
 const API_DEFS = [
@@ -16,15 +14,12 @@ const API_DEFS = [
         key: 'prompt',
         label: 'Prompt API',
         globalName: 'LanguageModel',
-        tagline: 'Browser Local AI · free-form prompts',
-        availabilityOptions: () => ({}),
-        createOptions: () => ({}),
+        tagline: 'Browser Local AI · text, image & audio prompts',
     },
 ];
 
-// Some Chromium forks (e.g. Opera) expose the LanguageModel global even when
-// the feature flag is off, but availability() never resolves. Racing it
-// against a timeout prevents the UI from getting stuck in "checking".
+// Some Chromium forks expose the LanguageModel global even when the feature
+// flag is off, but availability() never resolves. Race it against a timeout.
 const AVAILABILITY_TIMEOUT_MS = 5000;
 
 const withTimeout = (promise, ms) => Promise.race([
@@ -66,6 +61,12 @@ export const getChromeAISupport = () => {
     return { supported, apis };
 };
 
+// Options used to probe each non-text input modality on its own.
+const MODALITY_PROBE_OPTIONS = {
+    image: { expectedInputs: [{ type: 'text' }, { type: 'image' }] },
+    audio: { expectedInputs: [{ type: 'text' }, { type: 'audio' }] },
+};
+
 export const useChromeAI = (isActive) => {
     const [statuses, setStatuses] = useState({});
     const mountedRef = useRef(true);
@@ -92,12 +93,10 @@ export const useChromeAI = (isActive) => {
 
         await Promise.all(API_DEFS.map(async (def) => {
             if (!support.apis[def.key]) return;
+            const ctor = window[def.globalName];
+
             try {
-                const ctor = window[def.globalName];
-                const raw = await withTimeout(
-                    ctor.availability(def.availabilityOptions()),
-                    AVAILABILITY_TIMEOUT_MS
-                );
+                const raw = await withTimeout(ctor.availability(), AVAILABILITY_TIMEOUT_MS);
                 setStatus(def.key, { phase: normalizeAvailability(raw) });
             } catch (err) {
                 if (err?.message === 'availability-timeout') {
@@ -106,7 +105,25 @@ export const useChromeAI = (isActive) => {
                 } else {
                     setStatus(def.key, { phase: 'unavailable' });
                 }
+                return;
             }
+
+            // Probe multimodal input support in parallel. Each capability is
+            // independent, and unsupported ones throw NotSupportedError.
+            const probe = async (modality) => {
+                try {
+                    const raw = await withTimeout(
+                        ctor.availability(MODALITY_PROBE_OPTIONS[modality]),
+                        AVAILABILITY_TIMEOUT_MS
+                    );
+                    return normalizeAvailability(raw);
+                } catch {
+                    return 'unavailable';
+                }
+            };
+
+            const [imagePhase, audioPhase] = await Promise.all([probe('image'), probe('audio')]);
+            setStatus(def.key, { modalities: { image: imagePhase, audio: audioPhase } });
         }));
     }, [setStatus]);
 
@@ -120,10 +137,18 @@ export const useChromeAI = (isActive) => {
         const ctor = def && window[def.globalName];
         if (!ctor) return;
 
+        // Declare every modality this build can support so a single download
+        // enables text, image and audio inputs together.
+        const mods = statuses[key]?.modalities || {};
+        const expectedInputs = [{ type: 'text', languages: ['en'] }];
+        if (mods.image && mods.image !== 'unavailable') expectedInputs.push({ type: 'image' });
+        if (mods.audio && mods.audio !== 'unavailable') expectedInputs.push({ type: 'audio' });
+
         setStatus(key, { phase: 'downloading', progress: 0, error: undefined });
         try {
             const instance = await ctor.create({
-                ...def.createOptions(),
+                expectedInputs,
+                expectedOutputs: [{ type: 'text', languages: ['en'] }],
                 monitor(m) {
                     m.addEventListener('downloadprogress', (e) => {
                         const pct = Math.max(0, Math.min(100, Math.round((e.loaded ?? 0) * 100)));
@@ -133,33 +158,64 @@ export const useChromeAI = (isActive) => {
             });
             instance?.destroy?.();
             setStatus(key, { phase: 'available', progress: undefined });
+            checkAll(); // refresh modality states after the download completes
         } catch (err) {
             setStatus(key, { phase: 'error', progress: undefined, error: err?.message || 'Download failed.' });
         }
-    }, [setStatus]);
+    }, [setStatus, statuses, checkAll]);
 
-
-    // Selector-ready view of the Prompt API. This is the model the chat
-    // pipeline uses when a "chrome:" model is selected.
+    // Selector-ready view of the Prompt API for chat. The modality string
+    // reflects the input types that are actually ready on this device, and
+    // drives the capability badges in the model selector.
     const chatModels = useMemo(() => {
         const phase = statuses.prompt?.phase || 'checking';
+        const mods = statuses.prompt?.modalities || {};
+        const imageReady = mods.image === 'available';
+        const audioReady = mods.audio === 'available';
+        const inputs = ['text'];
+        if (imageReady) inputs.push('image');
+        if (audioReady) inputs.push('audio');
         return [{
             value: 'chrome:localai',
             label: 'Browser Local AI',
             category: 'local',
-            modality: 'text->text',
+            modality: `${inputs.join('+')}->text`,
             description: 'Chrome built-in',
             chrome: true,
             status: phase,
             selectable: phase === 'available',
+            supportsImageInput: imageReady,
+            supportsAudioInput: audioReady,
         }];
-    }, [statuses.prompt?.phase]);
+    }, [statuses.prompt]);
+
+    // On-device audio transcription, exposed as audio models so it appears
+    // next to Whisper / Saaras in the audio model list. Only listed when the
+    // audio input capability is actually ready on this device.
+    const audioModels = useMemo(() => {
+        const phase = statuses.prompt?.phase;
+        const audioPhase = statuses.prompt?.modalities?.audio;
+        if (phase !== 'available' || audioPhase !== 'available') return [];
+        const base = {
+            category: 'audio',
+            modality: 'audio->text',
+            description: 'Chrome built-in',
+            chrome: true,
+            status: 'available',
+            selectable: true,
+        };
+        return [
+            { ...base, value: 'chrome:localai-transcribe', label: 'Browser Local AI (On-device)' },
+            { ...base, value: 'chrome:localai-transcribe|translate', label: 'Browser Local AI (Translate to EN)' },
+        ];
+    }, [statuses.prompt]);
 
     return {
         defs: API_DEFS,
         statuses,
         support: getChromeAISupport(),
         chatModels,
+        audioModels,
         checkAll,
         enableApi,
     };

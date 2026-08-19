@@ -4,6 +4,48 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 const MAX_RECORDING_SECONDS = 600;
 const WARNING_THRESHOLD_SECONDS = 540;
 
+// Transcribes (or translates) an audio blob fully on-device via the Prompt API.
+// The blob is decoded to an AudioBuffer, which is the accepted audio value type.
+const transcribeWithChromeAI = async (audioBlob, mode, signal) => {
+    if (!('LanguageModel' in window)) {
+        throw new Error('Browser Local AI is not available in this browser.');
+    }
+
+    const arrayBuffer = await audioBlob.arrayBuffer();
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioCtx();
+    let audioBuffer;
+    try {
+        audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    } finally {
+        try { audioCtx.close(); } catch { /* ignore */ }
+    }
+
+    const session = await LanguageModel.create({
+        expectedInputs: [{ type: 'text', languages: ['en'] }, { type: 'audio' }],
+        expectedOutputs: [{ type: 'text', languages: ['en'] }],
+        signal,
+    });
+
+    try {
+        const instruction = mode === 'translate'
+            ? 'Translate the speech in this audio into English. Return only the translated text, with no commentary.'
+            : 'Transcribe the speech in this audio exactly as spoken. Return only the transcription, with no commentary or timestamps.';
+
+        const result = await session.prompt([{
+            role: 'user',
+            content: [
+                { type: 'text', value: instruction },
+                { type: 'audio', value: audioBuffer },
+            ],
+        }], { signal });
+
+        return String(result || '').trim();
+    } finally {
+        try { session.destroy(); } catch { /* ignore */ }
+    }
+};
+
 export const useVoiceInput = ({ transcriptionUrl, selectedAudioModel }) => {
     const [isRecording, setIsRecording] = useState(false);
     const [elapsedTime, setElapsedTime] = useState(0);
@@ -23,6 +65,32 @@ export const useVoiceInput = ({ transcriptionUrl, selectedAudioModel }) => {
 
         setRecordings(prev => prev.map(r => r.id === id ? { ...r, isTranscribing: true, error: null } : r));
 
+        // On-device path: Browser Local AI (Chrome Prompt API)
+        if (selectedAudioModel?.startsWith('chrome:')) {
+            const mode = selectedAudioModel.includes('|')
+                ? selectedAudioModel.split('|')[1]
+                : 'transcribe';
+
+            const abortController = new AbortController();
+            abortControllersRef.current[id] = abortController;
+
+            try {
+                const text = await transcribeWithChromeAI(audioBlob, mode, abortController.signal);
+                setRecordings(prev => prev.map(r => r.id === id ? { ...r, transcription: text, isTranscribing: false } : r));
+            } catch (error) {
+                if (error?.name === 'AbortError') {
+                    console.info('Local transcription was cancelled by the user.');
+                } else {
+                    console.error('Local transcription error:', error);
+                    setRecordings(prev => prev.map(r => r.id === id ? { ...r, error: error.message || 'Local transcription failed.', isTranscribing: false } : r));
+                }
+            } finally {
+                delete abortControllersRef.current[id];
+            }
+            return;
+        }
+
+        // Backend path: Whisper / Saaras via the transcription endpoint
         const formData = new FormData();
         formData.append('audio_file', audioBlob, 'recording.webm');
 

@@ -169,6 +169,7 @@ const ChatInput = ({
     ollamaModels = [],
     ollamaStatus = 'disconnected',
     chromeModels = [],
+    chromeAudioModels = [],
     isLocalModelsModalOpen = false,
     onOllamaRefresh,
     onOpenOllamaSettings,
@@ -210,7 +211,7 @@ const ChatInput = ({
         'flag-disabled': 'bg-amber-400',
         error: 'bg-red-400',
     }[chromeStatus] || 'bg-gray-500';
-    
+
     const CHROME_STATUS_LABELS = {
         checking: 'Checking',
         available: 'Ready',
@@ -258,13 +259,12 @@ const ChatInput = ({
         if (modelSearchQuery.trim() || isSearchingModels) return [];
         return recentModelValues
             .map(recent => {
-                const source = recent.type === 'audio' ? availableAudioModels : [...ollamaModels, ...chromeModels, ...availableModels];
+                const source = recent.type === 'audio' ? [...chromeAudioModels, ...availableAudioModels] : [...ollamaModels, ...chromeModels, ...availableModels];
                 const found = source.find(m => m.value === recent.value);
                 return found ? { ...found, _type: recent.type } : null;
             })
             .filter(Boolean);
-    }, [recentModelValues, availableModels, availableAudioModels, ollamaModels, chromeModels, modelSearchQuery, isSearchingModels]);
-
+    }, [recentModelValues, availableModels, availableAudioModels, ollamaModels, chromeModels, chromeAudioModels, modelSearchQuery, isSearchingModels]);
     const filteredTextModels = useMemo(() => {
         const sourceModels = searchedModels ? searchedModels.text : availableModels;
         const seen = new Set();
@@ -290,7 +290,7 @@ const ChatInput = ({
     }, [availableModels, modelSearchQuery, searchedModels, recentModelValues]);
 
     const filteredAudioModels = useMemo(() => {
-        const sourceModels = searchedModels ? searchedModels.audio : availableAudioModels;
+        const sourceModels = [...chromeAudioModels, ...(searchedModels ? searchedModels.audio : availableAudioModels)];
         const seen = new Set();
         const unique = sourceModels.filter((m) => {
             if (seen.has(m.value)) return false;
@@ -298,7 +298,12 @@ const ChatInput = ({
             return true;
         });
 
-        if (searchedModels) return unique;
+        if (searchedModels) {
+            // Server results are already filtered; filter local models client-side
+            const q = modelSearchQuery.trim().toLowerCase();
+            if (!q) return unique;
+            return unique.filter(m => !m.chrome || m.label.toLowerCase().includes(q));
+        }
 
         const q = modelSearchQuery.trim().toLowerCase();
         if (!q) {
@@ -311,7 +316,7 @@ const ChatInput = ({
             const searchable = `${m.label} ${m.category || ''}`.toLowerCase();
             return words.every((word) => searchable.includes(word));
         });
-    }, [availableAudioModels, modelSearchQuery, searchedModels, recentModelValues]);
+    }, [availableAudioModels, chromeAudioModels, modelSearchQuery, searchedModels, recentModelValues]);
 
     const selectableItems = useMemo(() => [
         ...recentModelItems,
@@ -663,11 +668,10 @@ const ChatInput = ({
             key={opt.value}
             type="button"
             onClick={onOpenChromeAISettings}
-            className={`w-full text-left px-2.5 py-2 text-sm rounded-lg flex items-start gap-2.5 transition-colors border border-dashed ${
-                isDark
-                    ? 'border-gray-700 text-gray-400 hover:border-teal-500/50 hover:text-teal-300'
-                    : 'border-gray-300 text-gray-500 hover:border-teal-500/60 hover:text-teal-600'
-            }`}
+            className={`w-full text-left px-2.5 py-2 text-sm rounded-lg flex items-start gap-2.5 transition-colors border border-dashed ${isDark
+                ? 'border-gray-700 text-gray-400 hover:border-teal-500/50 hover:text-teal-300'
+                : 'border-gray-300 text-gray-500 hover:border-teal-500/60 hover:text-teal-600'
+                }`}
         >
             <div className={`p-1.5 rounded-md flex-shrink-0 mt-0.5 ${isDark ? 'bg-teal-500/10 text-teal-400' : 'bg-teal-50 text-teal-600'}`}>
                 <HiOutlineCpuChip className="w-4 h-4" />
@@ -864,8 +868,8 @@ const ChatInput = ({
                                                                 type="button"
                                                                 onClick={onOpenChromeAISettings}
                                                                 className={`p-1 rounded transition-colors ${isDark ? 'hover:bg-white/10 text-gray-400 hover:text-gray-200' : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'}`}
-                                                                title="Manage Chrome built-in models"
-                                                                aria-label="Manage Chrome built-in models"
+                                                                title="Manage Chromium built-in models"
+                                                                aria-label="Manage Chromium built-in models"
                                                             >
                                                                 <HiOutlineCog6Tooth className="w-3.5 h-3.5" />
                                                             </button>

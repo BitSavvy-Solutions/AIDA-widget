@@ -29,7 +29,7 @@ const extractCleanErrorMessage = (rawError) => {
 };
 
 // --- Ollama helpers ---------------------------------------------------------
-const THINK_OPEN = '  ';
+const THINK_OPEN = '';
 const DEFAULT_OLLAMA_URL = 'http://localhost:11434';
 
 // Ollama expects raw base64, not data URLs
@@ -72,6 +72,14 @@ const parseThinkContent = (raw) => {
     const holdback = longestPartialTagSuffix(content);
     if (holdback > 0) content = content.slice(0, -holdback);
     return { reasoning: reasoning.trim(), content };
+};
+
+// --- Chrome Built-in AI (Prompt API) helpers --------------------------------
+// Converts a data URL (how image attachments are stored) into a Blob, which is
+// one of the accepted image value types for the Prompt API.
+const dataUrlToBlob = async (dataUrl) => {
+    const res = await fetch(dataUrl);
+    return await res.blob();
 };
 // ----------------------------------------------------------------------------
 
@@ -177,6 +185,26 @@ export const useChatAPI = ({
         });
         return result;
     }, [pageContext, customPrompt, formatMessageContent]);
+
+    // Builds Prompt API content for a message: a plain string for text-only
+    // messages, or a multimodal content array when a user message has images.
+    // Assistant messages stay text-only (the API rejects non-text assistant content).
+    const buildChromeContent = useCallback(async (m) => {
+        const text = formatMessageContent(m);
+        const images = m.sender === 'user' ? (m.images || []).filter(img => img?.src) : [];
+        if (images.length === 0) return text;
+
+        const parts = [];
+        if (text.trim()) parts.push({ type: 'text', value: text });
+        for (const img of images) {
+            try {
+                parts.push({ type: 'image', value: await dataUrlToBlob(img.src) });
+            } catch (e) {
+                console.warn('Skipping unreadable image for Chrome AI:', e);
+            }
+        }
+        return parts.length > 0 ? parts : text;
+    }, [formatMessageContent]);
 
     // Streams a chat completion from an Ollama server (NDJSON over /api/chat).
     const streamOllamaResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit = 10 }) => {
@@ -354,6 +382,8 @@ export const useChatAPI = ({
     };
 
     // Streams a completion from Chrome's built-in Browser Local AI (Prompt API).
+    // Multimodal: text input always, image input when the on-device model
+    // reports it as available and the conversation actually carries images.
     const streamChromeResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit = 10 }) => {
         setIsLoading(true);
         setLastCost(0);
@@ -372,18 +402,24 @@ export const useChatAPI = ({
                 throw new Error('Chromium Local AI is not available in this browser.');
             }
 
-            const availability = await LanguageModel.availability();
-            if (availability !== 'available' && availability !== 'readily') {
-                throw new Error(`Browser Local AI is not ready (status: ${availability}). Enable it from Local Models, Chrome tab.`);
-            }
-
-            if ((userMessage.images || []).length > 0 || (userMessage.attachments || []).some(a => a.type === 'image')) {
-                throw new Error('Chromium Local AI is text-only here. Remove the image or choose a vision model.');
-            }
-
             let limitedHistory = historyForPayload;
             if (typeof contextLimit === 'number' && contextLimit > 0) {
                 limitedHistory = historyForPayload.slice(-contextLimit);
+            }
+
+            // Declare image input only when a message in scope actually has images
+            const hasImages = limitedHistory.some(m => (m.images || []).length > 0);
+            const expectedInputs = [{ type: 'text', languages: ['en'] }];
+            if (hasImages) expectedInputs.push({ type: 'image' });
+
+            const availability = hasImages
+                ? await LanguageModel.availability({ expectedInputs })
+                : await LanguageModel.availability();
+
+            if (availability !== 'available' && availability !== 'readily') {
+                throw new Error(hasImages
+                    ? `Browser Local AI with image input is not ready (status: ${availability}). This browser build may not support multimodal prompts, or the model needs to be enabled from Local Models, Chromium tab.`
+                    : `Browser Local AI is not ready (status: ${availability}). Enable it from Local Models, Chromium tab.`);
             }
 
             const systemParts = [];
@@ -400,16 +436,27 @@ export const useChatAPI = ({
             }
             // Everything except the latest user message becomes session context
             for (const m of limitedHistory.slice(0, -1)) {
-                const content = formatMessageContent(m);
-                if (!content.trim()) continue;
+                const content = await buildChromeContent(m);
+                const isEmpty = typeof content === 'string' ? !content.trim() : content.length === 0;
+                if (isEmpty) continue;
                 initialPrompts.push({ role: m.sender === 'user' ? 'user' : 'assistant', content });
             }
 
-            lmSession = await LanguageModel.create({ initialPrompts, signal: abortController.signal });
+            lmSession = await LanguageModel.create({
+                initialPrompts,
+                expectedInputs,
+                expectedOutputs: [{ type: 'text', languages: ['en'] }],
+                signal: abortController.signal,
+            });
 
-            const currentUserInput = formatMessageContent(userMessage);
-            const stream = await lmSession.promptStreaming(currentUserInput, { signal: abortController.signal });
-
+            const currentUserContent = await buildChromeContent(userMessage);
+            // A bare array is parsed as LanguageModelMessage[], so multimodal
+            // parts must be wrapped in a message object with role + content.
+            const promptInput = Array.isArray(currentUserContent)
+                ? [{ role: 'user', content: currentUserContent }]
+                : currentUserContent;
+            const stream = await lmSession.promptStreaming(promptInput, { signal: abortController.signal });
+            
             let fullText = '';
             for await (const chunk of stream) {
                 const piece = String(chunk ?? '');

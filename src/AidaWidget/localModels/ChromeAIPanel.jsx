@@ -68,6 +68,14 @@ const ChromeAIPanel = ({ chromeAI, theme = 'dark', onClose }) => {
 
                 <p className={`mt-1 text-[11px] ${subText}`}>{def.tagline}</p>
 
+                {phase === 'available' && state.modalities && (
+                    <p className={`mt-1 text-[10px] ${subText}`}>
+                        Inputs: text
+                        {state.modalities.image === 'available' ? ' · image' : ''}
+                        {state.modalities.audio === 'available' ? ' · audio' : ''}
+                    </p>
+                )}
+                
                 {/* Hint while the availability probe is running */}
                 {phase === 'checking' && (
                     <p className={`mt-2 text-[11px] leading-relaxed ${subText}`}>
