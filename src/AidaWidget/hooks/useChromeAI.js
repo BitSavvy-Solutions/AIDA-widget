@@ -14,7 +14,7 @@ const API_DEFS = [
         key: 'prompt',
         label: 'Prompt API',
         globalName: 'LanguageModel',
-        tagline: 'Browser Local AI · text, image & audio prompts',
+        tagline: 'Browser Local AI · chat & transcription',
     },
 ];
 
@@ -171,10 +171,8 @@ export const useChromeAI = (isActive) => {
         const phase = statuses.prompt?.phase || 'checking';
         const mods = statuses.prompt?.modalities || {};
         const imageReady = mods.image === 'available';
-        const audioReady = mods.audio === 'available';
         const inputs = ['text'];
         if (imageReady) inputs.push('image');
-        if (audioReady) inputs.push('audio');
         return [{
             value: 'chrome:localai',
             label: 'Browser Local AI',
@@ -185,7 +183,6 @@ export const useChromeAI = (isActive) => {
             status: phase,
             selectable: phase === 'available',
             supportsImageInput: imageReady,
-            supportsAudioInput: audioReady,
         }];
     }, [statuses.prompt]);
 
@@ -205,7 +202,7 @@ export const useChromeAI = (isActive) => {
             selectable: true,
         };
         return [
-            { ...base, value: 'chrome:localai-transcribe', label: 'Browser Local AI (On-device)' },
+            { ...base, value: 'chrome:localai-transcribe', label: 'Browser Local AI (Transcribe)' },
             { ...base, value: 'chrome:localai-transcribe|translate', label: 'Browser Local AI (Translate to EN)' },
         ];
     }, [statuses.prompt]);

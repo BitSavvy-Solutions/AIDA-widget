@@ -1,8 +1,8 @@
 /* src/AidaWidget/localModels/ChromeAIPanel.jsx */
-import React, { useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     HiArrowPath, HiExclamationTriangle, HiOutlineSparkles,
-    HiOutlineArrowDownTray,
+    HiOutlineArrowDownTray, HiClipboard, HiCheck,
 } from 'react-icons/hi2';
 
 const badgeFor = (phase, isDark) => {
@@ -17,6 +17,79 @@ const badgeFor = (phase, isDark) => {
         error: { label: 'Error', cls: isDark ? 'bg-red-500/15 text-red-300' : 'bg-red-50 text-red-600' },
     };
     return map[phase] || map.checking;
+};
+
+/**
+ * Click-to-copy code chip (used for chrome://flags).
+ * Copies its text on click, then confirms with a check icon
+ * and a small "Copied!" tooltip for ~1.6s.
+ */
+const CopyableCode = ({ text, isDark }) => {
+    const [copied, setCopied] = useState(false);
+    const resetTimerRef = useRef(null);
+
+    useEffect(() => () => {
+        if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+    }, []);
+
+    const handleCopy = async (e) => {
+        e.stopPropagation();
+
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                // Fallback for non-secure contexts without the async clipboard API
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+            }
+            setCopied(true);
+            if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+            resetTimerRef.current = setTimeout(() => setCopied(false), 1600);
+        } catch {
+            // Clipboard access was blocked; nothing useful to surface here
+        }
+    };
+
+    return (
+        <span className="relative inline-block align-baseline">
+            <button
+                type="button"
+                onClick={handleCopy}
+                title={`Click to copy "${text}"`}
+                aria-label={`Copy ${text} to clipboard`}
+                className={`font-mono inline-flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors ${
+                    copied
+                        ? (isDark ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-100 text-emerald-700')
+                        : (isDark ? 'bg-black/30 hover:bg-black/50' : 'bg-black/5 hover:bg-black/10')
+                }`}
+            >
+                {text}
+                {copied
+                    ? <HiCheck className="w-3 h-3 shrink-0" />
+                    : <HiClipboard className="w-3 h-3 shrink-0 opacity-50" />}
+            </button>
+
+            {copied && (
+                <span
+                    role="status"
+                    className={`absolute z-10 bottom-full left-1/2 -translate-x-1/2 mb-1 px-1.5 py-0.5 rounded text-[9px] font-bold whitespace-nowrap pointer-events-none shadow-sm ${
+                        isDark
+                            ? 'bg-emerald-500/25 text-emerald-200 border border-emerald-400/30'
+                            : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                    }`}
+                >
+                    Copied!
+                </span>
+            )}
+        </span>
+    );
 };
 
 const ChromeAIPanel = ({ chromeAI, theme = 'dark', onClose }) => {
@@ -68,19 +141,39 @@ const ChromeAIPanel = ({ chromeAI, theme = 'dark', onClose }) => {
 
                 <p className={`mt-1 text-[11px] ${subText}`}>{def.tagline}</p>
 
-                {phase === 'available' && state.modalities && (
-                    <p className={`mt-1 text-[10px] ${subText}`}>
-                        Inputs: text
-                        {state.modalities.image === 'available' ? ' · image' : ''}
-                        {state.modalities.audio === 'available' ? ' · audio' : ''}
-                    </p>
-                )}
-                
+                {state.modalities && (() => {
+                    const audioBadge = badgeFor(state.modalities.audio || 'unavailable', isDark);
+                    const chatBadge = badgeFor(phase, isDark);
+                    return (
+                        <div className={`mt-2 space-y-1 rounded-lg border px-2.5 py-2 ${isDark ? 'border-gray-800 bg-gray-900/40' : 'border-gray-200 bg-gray-50'
+                            }`}>
+                            <div className="flex items-center justify-between gap-2">
+                                <span className={`text-[11px] ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                                    Browser Local AI
+                                    <span className="opacity-60"> ({state.modalities.image === 'available' ? 'text · image' : 'text only'})</span>
+                                </span>
+                                <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${chatBadge.cls}`}>
+                                    {chatBadge.label}
+                                </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                                <span className={`text-[11px] ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                                    Browser Local AI
+                                    <span className="opacity-60"> (Transcription)</span>
+                                </span>
+                                <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${audioBadge.cls}`}>
+                                    {audioBadge.label}
+                                </span>
+                            </div>
+                        </div>
+                    );
+                })()}
+
                 {/* Hint while the availability probe is running */}
                 {phase === 'checking' && (
                     <p className={`mt-2 text-[11px] leading-relaxed ${subText}`}>
                         Checking availability. If this takes more than a few seconds, enable the
-                        Prompt API flag at <code className="font-mono">chrome://flags</code>,
+                        Prompt API flag at <CopyableCode text="chrome://flags" isDark={isDark} />,
                         relaunch the browser, then re-check.
                     </p>
                 )}
@@ -92,7 +185,7 @@ const ChromeAIPanel = ({ chromeAI, theme = 'dark', onClose }) => {
                         <HiExclamationTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                         <p>
                             The Prompt API exists in this browser but is not responding, which usually
-                            means the flag is off. Open <code className="font-mono">chrome://flags</code>,
+                            means the flag is off. Open <CopyableCode text="chrome://flags" isDark={isDark} />,
                             search for <span className="font-semibold">Prompt API</span>, set it to
                             Enabled, relaunch the browser, then press Re-check.
                         </p>
@@ -177,7 +270,7 @@ const ChromeAIPanel = ({ chromeAI, theme = 'dark', onClose }) => {
                             <HiExclamationTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                             <p>
                                 This browser does not expose Chrome's Built-in AI Prompt API. Update Chrome and
-                                enable the Prompt API flags at <code className="font-mono">chrome://flags</code>,
+                                enable the Prompt API flags at <CopyableCode text="chrome://flags" isDark={isDark} />,
                                 then relaunch. Browser Local AI is shown below but cannot be enabled here.
                             </p>
                         </div>
