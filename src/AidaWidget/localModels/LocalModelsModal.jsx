@@ -86,7 +86,7 @@ const LocalModelsModal = ({
                 {/* Tab bar */}
                 <div className={`flex gap-1 px-4 pt-2 border-b ${isDark ? 'border-gray-800' : 'border-gray-100'}`} role="tablist">
                     {renderTab('ollama', 'Ollama', ollamaDot, null)}
-                    {renderTab('chrome', 'Chrome', null, chromeSupported ? null : 'N/A')}
+                    {renderTab('chrome', 'Chromium', null, chromeSupported ? null : 'N/A')}
                 </div>
 
                 {/* Panels own their body and footer */}

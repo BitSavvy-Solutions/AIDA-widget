@@ -1,20 +1,20 @@
 /* src/AidaWidget/localModels/ChromeAIPanel.jsx */
 import React, { useEffect } from 'react';
 import {
-    HiArrowPath, HiCheckCircle, HiExclamationTriangle, HiOutlineSparkles,
+    HiArrowPath, HiExclamationTriangle, HiOutlineSparkles,
     HiOutlineArrowDownTray,
 } from 'react-icons/hi2';
 
 const badgeFor = (phase, isDark) => {
     const map = {
-        checking:        { label: 'Checking', cls: isDark ? 'bg-gray-700/60 text-gray-400' : 'bg-gray-100 text-gray-500', pulse: true },
-        available:       { label: 'Ready', cls: isDark ? 'bg-emerald-500/15 text-emerald-300' : 'bg-emerald-50 text-emerald-600' },
-        downloadable:    { label: 'Needs download', cls: isDark ? 'bg-amber-500/15 text-amber-300' : 'bg-amber-50 text-amber-600' },
-        downloading:     { label: 'Downloading', cls: isDark ? 'bg-blue-500/15 text-blue-300' : 'bg-blue-50 text-blue-600' },
-        unavailable:     { label: 'Unavailable', cls: isDark ? 'bg-gray-700/60 text-gray-500' : 'bg-gray-100 text-gray-400' },
-        unsupported:     { label: 'Not in this Chrome', cls: isDark ? 'bg-gray-700/60 text-gray-500' : 'bg-gray-100 text-gray-400' },
+        checking: { label: 'Checking', cls: isDark ? 'bg-gray-700/60 text-gray-400' : 'bg-gray-100 text-gray-500', pulse: true },
+        available: { label: 'Ready', cls: isDark ? 'bg-emerald-500/15 text-emerald-300' : 'bg-emerald-50 text-emerald-600' },
+        downloadable: { label: 'Needs download', cls: isDark ? 'bg-amber-500/15 text-amber-300' : 'bg-amber-50 text-amber-600' },
+        downloading: { label: 'Downloading', cls: isDark ? 'bg-blue-500/15 text-blue-300' : 'bg-blue-50 text-blue-600' },
+        unavailable: { label: 'Unavailable', cls: isDark ? 'bg-gray-700/60 text-gray-500' : 'bg-gray-100 text-gray-400' },
+        unsupported: { label: 'Not in this Chrome', cls: isDark ? 'bg-gray-700/60 text-gray-500' : 'bg-gray-100 text-gray-400' },
         'flag-disabled': { label: 'Flag disabled', cls: isDark ? 'bg-amber-500/15 text-amber-300' : 'bg-amber-50 text-amber-600' },
-        error:           { label: 'Error', cls: isDark ? 'bg-red-500/15 text-red-300' : 'bg-red-50 text-red-600' },
+        error: { label: 'Error', cls: isDark ? 'bg-red-500/15 text-red-300' : 'bg-red-50 text-red-600' },
     };
     return map[phase] || map.checking;
 };
@@ -22,7 +22,7 @@ const badgeFor = (phase, isDark) => {
 const ChromeAIPanel = ({ chromeAI, theme = 'dark', onClose }) => {
     const {
         defs, statuses, support,
-        checkAll, enableApi, testApi,
+        checkAll, enableApi,
     } = chromeAI;
 
     const isDark = theme === 'dark';
@@ -38,23 +38,21 @@ const ChromeAIPanel = ({ chromeAI, theme = 'dark', onClose }) => {
 
     const subText = isDark ? 'text-gray-500' : 'text-gray-400';
     const tealBtn = 'flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-teal-600 hover:bg-teal-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
-    const ghostBtn = `flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-        isDark ? 'border-gray-700 hover:bg-gray-800 text-gray-300' : 'border-gray-300 hover:bg-gray-100 text-gray-600'
-    }`;
+    const ghostBtn = `flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isDark ? 'border-gray-700 hover:bg-gray-800 text-gray-300' : 'border-gray-300 hover:bg-gray-100 text-gray-600'
+        }`;
 
     const renderCard = (def) => {
         const state = statuses[def.key] || { phase: 'checking' };
-        const { phase, progress, error, testing, testResult } = state;
+        const { phase, progress, error } = state;
         const badge = badgeFor(phase, isDark);
         const isDead = phase === 'unavailable' || phase === 'unsupported';
-        const isBusy = phase === 'checking' || phase === 'downloading' || testing;
+        const isBusy = phase === 'checking' || phase === 'downloading';
 
         return (
             <div
                 key={def.key}
-                className={`rounded-lg border p-3 transition-opacity ${
-                    isDark ? 'bg-gray-950 border-gray-700' : 'bg-gray-50 border-gray-200'
-                } ${isDead ? 'opacity-60' : ''}`}
+                className={`rounded-lg border p-3 transition-opacity ${isDark ? 'bg-gray-950 border-gray-700' : 'bg-gray-50 border-gray-200'
+                    } ${isDead ? 'opacity-60' : ''}`}
             >
                 <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
@@ -81,9 +79,8 @@ const ChromeAIPanel = ({ chromeAI, theme = 'dark', onClose }) => {
 
                 {/* Probe timed out: the flag is almost certainly off in this Chromium fork */}
                 {phase === 'flag-disabled' && (
-                    <div className={`mt-2 rounded-lg border p-2.5 text-[11px] leading-relaxed flex items-start gap-2 ${
-                        isDark ? 'bg-amber-500/10 border-amber-500/30 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-700'
-                    }`}>
+                    <div className={`mt-2 rounded-lg border p-2.5 text-[11px] leading-relaxed flex items-start gap-2 ${isDark ? 'bg-amber-500/10 border-amber-500/30 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-700'
+                        }`}>
                         <HiExclamationTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                         <p>
                             The Prompt API exists in this browser but is not responding, which usually
@@ -108,19 +105,7 @@ const ChromeAIPanel = ({ chromeAI, theme = 'dark', onClose }) => {
                     <p className={`mt-2 text-[11px] break-words ${isDark ? 'text-red-300' : 'text-red-600'}`}>{error}</p>
                 )}
 
-                {testResult && (
-                    <p className={`mt-2 text-[11px] font-mono break-words ${isDark ? 'text-emerald-300/90' : 'text-emerald-600'}`}>
-                        {testResult}
-                    </p>
-                )}
-
                 <div className="mt-2.5 flex justify-end gap-2">
-                    {phase === 'available' && (
-                        <button type="button" onClick={() => testApi(def.key)} disabled={testing} className={ghostBtn}>
-                            {testing ? <HiArrowPath className="w-3.5 h-3.5 animate-spin" /> : <HiCheckCircle className="w-3.5 h-3.5" />}
-                            {testing ? 'Testing' : 'Test'}
-                        </button>
-                    )}
                     {phase === 'downloadable' && (
                         <button type="button" onClick={() => enableApi(def.key)} className={tealBtn}>
                             <HiOutlineArrowDownTray className="w-3.5 h-3.5" />
@@ -166,9 +151,8 @@ const ChromeAIPanel = ({ chromeAI, theme = 'dark', onClose }) => {
                             type="button"
                             onClick={checkAll}
                             disabled={anyChecking}
-                            className={`p-1.5 rounded-lg transition-colors disabled:opacity-50 ${
-                                isDark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
-                            }`}
+                            className={`p-1.5 rounded-lg transition-colors disabled:opacity-50 ${isDark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
+                                }`}
                             title="Re-check availability"
                             aria-label="Re-check availability"
                         >
@@ -179,9 +163,8 @@ const ChromeAIPanel = ({ chromeAI, theme = 'dark', onClose }) => {
 
                 {/* Unsupported banner: feature stays visible but greyed out */}
                 {!support.supported && (
-                    <div className={`rounded-lg border p-3 text-xs leading-relaxed ${
-                        isDark ? 'bg-amber-500/5 border-amber-500/30 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-700'
-                    }`}>
+                    <div className={`rounded-lg border p-3 text-xs leading-relaxed ${isDark ? 'bg-amber-500/5 border-amber-500/30 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-700'
+                        }`}>
                         <div className="flex items-start gap-2">
                             <HiExclamationTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                             <p>
@@ -197,11 +180,7 @@ const ChromeAIPanel = ({ chromeAI, theme = 'dark', onClose }) => {
             </div>
 
             {/* Footer */}
-            <div className={`flex items-center gap-2 px-5 py-3.5 border-t ${isDark ? 'border-gray-800' : 'border-gray-100'}`}>
-                <span className={`text-[10px] ${subText}`}>
-                    Managed by Chrome
-                </span>
-                <div className="flex-1" />
+            <div className={`flex items-center justify-end px-5 py-3.5 border-t ${isDark ? 'border-gray-800' : 'border-gray-100'}`}>
                 <button
                     type="button"
                     onClick={onClose}

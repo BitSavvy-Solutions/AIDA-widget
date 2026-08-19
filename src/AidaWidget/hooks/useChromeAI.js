@@ -19,10 +19,6 @@ const API_DEFS = [
         tagline: 'Browser Local AI · free-form prompts',
         availabilityOptions: () => ({}),
         createOptions: () => ({}),
-        test: async (inst) => {
-            const r = await inst.prompt('Reply with exactly: OK');
-            return String(r || '').trim().slice(0, 80) || 'OK';
-        },
     },
 ];
 
@@ -142,21 +138,6 @@ export const useChromeAI = (isActive) => {
         }
     }, [setStatus]);
 
-    const testApi = useCallback(async (key) => {
-        const def = API_DEFS.find(d => d.key === key);
-        const ctor = def && window[def.globalName];
-        if (!ctor) return;
-
-        setStatus(key, { testing: true, testResult: undefined });
-        try {
-            const instance = await ctor.create(def.createOptions());
-            const result = await def.test(instance);
-            instance?.destroy?.();
-            setStatus(key, { testing: false, testResult: result });
-        } catch (err) {
-            setStatus(key, { testing: false, testResult: `Failed: ${err?.message || err}` });
-        }
-    }, [setStatus]);
 
     // Selector-ready view of the Prompt API. This is the model the chat
     // pipeline uses when a "chrome:" model is selected.
@@ -181,6 +162,5 @@ export const useChromeAI = (isActive) => {
         chatModels,
         checkAll,
         enableApi,
-        testApi,
     };
 };
