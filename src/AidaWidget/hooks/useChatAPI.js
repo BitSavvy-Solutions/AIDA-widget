@@ -29,7 +29,8 @@ const extractCleanErrorMessage = (rawError) => {
 };
 
 // --- Ollama helpers ---------------------------------------------------------
-const THINK_OPEN = '';
+const THINK_OPEN = '<think>';
+const THINK_CLOSE = '</think>';
 const DEFAULT_OLLAMA_URL = 'http://localhost:11434';
 
 // Ollama expects raw base64, not data URLs
@@ -456,7 +457,7 @@ export const useChatAPI = ({
                 ? [{ role: 'user', content: currentUserContent }]
                 : currentUserContent;
             const stream = await lmSession.promptStreaming(promptInput, { signal: abortController.signal });
-            
+
             let fullText = '';
             for await (const chunk of stream) {
                 const piece = String(chunk ?? '');
