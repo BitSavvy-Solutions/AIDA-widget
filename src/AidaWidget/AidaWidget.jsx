@@ -12,8 +12,7 @@ import ShareModal from './ShareModal';
 import './AidaWidget.css';
 import ChatInput from './ChatInput';
 import AppearanceModal, { THEMES } from './AppearanceModal';
-import OllamaModal from './OllamaModal';
-
+import LocalModelsModal from './localModels/LocalModelsModal';
 import {
     useWidgetState,
     useModal,
@@ -27,6 +26,7 @@ import {
     useDisplayAnimation,
     useDragAndDrop,
     useOllama,
+    useChromeAI,
 } from './hooks';
 
 import { CHAT_URL, TRANSCRIPTION_URL, MODELS_URL } from './utils/apiConfig';
@@ -184,13 +184,13 @@ const AidaWidget = (props) => {
 
     const [selectedModel, setSelectedModel] = useState(() => {
         const saved = localStorage.getItem('aida-selected-model');
-        if (saved?.startsWith('ollama:')) return saved;
-        const exists = availableModels.some(m => m.value === saved);
+        if (saved?.startsWith('ollama:') || saved?.startsWith('chrome:')) return saved;        const exists = availableModels.some(m => m.value === saved);
         return exists ? saved : availableModels[0].value;
     });
 
     const [selectedAudioModel, setSelectedAudioModel] = useState(() => {
         const saved = localStorage.getItem('aida-selected-audio-model');
+        if (saved?.startsWith('chrome:')) return saved;
         const exists = availableAudioModels.some(m => m.value === saved);
         return exists ? saved : availableAudioModels[0].value;
     });
@@ -242,9 +242,10 @@ const AidaWidget = (props) => {
     const { isPanelOpen, openPanel, closePanel, historyItems, projects, currentSessionId, setCurrentSessionId, createNewSession, updateCurrentSession, saveCurrentChatToHistory, historyHandlers } = useChatHistory(getSanitizedMessages);
     const { isOpen: isPromptModalOpen, open: openPromptModal, close: closePromptModal } = useModal();
     const { isOpen: isShareModalOpen, open: openShareModal, close: closeShareModal } = useModal();
+    const chromeAI = useChromeAI(true);
     const ollama = useOllama();
-    const [isOllamaModalOpen, setIsOllamaModalOpen] = useState(false);
-    const {
+    const [isLocalModelsModalOpen, setIsLocalModelsModalOpen] = useState(false);
+    const [localModelsTab, setLocalModelsTab] = useState('ollama');    const {
         attachments, setAttachments, addImageAttachments, addTextAttachment, addFolderAttachments,
         addUrlAttachment, addContextAttachment,
         removeAttachment, clearAttachments, isAttachmentModalOpen, openModal: openAttachmentModal, closeModal: closeAttachmentModal
@@ -323,7 +324,9 @@ const AidaWidget = (props) => {
     const { countdown: autoRecordCountdown, start: startAutoRecordTimer, cancel: cancelAutoRecordTimer, setIsPaused: setIsRecordTimerPaused } = useCountdown(startRecording, 3);
 
     const resolveModelName = useCallback((model) => (
-        isWebSearchEnabled && !model?.startsWith('ollama:') ? `${model}:online` : model
+        isWebSearchEnabled && !model?.startsWith('ollama:') && !model?.startsWith('chrome:')
+            ? `${model}:online`
+            : model
     ), [isWebSearchEnabled]);
 
     const stableHandleSendMessage = useCallback(async (messageTextOverride = null) => {
@@ -349,7 +352,7 @@ const AidaWidget = (props) => {
         nextMessages = [...messages, userMessage, { id: botMessageId, sender: 'bot', text: '' }];
         setMessages(nextMessages);
         if (!activeSessionId) {
-            activeSessionId = createNewSession(nextMessages);
+            activeSessionId = await createNewSession(nextMessages);
         } else {
             updateCurrentSession(nextMessages);
         }
@@ -705,7 +708,7 @@ const AidaWidget = (props) => {
                             onEmbedUrl={handleOpenEmbed}
                             onDeleteMessage={handleDeleteMessage}
                         />
-                        <ChatInput
+                                                <ChatInput
                             handleSendMessage={stableHandleSendMessage}
                             handleRecordButtonClick={handleRecordButtonClick}
                             inputRef={inputRef}
@@ -750,10 +753,12 @@ const AidaWidget = (props) => {
                             onModelSelected={addRecentModel}
                             ollamaModels={ollama.models}
                             ollamaStatus={ollama.status}
-                            isOllamaModalOpen={isOllamaModalOpen}
+                            chromeModels={chromeAI.chatModels}
+                            chromeAudioModels={chromeAI.audioModels}
+                            isLocalModelsModalOpen={isLocalModelsModalOpen}
                             onOllamaRefresh={() => ollama.fetchModels()}
-                            onOpenOllamaSettings={() => setIsOllamaModalOpen(true)}
-                        />
+                            onOpenOllamaSettings={() => { setLocalModelsTab('ollama'); setIsLocalModelsModalOpen(true); }}
+                            onOpenChromeAISettings={() => { setLocalModelsTab('chrome'); setIsLocalModelsModalOpen(true); }}                        />
                         <AppearanceModal
                             isOpen={isAppearanceModalOpen}
                             onClose={() => setIsAppearanceModalOpen(false)}
@@ -844,22 +849,13 @@ const AidaWidget = (props) => {
                 theme={baseTheme}
             />
 
-            <OllamaModal
-                isOpen={isOllamaModalOpen}
-                onClose={() => setIsOllamaModalOpen(false)}
-                baseUrl={ollama.baseUrl}
-                setBaseUrl={ollama.setBaseUrl}
-                status={ollama.status}
-                models={ollama.models}
-                error={ollama.error}
-                lastFetchedAt={ollama.lastFetchedAt}
-                onConnect={(url) => ollama.fetchModels(url)}
-                onDisconnect={ollama.disconnect}
-                onRefresh={() => ollama.fetchModels()}
-                pullState={ollama.pullState}
-                onPullModel={ollama.pullModel}
-                onCancelPull={ollama.cancelPull}
-                onClearPullState={ollama.clearPullState}
+<LocalModelsModal
+                isOpen={isLocalModelsModalOpen}
+                onClose={() => setIsLocalModelsModalOpen(false)}
+                activeTab={localModelsTab}
+                onTabChange={setLocalModelsTab}
+                ollama={ollama}
+                chromeAI={chromeAI}
                 theme={baseTheme}
             />
 

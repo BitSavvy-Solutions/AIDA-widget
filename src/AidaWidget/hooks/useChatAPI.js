@@ -29,7 +29,7 @@ const extractCleanErrorMessage = (rawError) => {
 };
 
 // --- Ollama helpers ---------------------------------------------------------
-const THINK_OPEN = ' <think>';
+const THINK_OPEN = '<think>';
 const THINK_CLOSE = '</think>';
 const DEFAULT_OLLAMA_URL = 'http://localhost:11434';
 
@@ -73,6 +73,14 @@ const parseThinkContent = (raw) => {
     const holdback = longestPartialTagSuffix(content);
     if (holdback > 0) content = content.slice(0, -holdback);
     return { reasoning: reasoning.trim(), content };
+};
+
+// --- Chrome Built-in AI (Prompt API) helpers --------------------------------
+// Converts a data URL (how image attachments are stored) into a Blob, which is
+// one of the accepted image value types for the Prompt API.
+const dataUrlToBlob = async (dataUrl) => {
+    const res = await fetch(dataUrl);
+    return await res.blob();
 };
 // ----------------------------------------------------------------------------
 
@@ -178,6 +186,26 @@ export const useChatAPI = ({
         });
         return result;
     }, [pageContext, customPrompt, formatMessageContent]);
+
+    // Builds Prompt API content for a message: a plain string for text-only
+    // messages, or a multimodal content array when a user message has images.
+    // Assistant messages stay text-only (the API rejects non-text assistant content).
+    const buildChromeContent = useCallback(async (m) => {
+        const text = formatMessageContent(m);
+        const images = m.sender === 'user' ? (m.images || []).filter(img => img?.src) : [];
+        if (images.length === 0) return text;
+
+        const parts = [];
+        if (text.trim()) parts.push({ type: 'text', value: text });
+        for (const img of images) {
+            try {
+                parts.push({ type: 'image', value: await dataUrlToBlob(img.src) });
+            } catch (e) {
+                console.warn('Skipping unreadable image for Chrome AI:', e);
+            }
+        }
+        return parts.length > 0 ? parts : text;
+    }, [formatMessageContent]);
 
     // Streams a chat completion from an Ollama server (NDJSON over /api/chat).
     const streamOllamaResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit = 10 }) => {
@@ -354,10 +382,148 @@ export const useChatAPI = ({
         }
     };
 
+    // Streams a completion from Chrome's built-in Browser Local AI (Prompt API).
+    // Multimodal: text input always, image input when the on-device model
+    // reports it as available and the conversation actually carries images.
+    const streamChromeResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit = 10 }) => {
+        setIsLoading(true);
+        setLastCost(0);
+        setLiveReasoning({ text: '', botId: botMessageId, contentHasStarted: false });
+        setApiError(null);
+        liveReasoningTextRef.current = '';
+
+        const abortController = new AbortController();
+        streamAbortControllerRef.current = abortController;
+
+        let finalMessages = null;
+        let lmSession = null;
+
+        try {
+            if (!('LanguageModel' in window)) {
+                throw new Error('Chromium Local AI is not available in this browser.');
+            }
+
+            let limitedHistory = historyForPayload;
+            if (typeof contextLimit === 'number' && contextLimit > 0) {
+                limitedHistory = historyForPayload.slice(-contextLimit);
+            }
+
+            // Declare image input only when a message in scope actually has images
+            const hasImages = limitedHistory.some(m => (m.images || []).length > 0);
+            const expectedInputs = [{ type: 'text', languages: ['en'] }];
+            if (hasImages) expectedInputs.push({ type: 'image' });
+
+            const availability = hasImages
+                ? await LanguageModel.availability({ expectedInputs })
+                : await LanguageModel.availability();
+
+            if (availability !== 'available' && availability !== 'readily') {
+                throw new Error(hasImages
+                    ? `Browser Local AI with image input is not ready (status: ${availability}). This browser build may not support multimodal prompts, or the model needs to be enabled from Local Models, Chromium tab.`
+                    : `Browser Local AI is not ready (status: ${availability}). Enable it from Local Models, Chromium tab.`);
+            }
+
+            const systemParts = [];
+            if (pageContext && Object.keys(pageContext).length > 0) {
+                systemParts.push(`<PageContext>\n${JSON.stringify(pageContext, null, 2)}\n</PageContext>`);
+            }
+            if ((customPrompt || '').trim()) {
+                systemParts.push(customPrompt.trim());
+            }
+
+            const initialPrompts = [];
+            if (systemParts.length > 0) {
+                initialPrompts.push({ role: 'system', content: systemParts.join('\n\n') });
+            }
+            // Everything except the latest user message becomes session context
+            for (const m of limitedHistory.slice(0, -1)) {
+                const content = await buildChromeContent(m);
+                const isEmpty = typeof content === 'string' ? !content.trim() : content.length === 0;
+                if (isEmpty) continue;
+                initialPrompts.push({ role: m.sender === 'user' ? 'user' : 'assistant', content });
+            }
+
+            lmSession = await LanguageModel.create({
+                initialPrompts,
+                expectedInputs,
+                expectedOutputs: [{ type: 'text', languages: ['en'] }],
+                signal: abortController.signal,
+            });
+
+            const currentUserContent = await buildChromeContent(userMessage);
+            // A bare array is parsed as LanguageModelMessage[], so multimodal
+            // parts must be wrapped in a message object with role + content.
+            const promptInput = Array.isArray(currentUserContent)
+                ? [{ role: 'user', content: currentUserContent }]
+                : currentUserContent;
+            const stream = await lmSession.promptStreaming(promptInput, { signal: abortController.signal });
+
+            let fullText = '';
+            for await (const chunk of stream) {
+                const piece = String(chunk ?? '');
+                // Some Chrome builds stream deltas, others cumulative snapshots
+                fullText = piece.startsWith(fullText) ? piece : fullText + piece;
+
+                setMessages(prev => {
+                    const updated = prev.map(m => m.id === botMessageId ? { ...m, text: fullText } : m);
+                    finalMessages = updated;
+                    return updated;
+                });
+                setLiveReasoning(prev => prev.contentHasStarted ? prev : { ...prev, contentHasStarted: true });
+            }
+
+            const tokenUsage =
+                (typeof lmSession.inputUsage === 'number' && lmSession.inputUsage > 0)
+                    ? { input_tokens: lmSession.inputUsage, total_tokens: lmSession.inputUsage }
+                    : null;
+
+            const finalMeta = {
+                model: userMessage.model,
+                webSearchEnabled: false,
+                tokenUsage,
+                cost: null,
+            };
+
+            setMessages(prev => {
+                const updated = prev.map(m => m.id === botMessageId ? { ...m, meta: finalMeta } : m);
+                finalMessages = updated;
+                return updated;
+            });
+
+            const targetSessionId = sessionId || currentSessionId;
+            if (targetSessionId && finalMessages) {
+                updateCurrentSession(finalMessages, targetSessionId);
+            }
+        } catch (error) {
+            if (error?.name === 'AbortError') {
+                console.info('Chrome AI streaming was stopped by the user.');
+            } else {
+                console.error('Chrome AI error:', error);
+                const message = error?.message || 'Browser Local AI request failed.';
+                setApiError(prev => prev || { message });
+                setMessages(prev => prev.map(m =>
+                    m.id === botMessageId && !m.text ? { ...m, error: message } : m
+                ));
+            }
+        } finally {
+            try { lmSession?.destroy?.(); } catch { /* ignore */ }
+            if (streamAbortControllerRef.current === abortController) {
+                streamAbortControllerRef.current = null;
+            }
+            setIsLoading(false);
+            setLiveReasoning({ text: '', botId: null, contentHasStarted: false });
+        }
+    };
+
     const streamResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit = 10 }) => {
         // Local Ollama models use a completely different API shape
         if (userMessage?.model?.startsWith('ollama:')) {
             return streamOllamaResponse({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit });
+        }
+
+        // Chrome built-in Browser Local AI uses the LanguageModel API
+        if (userMessage?.model?.startsWith('chrome:')) {
+            return streamChromeResponse({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit });
         }
 
         setIsLoading(true);

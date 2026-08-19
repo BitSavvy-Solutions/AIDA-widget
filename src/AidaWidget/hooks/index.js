@@ -11,3 +11,4 @@ export { useAttachments } from './useAttachments';
 export * from './useDisplayAnimation';
 export { useDragAndDrop } from './useDragAndDrop';
 export { useOllama } from './useOllama';
+export { useChromeAI, getChromeAISupport } from './useChromeAI';
