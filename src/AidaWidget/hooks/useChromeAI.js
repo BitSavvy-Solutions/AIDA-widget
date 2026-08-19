@@ -26,6 +26,18 @@ const API_DEFS = [
     },
 ];
 
+// Some Chromium forks (e.g. Opera) expose the LanguageModel global even when
+// the feature flag is off, but availability() never resolves. Racing it
+// against a timeout prevents the UI from getting stuck in "checking".
+const AVAILABILITY_TIMEOUT_MS = 5000;
+
+const withTimeout = (promise, ms) => Promise.race([
+    Promise.resolve(promise),
+    new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('availability-timeout')), ms);
+    }),
+]);
+
 // Normalize old ('readily', 'after-download', 'no') and new spec values.
 const normalizeAvailability = (raw) => {
     switch (raw) {
@@ -86,10 +98,18 @@ export const useChromeAI = (isActive) => {
             if (!support.apis[def.key]) return;
             try {
                 const ctor = window[def.globalName];
-                const raw = await ctor.availability(def.availabilityOptions());
+                const raw = await withTimeout(
+                    ctor.availability(def.availabilityOptions()),
+                    AVAILABILITY_TIMEOUT_MS
+                );
                 setStatus(def.key, { phase: normalizeAvailability(raw) });
             } catch (err) {
-                setStatus(def.key, { phase: 'unavailable' });
+                if (err?.message === 'availability-timeout') {
+                    // Global exists but never answered: flag is almost certainly off.
+                    setStatus(def.key, { phase: 'flag-disabled' });
+                } else {
+                    setStatus(def.key, { phase: 'unavailable' });
+                }
             }
         }));
     }, [setStatus]);

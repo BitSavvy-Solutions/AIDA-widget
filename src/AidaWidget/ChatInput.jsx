@@ -207,9 +207,10 @@ const ChatInput = ({
         downloadable: 'bg-amber-400',
         downloading: 'bg-blue-400 animate-pulse',
         checking: 'bg-gray-400 animate-pulse',
+        'flag-disabled': 'bg-amber-400',
         error: 'bg-red-400',
     }[chromeStatus] || 'bg-gray-500';
-
+    
     const CHROME_STATUS_LABELS = {
         checking: 'Checking',
         available: 'Ready',
@@ -217,6 +218,7 @@ const ChatInput = ({
         downloading: 'Downloading',
         unavailable: 'Unavailable',
         unsupported: 'Not supported',
+        'flag-disabled': 'Flag off',
         error: 'Error',
     };
 
