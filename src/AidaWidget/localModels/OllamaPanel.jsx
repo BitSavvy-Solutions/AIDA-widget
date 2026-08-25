@@ -5,6 +5,7 @@ import {
     HiCheckCircle, HiOutlineArrowDownTray,
 } from 'react-icons/hi2';
 import { formatSize } from '../hooks/useOllama';
+import OllamaCorsHelp from './OllamaCorsHelp';
 
 export const OLLAMA_STATUS_DOT = {
     disconnected: 'bg-gray-500',
@@ -15,9 +16,9 @@ export const OLLAMA_STATUS_DOT = {
 
 const STATUS_META = {
     disconnected: { dot: OLLAMA_STATUS_DOT.disconnected, label: 'Not connected', labelClass: 'text-gray-400' },
-    connecting:   { dot: OLLAMA_STATUS_DOT.connecting, label: 'Connecting', labelClass: 'text-amber-400' },
-    connected:    { dot: OLLAMA_STATUS_DOT.connected, label: 'Connected', labelClass: 'text-emerald-400' },
-    error:        { dot: OLLAMA_STATUS_DOT.error, label: 'Connection failed', labelClass: 'text-red-400' },
+    connecting: { dot: OLLAMA_STATUS_DOT.connecting, label: 'Connecting', labelClass: 'text-amber-400' },
+    connected: { dot: OLLAMA_STATUS_DOT.connected, label: 'Connected', labelClass: 'text-emerald-400' },
+    error: { dot: OLLAMA_STATUS_DOT.error, label: 'Connection failed', labelClass: 'text-red-400' },
 };
 
 const OllamaPanel = ({ ollama, theme = 'dark', onClose }) => {
@@ -84,9 +85,8 @@ const OllamaPanel = ({ ollama, theme = 'dark', onClose }) => {
 
     const sectionLabelClass = `text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`;
     const primaryBtnClass = 'flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg bg-teal-600 hover:bg-teal-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-w-[92px]';
-    const secondaryBtnClass = `flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border transition-colors ${
-        isDark ? 'border-gray-700 hover:bg-gray-800 text-gray-300' : 'border-gray-300 hover:bg-gray-100 text-gray-600'
-    }`;
+    const secondaryBtnClass = `flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border transition-colors ${isDark ? 'border-gray-700 hover:bg-gray-800 text-gray-300' : 'border-gray-300 hover:bg-gray-100 text-gray-600'
+        }`;
 
     const errorMessage = typeof error === 'object' ? error?.message : error;
     const errorRaw = typeof error === 'object' ? error?.raw : null;
@@ -123,36 +123,30 @@ const OllamaPanel = ({ ollama, theme = 'dark', onClose }) => {
                         placeholder="http://localhost:11434"
                         spellCheck={false}
                         autoComplete="off"
-                        className={`w-full text-xs font-mono px-3 py-2.5 rounded-lg border outline-none transition-colors disabled:opacity-50 ${
-                            isDark
-                                ? 'bg-gray-950 border-gray-700 text-gray-100 placeholder-gray-600 focus:border-teal-500/60'
-                                : 'bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-400 focus:border-teal-500'
-                        }`}
+                        className={`w-full text-xs font-mono px-3 py-2.5 rounded-lg border outline-none transition-colors disabled:opacity-50 ${isDark
+                            ? 'bg-gray-950 border-gray-700 text-gray-100 placeholder-gray-600 focus:border-teal-500/60'
+                            : 'bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-400 focus:border-teal-500'
+                            }`}
                     />
                 </div>
 
                 {/* Error */}
                 {status === 'error' && errorMessage && (
-                    <div className={`rounded-lg border p-3 text-xs leading-relaxed ${
-                        isDark ? 'bg-red-500/5 border-red-500/30 text-red-300' : 'bg-red-50 border-red-200 text-red-600'
-                    }`}>
+                    <div className={`rounded-lg border p-3 text-xs leading-relaxed ${isDark ? 'bg-red-500/5 border-red-500/30 text-red-300' : 'bg-red-50 border-red-200 text-red-600'
+                        }`}>
                         <div className="flex items-start gap-2">
                             <HiExclamationTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                                 <p className="font-medium break-words">{errorMessage}</p>
 
                                 {errorRaw && (
-                                    <div className={`mt-2 rounded p-2 text-[10px] font-mono break-all ${
-                                        isDark ? 'bg-gray-950 text-gray-400' : 'bg-gray-100 text-gray-600'
-                                    }`}>
+                                    <div className={`mt-2 rounded p-2 text-[10px] font-mono break-all ${isDark ? 'bg-gray-950 text-gray-400' : 'bg-gray-100 text-gray-600'
+                                        }`}>
                                         {errorRaw}
                                     </div>
                                 )}
 
-                                <p className="mt-1.5 opacity-70">
-                                    If Ollama is running, allow browser access by starting it with{' '}
-                                    <code className="font-mono">OLLAMA_ORIGINS=*</code>.
-                                </p>
+                                <OllamaCorsHelp isDark={isDark} />
                             </div>
                         </div>
                     </div>
@@ -164,20 +158,19 @@ const OllamaPanel = ({ ollama, theme = 'dark', onClose }) => {
                         <div className={`space-y-2 pt-4 border-t ${isDark ? 'border-gray-800' : 'border-gray-100'}`}>
                             <label className={sectionLabelClass}>
                                 Install a{' '}
-                                    <a
-                                        href="https://ollama.com/search"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="underline hover:opacity-80"
-                                    >
-                                        model
-                                    </a>
+                                <a
+                                    href="https://ollama.com/search"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="underline hover:opacity-80"
+                                >
+                                    model
+                                </a>
                             </label>
 
                             {isPulling ? (
-                                <div className={`rounded-lg border p-3 space-y-2 ${
-                                    isDark ? 'bg-gray-950 border-gray-700' : 'bg-gray-50 border-gray-200'
-                                }`}>
+                                <div className={`rounded-lg border p-3 space-y-2 ${isDark ? 'bg-gray-950 border-gray-700' : 'bg-gray-50 border-gray-200'
+                                    }`}>
                                     <div className="flex items-center justify-between gap-2">
                                         <span className={`text-xs font-semibold font-mono truncate ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>
                                             {pullState.name}
@@ -207,9 +200,8 @@ const OllamaPanel = ({ ollama, theme = 'dark', onClose }) => {
                                         <button
                                             type="button"
                                             onClick={cancelPull}
-                                            className={`text-[10px] font-semibold shrink-0 transition-colors ${
-                                                isDark ? 'text-red-400 hover:text-red-300' : 'text-red-500 hover:text-red-600'
-                                            }`}
+                                            className={`text-[10px] font-semibold shrink-0 transition-colors ${isDark ? 'text-red-400 hover:text-red-300' : 'text-red-500 hover:text-red-600'
+                                                }`}
                                         >
                                             Cancel
                                         </button>
@@ -225,11 +217,10 @@ const OllamaPanel = ({ ollama, theme = 'dark', onClose }) => {
                                         placeholder="e.g. llama3.2 or qwen3:4b"
                                         spellCheck={false}
                                         autoComplete="off"
-                                        className={`flex-1 min-w-0 text-xs font-mono px-3 py-2.5 rounded-lg border outline-none transition-colors ${
-                                            isDark
-                                                ? 'bg-gray-950 border-gray-700 text-gray-100 placeholder-gray-600 focus:border-teal-500/60'
-                                                : 'bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-400 focus:border-teal-500'
-                                        }`}
+                                        className={`flex-1 min-w-0 text-xs font-mono px-3 py-2.5 rounded-lg border outline-none transition-colors ${isDark
+                                            ? 'bg-gray-950 border-gray-700 text-gray-100 placeholder-gray-600 focus:border-teal-500/60'
+                                            : 'bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-400 focus:border-teal-500'
+                                            }`}
                                     />
                                     <button
                                         type="button"
@@ -244,9 +235,8 @@ const OllamaPanel = ({ ollama, theme = 'dark', onClose }) => {
                             )}
 
                             {pullState?.phase === 'success' && (
-                                <div className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 ${
-                                    isDark ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-emerald-50 border-emerald-200'
-                                }`}>
+                                <div className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 ${isDark ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-emerald-50 border-emerald-200'
+                                    }`}>
                                     <span className={`flex items-center gap-1.5 text-xs min-w-0 ${isDark ? 'text-emerald-300' : 'text-emerald-600'}`}>
                                         <HiCheckCircle className="w-4 h-4 shrink-0" />
                                         <span className="truncate">Installed <span className="font-mono">{pullState.name}</span></span>
@@ -263,9 +253,8 @@ const OllamaPanel = ({ ollama, theme = 'dark', onClose }) => {
                             )}
 
                             {pullState?.phase === 'error' && (
-                                <div className={`flex items-start justify-between gap-2 rounded-lg border px-3 py-2 ${
-                                    isDark ? 'bg-red-500/10 border-red-500/30' : 'bg-red-50 border-red-200'
-                                }`}>
+                                <div className={`flex items-start justify-between gap-2 rounded-lg border px-3 py-2 ${isDark ? 'bg-red-500/10 border-red-500/30' : 'bg-red-50 border-red-200'
+                                    }`}>
                                     <span className={`flex items-start gap-1.5 text-xs min-w-0 ${isDark ? 'text-red-300' : 'text-red-600'}`}>
                                         <HiExclamationTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                                         <span className="break-words">{pullState.error}</span>
@@ -298,15 +287,13 @@ const OllamaPanel = ({ ollama, theme = 'dark', onClose }) => {
                                     No models installed yet. Use the field above to pull your first one.
                                 </p>
                             ) : (
-                                <div className={`max-h-36 overflow-y-auto custom-scrollbar rounded-lg border divide-y ${
-                                    isDark ? 'border-gray-700 divide-gray-800' : 'border-gray-200 divide-gray-100'
-                                }`}>
+                                <div className={`max-h-36 overflow-y-auto custom-scrollbar rounded-lg border divide-y ${isDark ? 'border-gray-700 divide-gray-800' : 'border-gray-200 divide-gray-100'
+                                    }`}>
                                     {models.map((m) => (
                                         <div
                                             key={m.value}
-                                            className={`flex items-center justify-between gap-2 px-3 py-2 ${
-                                                isDark ? 'bg-gray-950/50' : 'bg-white'
-                                            }`}
+                                            className={`flex items-center justify-between gap-2 px-3 py-2 ${isDark ? 'bg-gray-950/50' : 'bg-white'
+                                                }`}
                                         >
                                             <div className="min-w-0 flex-1">
                                                 <p className={`text-xs font-medium truncate ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
@@ -319,9 +306,8 @@ const OllamaPanel = ({ ollama, theme = 'dark', onClose }) => {
                                                 </p>
                                             </div>
                                             {m.description && (
-                                                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 ${
-                                                    isDark ? 'bg-teal-500/10 text-teal-300' : 'bg-teal-50 text-teal-600'
-                                                }`}>
+                                                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 ${isDark ? 'bg-teal-500/10 text-teal-300' : 'bg-teal-50 text-teal-600'
+                                                    }`}>
                                                     {m.description}
                                                 </span>
                                             )}
@@ -340,9 +326,8 @@ const OllamaPanel = ({ ollama, theme = 'dark', onClose }) => {
                     <button
                         type="button"
                         onClick={disconnect}
-                        className={`text-xs font-medium px-2 py-2 rounded-lg transition-colors ${
-                            isDark ? 'text-red-400/90 hover:text-red-300 hover:bg-red-500/10' : 'text-red-500 hover:bg-red-50'
-                        }`}
+                        className={`text-xs font-medium px-2 py-2 rounded-lg transition-colors ${isDark ? 'text-red-400/90 hover:text-red-300 hover:bg-red-500/10' : 'text-red-500 hover:bg-red-50'
+                            }`}
                     >
                         Disconnect
                     </button>

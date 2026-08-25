@@ -1,9 +1,10 @@
 /* src/AidaWidget/localModels/ChromeAIPanel.jsx */
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import {
     HiArrowPath, HiExclamationTriangle, HiOutlineSparkles,
-    HiOutlineArrowDownTray, HiClipboard, HiCheck,
+    HiOutlineArrowDownTray,
 } from 'react-icons/hi2';
+import CopyableCode from '../CopyableCode';
 
 const badgeFor = (phase, isDark) => {
     const map = {
@@ -24,73 +25,7 @@ const badgeFor = (phase, isDark) => {
  * Copies its text on click, then confirms with a check icon
  * and a small "Copied!" tooltip for ~1.6s.
  */
-const CopyableCode = ({ text, isDark }) => {
-    const [copied, setCopied] = useState(false);
-    const resetTimerRef = useRef(null);
 
-    useEffect(() => () => {
-        if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-    }, []);
-
-    const handleCopy = async (e) => {
-        e.stopPropagation();
-
-        try {
-            if (navigator.clipboard?.writeText) {
-                await navigator.clipboard.writeText(text);
-            } else {
-                // Fallback for non-secure contexts without the async clipboard API
-                const ta = document.createElement('textarea');
-                ta.value = text;
-                ta.style.position = 'fixed';
-                ta.style.opacity = '0';
-                document.body.appendChild(ta);
-                ta.select();
-                document.execCommand('copy');
-                document.body.removeChild(ta);
-            }
-            setCopied(true);
-            if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-            resetTimerRef.current = setTimeout(() => setCopied(false), 1600);
-        } catch {
-            // Clipboard access was blocked; nothing useful to surface here
-        }
-    };
-
-    return (
-        <span className="relative inline-block align-baseline">
-            <button
-                type="button"
-                onClick={handleCopy}
-                title={`Click to copy "${text}"`}
-                aria-label={`Copy ${text} to clipboard`}
-                className={`font-mono inline-flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors ${
-                    copied
-                        ? (isDark ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-100 text-emerald-700')
-                        : (isDark ? 'bg-black/30 hover:bg-black/50' : 'bg-black/5 hover:bg-black/10')
-                }`}
-            >
-                {text}
-                {copied
-                    ? <HiCheck className="w-3 h-3 shrink-0" />
-                    : <HiClipboard className="w-3 h-3 shrink-0 opacity-50" />}
-            </button>
-
-            {copied && (
-                <span
-                    role="status"
-                    className={`absolute z-10 bottom-full left-1/2 -translate-x-1/2 mb-1 px-1.5 py-0.5 rounded text-[9px] font-bold whitespace-nowrap pointer-events-none shadow-sm ${
-                        isDark
-                            ? 'bg-emerald-500/25 text-emerald-200 border border-emerald-400/30'
-                            : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
-                    }`}
-                >
-                    Copied!
-                </span>
-            )}
-        </span>
-    );
-};
 
 const ChromeAIPanel = ({ chromeAI, theme = 'dark', onClose }) => {
     const {
