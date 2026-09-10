@@ -2,7 +2,7 @@
 import React, { memo, useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { HiSpeakerWave, HiPlay, HiPause, HiPaperClip, HiChevronDown, HiChevronUp, HiClipboard, HiCheck, HiPencilSquare, HiInformationCircle, HiTrash, HiExclamationTriangle } from 'react-icons/hi2';
+import { HiSpeakerWave, HiPlay, HiPause, HiPaperClip, HiChevronDown, HiChevronUp, HiClipboard, HiCheck, HiPencilSquare, HiInformationCircle, HiTrash, HiExclamationTriangle, HiArrowDown } from 'react-icons/hi2';
 import ReasoningDisplay from './ReasoningDisplay';
 import ShikiHighlighter, { isInlineCode } from 'react-shiki';
 import LinkPopover from './LinkPopover';
@@ -380,6 +380,31 @@ const ChatDisplay = ({
     const messageBodyRefs = useRef(new Map());
     const editInputRef = useRef(null);
 
+    const [isAtBottom, setIsAtBottom] = useState(true);
+
+    const checkAtBottom = useCallback(() => {
+        const el = containerRef.current;
+        if (!el) return;
+        setIsAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 40);
+    }, []);
+
+    useEffect(() => {
+        const el = containerRef.current;
+        if (!el) return;
+        checkAtBottom();
+        el.addEventListener('scroll', checkAtBottom, { passive: true });
+        return () => el.removeEventListener('scroll', checkAtBottom);
+    }, [checkAtBottom]);
+
+    useEffect(() => {
+        checkAtBottom();
+    }, [messages, checkAtBottom]);
+
+    const scrollToBottom = useCallback(() => {
+        const el = containerRef.current;
+        if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    }, []);
+
     // --- Two-click delete confirmation ----------------------------------------
     const [pendingDeleteId, setPendingDeleteId] = useState(null);
 
@@ -535,7 +560,8 @@ const ChatDisplay = ({
     const activeStartIndex = Math.max(0, messages.length - contextLimit);
 
     return (
-        <div ref={containerRef} className="relative flex-1 overflow-y-auto p-4 space-y-4" style={{ backgroundColor: 'var(--aida-body-bg)', color: 'var(--aida-body-text)' }}>
+        <div className="relative flex-1 min-h-0 flex flex-col" style={{ backgroundColor: 'var(--aida-body-bg)', color: 'var(--aida-body-text)' }}>
+        <div ref={containerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
             {messages.map((message, index) => {
                 const messageText = typeof message.text === 'string' ? message.text : '';
                 const trimmedText = messageText.trim();
@@ -844,6 +870,21 @@ const ChatDisplay = ({
                     </div>
                 );
             })}
+        </div>
+        {!isAtBottom && (
+            <button
+                type="button"
+                onClick={scrollToBottom}
+                aria-label="Scroll to latest message"
+                title="Scroll to latest message"
+                className={`absolute bottom-4 right-4 z-10 rounded-full p-2 shadow-lg border transition-all hover:scale-105 ${isDark
+                    ? 'bg-gray-800 border-gray-700 text-gray-300 hover:text-white'
+                    : 'bg-white border-gray-200 text-gray-500 hover:text-gray-800'
+                    }`}
+            >
+                <HiArrowDown className="w-4 h-4" />
+            </button>
+        )}
         </div>
     );
 };
