@@ -356,7 +356,6 @@ const MessageInfoPopover = ({ meta, theme }) => {
 
 const ChatDisplay = ({
     messages,
-    messagesEndRef,
     siteLanguage,
     editingMessageId,
     editDraft,
@@ -364,10 +363,6 @@ const ChatDisplay = ({
     onStartEdit,
     onCancelEdit,
     onSaveEdit,
-    onScrollStateChange,
-    onUserScrollAway,
-    programmaticScrollRef,
-    shouldAutoScroll = true,
     theme = 'dark',
     onImagePreview,
     onRetryBotMessage,
@@ -520,49 +515,6 @@ const ChatDisplay = ({
         utteranceRef.current = utterance;
         window.speechSynthesis.speak(utterance);
     }, [speechApiSupported, speakingMessageId, speechStatus, siteLanguage]);
-
-    useEffect(() => {
-        const root = containerRef.current;
-        const target = messagesEndRef?.current;
-        if (!root || !target || !onScrollStateChange) return;
-        const observer = new IntersectionObserver(
-            (entries) => {
-                const entry = entries[0];
-                onScrollStateChange(Boolean(entry && entry.isIntersecting));
-            },
-            { root, threshold: 0 }
-        );
-        observer.observe(target);
-        return () => observer.disconnect();
-    }, [messagesEndRef, onScrollStateChange]);
-
-    useEffect(() => {
-        if (!shouldAutoScroll) return;
-        const el = containerRef.current;
-        if (!el) return;
-        if (programmaticScrollRef) programmaticScrollRef.current = true;
-        el.scrollTop = el.scrollHeight;
-        if (onScrollStateChange) onScrollStateChange(true);
-        requestAnimationFrame(() => {
-            if (programmaticScrollRef) programmaticScrollRef.current = false;
-        });
-    }, [messages, shouldAutoScroll, programmaticScrollRef]);
-
-    useEffect(() => {
-        const el = containerRef.current;
-        if (!el || !onUserScrollAway) return;
-        let prevDistance = 0;
-        const threshold = 24;
-        const onScroll = () => {
-            if (programmaticScrollRef && programmaticScrollRef.current) return;
-            const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-            if (distance - prevDistance > threshold) onUserScrollAway();
-            prevDistance = distance;
-        };
-        prevDistance = el.scrollHeight - el.scrollTop - el.clientHeight;
-        el.addEventListener('scroll', onScroll, { passive: true });
-        return () => el.removeEventListener('scroll', onScroll);
-    }, [onUserScrollAway, programmaticScrollRef]);
 
     const handleCopy = async (text, id) => {
         try {
@@ -892,7 +844,6 @@ const ChatDisplay = ({
                     </div>
                 );
             })}
-            <div ref={messagesEndRef} />
         </div>
     );
 };
