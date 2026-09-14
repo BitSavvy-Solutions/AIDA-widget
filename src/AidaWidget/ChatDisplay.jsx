@@ -381,10 +381,12 @@ const ChatDisplay = ({
     const editInputRef = useRef(null);
 
     const [isAtBottom, setIsAtBottom] = useState(true);
+    const [hasNewContent, setHasNewContent] = useState(false);
+    const prevMessagesRef = useRef(messages);
 
     // --- ChatGPT-style pinning -------------------------------------------------
     // When a new user message is sent, auto-scroll it to the top of the
-    // viewport once. After that the user scrolls freely — nothing forces the
+    // viewport once. After that the user scrolls freely -- nothing forces the
     // scroll position. A spacer at the end of the list creates the scrollable
     // room needed to reach the pinned position, and shrinks as the response
     // grows so no crawlable blank space remains past the end.
@@ -472,9 +474,27 @@ const ChatDisplay = ({
         checkAtBottom();
     }, [messages, checkAtBottom]);
 
+    // NEW: flash the scroll button when new messages arrive while scrolled up
+    useEffect(() => {
+        if (messages !== prevMessagesRef.current) {
+            if (!isAtBottom) {
+                setHasNewContent(true);
+            }
+            prevMessagesRef.current = messages;
+        }
+    }, [messages, isAtBottom]);
+
+    // NEW: clear the new-content indicator once the user reaches the bottom
+    useEffect(() => {
+        if (isAtBottom) {
+            setHasNewContent(false);
+        }
+    }, [isAtBottom]);
+
     const scrollToBottom = useCallback(() => {
         const el = containerRef.current;
         if (el) el.scrollTo({ top: getRealContentBottom(), behavior: 'smooth' });
+        setHasNewContent(false);
     }, [getRealContentBottom]);
 
     // --- Two-click delete confirmation ----------------------------------------
@@ -949,11 +969,16 @@ const ChatDisplay = ({
                 type="button"
                 onClick={scrollToBottom}
                 aria-label="Scroll to latest message"
-                title="Scroll to latest message"
-                className={`absolute bottom-4 right-4 z-10 rounded-full p-2 shadow-lg border transition-all hover:scale-105 ${isDark
-                    ? 'bg-gray-800 border-gray-700 text-gray-300 hover:text-white'
-                    : 'bg-white border-gray-200 text-gray-500 hover:text-gray-800'
-                    }`}
+                title={hasNewContent ? 'New message. Click to scroll.' : 'Scroll to latest message'}
+                className={`absolute bottom-4 right-4 z-10 rounded-full p-2 shadow-lg border transition-all hover:scale-105 ${
+                    hasNewContent
+                        ? (isDark
+                            ? 'bg-gray-800 border-green-400 text-green-400 hover:bg-gray-700 hover:text-green-300'
+                            : 'bg-white border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700')
+                        : (isDark
+                            ? 'bg-gray-800 border-gray-700 text-gray-300 hover:text-white'
+                            : 'bg-white border-gray-200 text-gray-500 hover:text-gray-800')
+                }`}
             >
                 <HiArrowDown className="w-4 h-4" />
             </button>
