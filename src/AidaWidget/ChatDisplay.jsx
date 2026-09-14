@@ -382,11 +382,83 @@ const ChatDisplay = ({
 
     const [isAtBottom, setIsAtBottom] = useState(true);
 
+    // --- ChatGPT-style pinning -------------------------------------------------
+    // When a new user message is sent, auto-scroll it to the top of the
+    // viewport once. After that the user scrolls freely — nothing forces the
+    // scroll position. A spacer at the end of the list creates the scrollable
+    // room needed to reach the pinned position, and shrinks as the response
+    // grows so no crawlable blank space remains past the end.
+    const [pinnedMessageId, setPinnedMessageId] = useState(null);
+    const pinnedMessageIdRef = useRef(null);
+    const spacerRef = useRef(null);
+    const prevMessageCountRef = useRef(messages.length);
+    const lastPinnedUserIdRef = useRef(null);
+
+    useEffect(() => { pinnedMessageIdRef.current = pinnedMessageId; }, [pinnedMessageId]);
+
+    const getRealContentBottom = useCallback(() => {
+        const el = containerRef.current;
+        if (!el) return 0;
+        return el.scrollHeight - (spacerRef.current?.offsetHeight ?? 0);
+    }, []);
+
     const checkAtBottom = useCallback(() => {
         const el = containerRef.current;
         if (!el) return;
-        setIsAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 40);
+        setIsAtBottom(getRealContentBottom() - el.scrollTop - el.clientHeight < 40);
+    }, [getRealContentBottom]);
+
+    const adjustSpacer = useCallback((messageId) => {
+        const el = containerRef.current;
+        const target = messageBodyRefs.current.get(messageId);
+        const spacer = spacerRef.current;
+        if (!el || !target || !spacer) return;
+        const pinTop = el.scrollTop + target.getBoundingClientRect().top - el.getBoundingClientRect().top - 16;
+        const realBottom = el.scrollHeight - spacer.offsetHeight;
+        spacer.style.height = `${Math.max(0, el.clientHeight - (realBottom - pinTop))}px`;
     }, []);
+
+    // Pin newly sent user messages to the top of the viewport. The send path
+    // appends the user message and bot placeholder together with isLoading=true,
+    // which distinguishes a send from loading a session's history.
+    useEffect(() => {
+        const prevCount = prevMessageCountRef.current;
+        prevMessageCountRef.current = messages.length;
+        if (messages.length < prevCount) {
+            setPinnedMessageId(null);
+            lastPinnedUserIdRef.current = null;
+            return;
+        }
+        if (messages.length === prevCount || !isLoading) return;
+        const lastUserMessage = messages.findLast((m) => m.sender === 'user');
+        if (!lastUserMessage || lastUserMessage.id === lastPinnedUserIdRef.current) return;
+        lastPinnedUserIdRef.current = lastUserMessage.id;
+        setPinnedMessageId(lastUserMessage.id);
+        requestAnimationFrame(() => {
+            const el = containerRef.current;
+            const target = messageBodyRefs.current.get(lastUserMessage.id);
+            if (!el || !target) return;
+            adjustSpacer(lastUserMessage.id);
+            const pinTop = el.scrollTop + target.getBoundingClientRect().top - el.getBoundingClientRect().top - 16;
+            el.scrollTo({ top: pinTop, behavior: 'smooth' });
+        });
+    }, [messages, isLoading, adjustSpacer]);
+
+    // Keep the spacer sized correctly as content settles and on resize
+    useEffect(() => {
+        if (pinnedMessageId) adjustSpacer(pinnedMessageId);
+    }, [messages, pinnedMessageId, adjustSpacer]);
+
+    useEffect(() => {
+        const el = containerRef.current;
+        if (!el) return;
+        const observer = new ResizeObserver(() => {
+            if (pinnedMessageIdRef.current) adjustSpacer(pinnedMessageIdRef.current);
+        });
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, [adjustSpacer]);
+    // ---------------------------------------------------------------------------
 
     useEffect(() => {
         const el = containerRef.current;
@@ -402,8 +474,8 @@ const ChatDisplay = ({
 
     const scrollToBottom = useCallback(() => {
         const el = containerRef.current;
-        if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-    }, []);
+        if (el) el.scrollTo({ top: getRealContentBottom(), behavior: 'smooth' });
+    }, [getRealContentBottom]);
 
     // --- Two-click delete confirmation ----------------------------------------
     const [pendingDeleteId, setPendingDeleteId] = useState(null);
@@ -870,6 +942,7 @@ const ChatDisplay = ({
                     </div>
                 );
             })}
+            {pinnedMessageId && <div ref={spacerRef} aria-hidden="true" style={{ height: 0 }} />}
         </div>
         {!isAtBottom && (
             <button
