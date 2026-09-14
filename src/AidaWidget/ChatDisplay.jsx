@@ -470,7 +470,7 @@ const ChatDisplay = ({
     }, [adjustSpacer]);
     // ---------------------------------------------------------------------------
 
-    // --- NEW: compute how many messages are above the viewport ------------------
+    // --- compute how many USER messages are above the viewport ------------------
     const computeVisibleBounds = useCallback(() => {
         const container = containerRef.current;
         if (!container || messages.length === 0) {
@@ -482,30 +482,49 @@ const ChatDisplay = ({
         const paddingTop = parseFloat(window.getComputedStyle(container).paddingTop) || 0;
         const contentTop = containerRect.top + paddingTop;
 
-        let firstVisible = messages.length;
+        let firstVisibleIndex = messages.length;
 
         for (let i = 0; i < messages.length; i++) {
             const el = messageRefs.current.get(messages[i].id);
             if (!el) continue;
 
             const rect = el.getBoundingClientRect();
-            // Message is considered "above" if its bottom edge is above the content area
             if (rect.bottom > contentTop + 2) {
-                firstVisible = i;
+                firstVisibleIndex = i;
                 break;
             }
         }
 
-        setMessagesAboveCount(firstVisible);
+        let userMessagesAbove = 0;
+        for (let i = 0; i < firstVisibleIndex; i++) {
+            if (messages[i].sender === 'user') {
+                userMessagesAbove += 1;
+            }
+        }
+
+        setMessagesAboveCount(userMessagesAbove);
     }, [messages]);
 
     const scrollToPreviousMessage = useCallback(() => {
         const container = containerRef.current;
         if (!container || messagesAboveCount === 0) return;
 
-        const targetIndex = Math.max(0, messagesAboveCount - 1);
-        const targetId = messages[targetIndex]?.id;
-        const el = targetId ? messageRefs.current.get(targetId) : null;
+        let userCount = 0;
+        let targetId = null;
+
+        for (const message of messages) {
+            if (message.sender === 'user') {
+                userCount += 1;
+                if (userCount === messagesAboveCount) {
+                    targetId = message.id;
+                    break;
+                }
+            }
+        }
+
+        if (!targetId) return;
+
+        const el = messageRefs.current.get(targetId);
         if (!el) return;
 
         const paddingTop = parseFloat(window.getComputedStyle(container).paddingTop) || 0;
@@ -1035,13 +1054,13 @@ const ChatDisplay = ({
                 {pinnedMessageId && <div ref={spacerRef} aria-hidden="true" style={{ height: 0 }} />}
             </div>
 
-            {/* --- NEW: scroll to previous message button ------------------------- */}
+            {/* --- scroll to previous USER message button ------------------------- */}
             {messagesAboveCount > 0 && (
                 <button
                     type="button"
                     onClick={scrollToPreviousMessage}
-                    aria-label={`Scroll up to previous message, ${messagesAboveCount} above`}
-                    title={`${messagesAboveCount} message${messagesAboveCount === 1 ? '' : 's'} above - click to scroll up`}
+                    aria-label={`Scroll up to previous user message, ${messagesAboveCount} above`}
+                    title={`${messagesAboveCount} user message${messagesAboveCount === 1 ? '' : 's'} above - click to scroll up`}
                     className={`absolute top-4 right-4 z-10 rounded-full p-2 shadow-lg border transition-all hover:scale-105 ${isDark
                             ? 'bg-gray-800 border-gray-700 text-gray-300 hover:text-white'
                             : 'bg-white border-gray-200 text-gray-500 hover:text-gray-800'
