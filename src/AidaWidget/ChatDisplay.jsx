@@ -1,8 +1,12 @@
 /* src/AidaWidget/ChatDisplay.jsx */
-import React, { memo, useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import React, { memo, useEffect, useRef, useState, useMemo, useCallback, useLayoutEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { HiSpeakerWave, HiPlay, HiPause, HiPaperClip, HiChevronDown, HiChevronUp, HiClipboard, HiCheck, HiPencilSquare, HiInformationCircle, HiTrash, HiExclamationTriangle, HiArrowDown } from 'react-icons/hi2';
+import {
+    HiSpeakerWave, HiPlay, HiPause, HiPaperClip, HiChevronDown, HiChevronUp,
+    HiClipboard, HiCheck, HiPencilSquare, HiInformationCircle, HiTrash,
+    HiExclamationTriangle, HiArrowDown, HiArrowUp
+} from 'react-icons/hi2';
 import ReasoningDisplay from './ReasoningDisplay';
 import ShikiHighlighter, { isInlineCode } from 'react-shiki';
 import LinkPopover from './LinkPopover';
@@ -378,32 +382,183 @@ const ChatDisplay = ({
     const [copiedId, setCopiedId] = useState(null);
     const containerRef = useRef(null);
     const messageBodyRefs = useRef(new Map());
+    const messageRefs = useRef(new Map());
     const editInputRef = useRef(null);
 
     const [isAtBottom, setIsAtBottom] = useState(true);
+    const [hasNewContent, setHasNewContent] = useState(false);
+    const prevMessagesRef = useRef(messages);
+
+    // --- NEW: previous-message scroll state ---
+    const [messagesAboveCount, setMessagesAboveCount] = useState(0);
+
+    // --- ChatGPT-style pinning -------------------------------------------------
+    // When a new user message is sent, auto-scroll it to the top of the
+    // viewport once. After that the user scrolls freely -- nothing forces the
+    // scroll position. A spacer at the end of the list creates the scrollable
+    // room needed to reach the pinned position, and shrinks as the response
+    // grows so no crawlable blank space remains past the end.
+    const [pinnedMessageId, setPinnedMessageId] = useState(null);
+    const pinnedMessageIdRef = useRef(null);
+    const spacerRef = useRef(null);
+    const prevMessageCountRef = useRef(messages.length);
+    const lastPinnedUserIdRef = useRef(null);
+
+    useEffect(() => { pinnedMessageIdRef.current = pinnedMessageId; }, [pinnedMessageId]);
+
+    const getRealContentBottom = useCallback(() => {
+        const el = containerRef.current;
+        if (!el) return 0;
+        return el.scrollHeight - (spacerRef.current?.offsetHeight ?? 0);
+    }, []);
 
     const checkAtBottom = useCallback(() => {
         const el = containerRef.current;
         if (!el) return;
-        setIsAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 40);
+        setIsAtBottom(getRealContentBottom() - el.scrollTop - el.clientHeight < 40);
+    }, [getRealContentBottom]);
+
+    const adjustSpacer = useCallback((messageId) => {
+        const el = containerRef.current;
+        const target = messageBodyRefs.current.get(messageId);
+        const spacer = spacerRef.current;
+        if (!el || !target || !spacer) return;
+        const pinTop = el.scrollTop + target.getBoundingClientRect().top - el.getBoundingClientRect().top - 16;
+        const realBottom = el.scrollHeight - spacer.offsetHeight;
+        spacer.style.height = `${Math.max(0, el.clientHeight - (realBottom - pinTop))}px`;
     }, []);
+
+    // Pin newly sent user messages to the top of the viewport. The send path
+    // appends the user message and bot placeholder together with isLoading=true,
+    // which distinguishes a send from loading a session's history.
+    useEffect(() => {
+        const prevCount = prevMessageCountRef.current;
+        prevMessageCountRef.current = messages.length;
+        if (messages.length < prevCount) {
+            setPinnedMessageId(null);
+            lastPinnedUserIdRef.current = null;
+            return;
+        }
+        if (messages.length === prevCount || !isLoading) return;
+        const lastUserMessage = messages.findLast((m) => m.sender === 'user');
+        if (!lastUserMessage || lastUserMessage.id === lastPinnedUserIdRef.current) return;
+        lastPinnedUserIdRef.current = lastUserMessage.id;
+        setPinnedMessageId(lastUserMessage.id);
+        requestAnimationFrame(() => {
+            const el = containerRef.current;
+            const target = messageBodyRefs.current.get(lastUserMessage.id);
+            if (!el || !target) return;
+            adjustSpacer(lastUserMessage.id);
+            const pinTop = el.scrollTop + target.getBoundingClientRect().top - el.getBoundingClientRect().top - 16;
+            el.scrollTo({ top: pinTop, behavior: 'smooth' });
+        });
+    }, [messages, isLoading, adjustSpacer]);
+
+    // Keep the spacer sized correctly as content settles and on resize
+    useEffect(() => {
+        if (pinnedMessageId) adjustSpacer(pinnedMessageId);
+    }, [messages, pinnedMessageId, adjustSpacer]);
 
     useEffect(() => {
         const el = containerRef.current;
         if (!el) return;
-        checkAtBottom();
-        el.addEventListener('scroll', checkAtBottom, { passive: true });
-        return () => el.removeEventListener('scroll', checkAtBottom);
-    }, [checkAtBottom]);
+        const observer = new ResizeObserver(() => {
+            if (pinnedMessageIdRef.current) adjustSpacer(pinnedMessageIdRef.current);
+        });
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, [adjustSpacer]);
+    // ---------------------------------------------------------------------------
+
+    // --- NEW: compute how many messages are above the viewport ------------------
+    const computeVisibleBounds = useCallback(() => {
+        const container = containerRef.current;
+        if (!container || messages.length === 0) {
+            setMessagesAboveCount(0);
+            return;
+        }
+
+        const containerRect = container.getBoundingClientRect();
+        const paddingTop = parseFloat(window.getComputedStyle(container).paddingTop) || 0;
+        const contentTop = containerRect.top + paddingTop;
+
+        let firstVisible = messages.length;
+
+        for (let i = 0; i < messages.length; i++) {
+            const el = messageRefs.current.get(messages[i].id);
+            if (!el) continue;
+
+            const rect = el.getBoundingClientRect();
+            // Message is considered "above" if its bottom edge is above the content area
+            if (rect.bottom > contentTop + 2) {
+                firstVisible = i;
+                break;
+            }
+        }
+
+        setMessagesAboveCount(firstVisible);
+    }, [messages]);
+
+    const scrollToPreviousMessage = useCallback(() => {
+        const container = containerRef.current;
+        if (!container || messagesAboveCount === 0) return;
+
+        const targetIndex = Math.max(0, messagesAboveCount - 1);
+        const targetId = messages[targetIndex]?.id;
+        const el = targetId ? messageRefs.current.get(targetId) : null;
+        if (!el) return;
+
+        const paddingTop = parseFloat(window.getComputedStyle(container).paddingTop) || 0;
+        container.scrollTo({
+            top: el.offsetTop - paddingTop,
+            behavior: 'smooth',
+        });
+    }, [messages, messagesAboveCount]);
+    // ---------------------------------------------------------------------------
+
+    useEffect(() => {
+        const el = containerRef.current;
+        if (!el) return;
+
+        const onScroll = () => {
+            checkAtBottom();
+            computeVisibleBounds();
+        };
+
+        el.addEventListener('scroll', onScroll, { passive: true });
+        return () => el.removeEventListener('scroll', onScroll);
+    }, [checkAtBottom, computeVisibleBounds]);
 
     useEffect(() => {
         checkAtBottom();
     }, [messages, checkAtBottom]);
 
+    // NEW: flash the scroll button when new messages arrive while scrolled up
+    useEffect(() => {
+        if (messages !== prevMessagesRef.current) {
+            if (!isAtBottom) {
+                setHasNewContent(true);
+            }
+            prevMessagesRef.current = messages;
+        }
+    }, [messages, isAtBottom]);
+
+    // NEW: clear the new-content indicator once the user reaches the bottom
+    useEffect(() => {
+        if (isAtBottom) {
+            setHasNewContent(false);
+        }
+    }, [isAtBottom]);
+
+    useLayoutEffect(() => {
+        computeVisibleBounds();
+    }, [messages, computeVisibleBounds]);
+
     const scrollToBottom = useCallback(() => {
         const el = containerRef.current;
-        if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-    }, []);
+        if (el) el.scrollTo({ top: getRealContentBottom(), behavior: 'smooth' });
+        setHasNewContent(false);
+    }, [getRealContentBottom]);
 
     // --- Two-click delete confirmation ----------------------------------------
     const [pendingDeleteId, setPendingDeleteId] = useState(null);
@@ -561,330 +716,365 @@ const ChatDisplay = ({
 
     return (
         <div className="relative flex-1 min-h-0 flex flex-col" style={{ backgroundColor: 'var(--aida-body-bg)', color: 'var(--aida-body-text)' }}>
-        <div ref={containerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.map((message, index) => {
-                const messageText = typeof message.text === 'string' ? message.text : '';
-                const trimmedText = messageText.trim();
-                const hasImages = Array.isArray(message.images) && message.images.length > 0;
-                const hasAttachments = Array.isArray(message.attachments) && message.attachments.length > 0;
-                const isBot = message.sender === 'bot';
-                const isEditing = editingMessageId === message.id;
+            <div ref={containerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+                {messages.map((message, index) => {
+                    const messageText = typeof message.text === 'string' ? message.text : '';
+                    const trimmedText = messageText.trim();
+                    const hasImages = Array.isArray(message.images) && message.images.length > 0;
+                    const hasAttachments = Array.isArray(message.attachments) && message.attachments.length > 0;
+                    const isBot = message.sender === 'bot';
+                    const isEditing = editingMessageId === message.id;
 
-                const isLastMessage = index === messages.length - 1;
-                const isBotLoading = isBot && isLastMessage && isLoading;
+                    const isLastMessage = index === messages.length - 1;
+                    const isBotLoading = isBot && isLastMessage && isLoading;
 
-                const hasBakedInReasoning = message.reasoning && message.reasoning.trim().length > 0;
+                    const hasBakedInReasoning = message.reasoning && message.reasoning.trim().length > 0;
 
-                const isLiveReasoningActive = isBotLoading && liveReasoning?.botId === message.id && liveReasoning.text.trim().length > 0;
-                const isTimerDisplayLive = isLiveReasoningActive && !liveReasoning.contentHasStarted;
+                    const isLiveReasoningActive = isBotLoading && liveReasoning?.botId === message.id && liveReasoning.text.trim().length > 0;
+                    const isTimerDisplayLive = isLiveReasoningActive && !liveReasoning.contentHasStarted;
 
-                const showReasoning = hasBakedInReasoning || isLiveReasoningActive;
-                const reasoningTextToShow = hasBakedInReasoning ? message.reasoning : (liveReasoning?.text || '');
+                    const showReasoning = hasBakedInReasoning || isLiveReasoningActive;
+                    const reasoningTextToShow = hasBakedInReasoning ? message.reasoning : (liveReasoning?.text || '');
 
-                const showThinkingDots = isBotLoading && !showReasoning && trimmedText === '' && !hasImages && !message.error;
-                const hideBotMessage = isBot && !isBotLoading && trimmedText === '' && !hasImages && !hasBakedInReasoning && !message.error;
+                    const showThinkingDots = isBotLoading && !showReasoning && trimmedText === '' && !hasImages && !message.error;
+                    const hideBotMessage = isBot && !isBotLoading && trimmedText === '' && !hasBakedInReasoning && !message.error;
 
-                const isMessageActive = index >= activeStartIndex;
-                const opacityClass = isMessageActive ? 'opacity-100' : 'opacity-40 grayscale transition-all duration-500';
+                    const isMessageActive = index >= activeStartIndex;
+                    const opacityClass = isMessageActive ? 'opacity-100' : 'opacity-40 grayscale transition-all duration-500';
 
-                let canRetry = false;
-                if (isBot && onRetryBotMessage) {
-                    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
-                        const candidate = messages[cursor];
-                        if (candidate.sender !== 'user') continue;
-                        if ((candidate.text || '').trim() === '' && (!candidate.attachments || candidate.attachments.length === 0)) continue;
-                        canRetry = true;
-                        break;
+                    let canRetry = false;
+                    if (isBot && onRetryBotMessage) {
+                        for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+                            const candidate = messages[cursor];
+                            if (candidate.sender !== 'user') continue;
+                            if ((candidate.text || '').trim() === '' && (!candidate.attachments || candidate.attachments.length === 0)) continue;
+                            canRetry = true;
+                            break;
+                        }
                     }
-                }
 
-                if (hideBotMessage) return null;
+                    if (hideBotMessage) return null;
 
-                // --- Delete button state for this message --------------------
-                const isPendingDelete = pendingDeleteId === message.id;
+                    // --- Delete button state for this message --------------------
+                    const isPendingDelete = pendingDeleteId === message.id;
 
-                return (
-                    <div key={message.id} className={`flex ${message.sender === 'user' ? 'justify-end pl-10' : 'justify-start'} ${opacityClass}`}>
-                        <div className={`flex flex-col w-full ${message.sender === 'user' ? 'items-end' : 'items-start'}`}>
-                            {showReasoning && (
-                                <ReasoningDisplay
-                                    text={reasoningTextToShow}
-                                    theme={theme}
-                                    isLive={isTimerDisplayLive}
-                                    startTime={isTimerDisplayLive ? liveReasoningInfo.startTime : null}
-                                    finalDuration={finalReasoningDurations[message.id] ?? null}
-                                />
-                            )}
+                    return (
+                        <div
+                            key={message.id}
+                            ref={(el) => {
+                                if (el) messageRefs.current.set(message.id, el);
+                                else messageRefs.current.delete(message.id);
+                            }}
+                            className={`flex ${message.sender === 'user' ? 'justify-end pl-10' : 'justify-start'} ${opacityClass}`}
+                        >
+                            <div className={`flex flex-col w-full ${message.sender === 'user' ? 'items-end' : 'items-start'}`}>
+                                {showReasoning && (
+                                    <ReasoningDisplay
+                                        text={reasoningTextToShow}
+                                        theme={theme}
+                                        isLive={isTimerDisplayLive}
+                                        startTime={isTimerDisplayLive ? liveReasoningInfo.startTime : null}
+                                        finalDuration={finalReasoningDurations[message.id] ?? null}
+                                    />
+                                )}
 
-                            {/* Error display for stream errors */}
-                            {message.error && (
-                                <div className={`mb-2 p-3 rounded-lg border text-xs ${isDark
+                                {/* Error display for stream errors */}
+                                {message.error && (
+                                    <div className={`mb-2 p-3 rounded-lg border text-xs ${isDark
                                         ? 'bg-red-900/20 border-red-700/50 text-red-300'
                                         : 'bg-red-50 border-red-200 text-red-600'
-                                    }`}>
-                                    <div className="flex items-center gap-2 font-medium mb-1">
-                                        <HiExclamationTriangle className="w-4 h-4 shrink-0" />
-                                        <span>Error</span>
-                                    </div>
-                                    <p className="whitespace-pre-wrap break-words leading-relaxed">{message.error}</p>
-                                </div>
-                            )}
-
-                            <div
-                                ref={(el) => {
-                                    if (el) messageBodyRefs.current.set(message.id, el);
-                                    else messageBodyRefs.current.delete(message.id);
-                                }}
-                                className={`${message.sender === 'user' ? 'user-message rounded-l-xl' : 'bot-message'} ${isEditing ? 'w-full' : ''}`}
-                                dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'}
-                            >
-                                {hasImages && (
-                                    <div className="space-y-2 mb-2">
-                                        {message.images.map((img) => (
-                                            <button
-                                                key={img.id || img.src}
-                                                type="button"
-                                                onClick={() => onImagePreview && onImagePreview({ ...img, messageId: message.id })}
-                                                className="block"
-                                                aria-label="Open image"
-                                            >
-                                                <img
-                                                    src={img.src}
-                                                    alt={img.name || 'uploaded'}
-                                                    className="rounded-lg border border-gray-200 max-w-full max-h-64 object-contain transition-transform hover:scale-[1.02]"
-                                                />
-                                            </button>
-                                        ))}
+                                        }`}>
+                                        <div className="flex items-center gap-2 font-medium mb-1">
+                                            <HiExclamationTriangle className="w-4 h-4 shrink-0" />
+                                            <span>Error</span>
+                                        </div>
+                                        <p className="whitespace-pre-wrap break-words leading-relaxed">{message.error}</p>
                                     </div>
                                 )}
 
-                                {isEditing ? (
-                                    <div className="w-full">
-                                        <textarea
-                                            ref={editInputRef}
-                                            value={editDraft}
-                                            onChange={(e) => {
-                                                setEditDraft(e.target.value);
-                                                e.target.style.height = 'auto';
-                                                e.target.style.height = `${e.target.scrollHeight}px`;
-                                            }}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Escape') {
-                                                    e.preventDefault();
-                                                    onCancelEdit();
-                                                } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                                                    e.preventDefault();
-                                                    onSaveEdit();
-                                                }
-                                            }}
-                                            className={`w-full p-2 rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 edit-textarea ${isDark ? 'bg-gray-800 text-white border border-gray-700' : 'bg-white text-gray-900 border border-gray-300'
-                                                }`}
-                                            rows={1}
-                                        />
-                                        <div className="flex justify-end gap-2 mt-2">
-                                            <button
-                                                onClick={onCancelEdit}
-                                                className={`px-3 py-1 text-xs rounded-md border transition-colors ${isDark ? 'border-gray-600 hover:bg-gray-700 text-gray-300' : 'border-gray-300 hover:bg-gray-100 text-gray-600'
-                                                    }`}
-                                            >
-                                                Cancel
-                                            </button>
-                                            <button
-                                                onClick={onSaveEdit}
-                                                className="px-3 py-1 text-xs rounded-md bg-blue-600 hover:bg-blue-500 text-white transition-colors"
-                                            >
-                                                Save
-                                            </button>
+                                <div
+                                    ref={(el) => {
+                                        if (el) messageBodyRefs.current.set(message.id, el);
+                                        else messageBodyRefs.current.delete(message.id);
+                                    }}
+                                    className={`${message.sender === 'user' ? 'user-message rounded-l-xl' : 'bot-message'} ${isEditing ? 'w-full' : ''}`}
+                                    dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'}
+                                >
+                                    {hasImages && (
+                                        <div className="space-y-2 mb-2">
+                                            {message.images.map((img) => (
+                                                <button
+                                                    key={img.id || img.src}
+                                                    type="button"
+                                                    onClick={() => onImagePreview && onImagePreview({ ...img, messageId: message.id })}
+                                                    className="block"
+                                                    aria-label="Open image"
+                                                >
+                                                    <img
+                                                        src={img.src}
+                                                        alt={img.name || 'uploaded'}
+                                                        className="rounded-lg border border-gray-200 max-w-full max-h-64 object-contain transition-transform hover:scale-[1.02]"
+                                                    />
+                                                </button>
+                                            ))}
                                         </div>
-                                    </div>
-                                ) : (
-                                    trimmedText !== '' ? (
-                                        isBotLoading ? (
-                                            <SmoothMessage
-                                                text={messageText}
-                                                isStreaming={true}
-                                                components={markdownComponents}
+                                    )}
+
+                                    {isEditing ? (
+                                        <div className="w-full">
+                                            <textarea
+                                                ref={editInputRef}
+                                                value={editDraft}
+                                                onChange={(e) => {
+                                                    setEditDraft(e.target.value);
+                                                    e.target.style.height = 'auto';
+                                                    e.target.style.height = `${e.target.scrollHeight}px`;
+                                                }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Escape') {
+                                                        e.preventDefault();
+                                                        onCancelEdit();
+                                                    } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                                                        e.preventDefault();
+                                                        onSaveEdit();
+                                                    }
+                                                }}
+                                                className={`w-full p-2 rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 edit-textarea ${isDark ? 'bg-gray-800 text-white border border-gray-700' : 'bg-white text-gray-900 border border-gray-300'
+                                                    }`}
+                                                rows={1}
                                             />
-                                        ) : (
-                                            <MemoizedMarkdown
-                                                content={String(messageText)}
-                                                components={markdownComponents}
-                                            />
-                                        )
-                                    ) : (
-                                        showThinkingDots ? (
-                                            <div className="thinking-dots" role="status" aria-live="polite" aria-label="Assistant is thinking">
-                                                <span className="dot" />
-                                                <span className="dot" />
-                                                <span className="dot" />
+                                            <div className="flex justify-end gap-2 mt-2">
+                                                <button
+                                                    onClick={onCancelEdit}
+                                                    className={`px-3 py-1 text-xs rounded-md border transition-colors ${isDark ? 'border-gray-600 hover:bg-gray-700 text-gray-300' : 'border-gray-300 hover:bg-gray-100 text-gray-600'
+                                                        }`}
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    onClick={onSaveEdit}
+                                                    className="px-3 py-1 text-xs rounded-md bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+                                                >
+                                                    Save
+                                                </button>
                                             </div>
-                                        ) : null
-                                    )
+                                        </div>
+                                    ) : (
+                                        trimmedText !== '' ? (
+                                            isBotLoading ? (
+                                                <SmoothMessage
+                                                    text={messageText}
+                                                    isStreaming={true}
+                                                    components={markdownComponents}
+                                                />
+                                            ) : (
+                                                <MemoizedMarkdown
+                                                    content={String(messageText)}
+                                                    components={markdownComponents}
+                                                />
+                                            )
+                                        ) : (
+                                            showThinkingDots ? (
+                                                <div className="thinking-dots" role="status" aria-live="polite" aria-label="Assistant is thinking">
+                                                    <span className="dot" />
+                                                    <span className="dot" />
+                                                    <span className="dot" />
+                                                </div>
+                                            ) : null
+                                        )
+                                    )}
+                                </div>
+
+                                {message.sender === 'user' && hasAttachments && onViewAttachments && (
+                                    <div className="mt-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => onViewAttachments(message)}
+                                            className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${isDark
+                                                ? 'bg-gray-800/80 border-gray-700/70 text-gray-300 hover:bg-gray-700/80 hover:border-gray-600'
+                                                : 'bg-gray-100 border-gray-200 text-gray-700 hover:bg-gray-200 hover:border-gray-300'
+                                                }`}
+                                            title="View attachments"
+                                        >
+                                            <HiPaperClip className="w-4 h-4" />
+                                            <span>{message.attachments.length} attachment{message.attachments.length > 1 ? 's' : ''}</span>
+                                        </button>
+                                    </div>
+                                )}
+
+                                {!isBotLoading && !isEditing && (
+                                    <div
+                                        className="mt-3 flex items-center gap-2 select-none"
+                                        // Force the action buttons to inherit the AI text color (or body text for user messages)
+                                        style={{ color: message.sender === 'bot' ? 'var(--aida-bot-msg-text)' : 'inherit' }}
+                                    >
+                                        {/* Copy */}
+                                        <button
+                                            type="button"
+                                            onClick={() => handleCopy(messageText, message.id)}
+                                            className="opacity-50 hover:opacity-100 transition-opacity p-1"
+                                            aria-label="Copy message"
+                                            title="Copy message"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                                                <path d="M16 1H4c-1.1 0-2 .9-2 2v12h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
+                                            </svg>
+                                        </button>
+
+                                        {/* Speech */}
+                                        {speechApiSupported && trimmedText !== '' && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleToggleSpeech(message)}
+                                                className="opacity-50 hover:opacity-100 transition-opacity p-1"
+                                                aria-label={
+                                                    speakingMessageId === message.id && speechStatus === 'speaking' ? 'Pause speech'
+                                                        : speakingMessageId === message.id && speechStatus === 'paused' ? 'Resume speech'
+                                                            : 'Read message aloud'
+                                                }
+                                                title={
+                                                    speakingMessageId === message.id && speechStatus === 'speaking' ? 'Pause speech'
+                                                        : speakingMessageId === message.id && speechStatus === 'paused' ? 'Resume speech'
+                                                            : 'Read message aloud'
+                                                }
+                                            >
+                                                {speakingMessageId === message.id && speechStatus !== 'idle' ? (
+                                                    speechStatus === 'speaking' ? <HiPause className="w-4 h-4" /> : <HiPlay className="w-4 h-4" />
+                                                ) : (
+                                                    <HiSpeakerWave className="w-4 h-4" />
+                                                )}
+                                            </button>
+                                        )}
+
+                                        {/* Retry / Regenerate (user messages) */}
+                                        {message.sender === 'user' && onRegenerateResponse && (
+                                            <button
+                                                type="button"
+                                                onClick={() => onRegenerateResponse(message.id)}
+                                                disabled={isLoading}
+                                                className="opacity-50 hover:opacity-100 transition-opacity p-1 disabled:opacity-20 disabled:cursor-not-allowed"
+                                                aria-label="Regenerate response"
+                                                title="Regenerate response"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                                                    <path d="M12 6V3L8 7l4 4V8c2.76 0 5 2.24 5 5 0 1.01-.3 1.95-.82 2.73l1.46 1.46C18.54 15.77 19 14.44 19 13c0-3.87-3.13-7-7-7zm-6.64.64L3.9 8.1C3.27 9.36 3 10.66 3 12c0 3.87 3.13 7 7 7v3l4-4-4-4v3c-2.76 0-5-2.24-5-5 0-1.01.3-1.95.82-2.73L5.36 6.64z" />
+                                                </svg>
+                                            </button>
+                                        )}
+
+                                        {/* Retry (bot messages) */}
+                                        {message.sender === 'bot' && onRetryBotMessage && canRetry && (
+                                            <button
+                                                type="button"
+                                                onClick={() => onRetryBotMessage(message.id)}
+                                                disabled={isLoading}
+                                                className="opacity-50 hover:opacity-100 transition-opacity p-1 disabled:opacity-20 disabled:cursor-not-allowed"
+                                                aria-label="Retry response"
+                                                title="Retry response"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                                                    <path d="M12 6V3L8 7l4 4V8c2.76 0 5 2.24 5 5 0 1.01-.3 1.95-.82 2.73l1.46 1.46C18.54 15.77 19 14.44 19 13c0-3.87-3.13-7-7-7zm-6.64.64L3.9 8.1C3.27 9.36 3 10.66 3 12c0 3.87 3.13 7 7 7v3l4-4-4-4v3c-2.76 0-5-2.24-5-5 0-1.01.3-1.95.82-2.73L5.36 6.64z" />
+                                                </svg>
+                                            </button>
+                                        )}
+
+                                        {/* Edit */}
+                                        {onStartEdit && (
+                                            <button
+                                                type="button"
+                                                onClick={() => onStartEdit(message)}
+                                                className="opacity-50 hover:opacity-100 transition-opacity p-1"
+                                                aria-label="Edit message"
+                                                title="Edit message"
+                                            >
+                                                <HiPencilSquare className="w-4 h-4" />
+                                            </button>
+                                        )}
+
+                                        {/* --- Delete: two-click confirmation ---------------- */}
+                                        {onDeleteMessage && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (isPendingDelete) {
+                                                        // Second click -> actually delete
+                                                        onDeleteMessage(message.id);
+                                                        setPendingDeleteId(null);
+                                                    } else {
+                                                        // First click -> arm the button
+                                                        setPendingDeleteId(message.id);
+                                                    }
+                                                }}
+                                                disabled={isLoading}
+                                                className={`transition-all p-1 rounded disabled:opacity-20 disabled:cursor-not-allowed ${isPendingDelete
+                                                    ? 'text-red-500 bg-red-500/15 ring-1 ring-red-500/40 scale-110 opacity-100'
+                                                    : 'opacity-50 hover:opacity-100 hover:text-red-500'
+                                                    }`}
+                                                aria-label={isPendingDelete ? 'Click again to confirm delete' : 'Delete message'}
+                                                title={isPendingDelete ? 'Click again to confirm delete' : 'Delete message'}
+                                            >
+                                                <HiTrash className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                        {/* -------------------------------------------------- */}
+
+                                        {/* Response metadata info (bot messages only) */}
+                                        {message.sender === 'bot' && message.meta && (
+                                            <MessageInfoPopover meta={message.meta} theme={theme} />
+                                        )}
+
+                                        {copiedId === message.id && (
+                                            <span className="text-xs text-green-600">Copied</span>
+                                        )}
+                                    </div>
                                 )}
                             </div>
-
-                            {message.sender === 'user' && hasAttachments && onViewAttachments && (
-                                <div className="mt-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => onViewAttachments(message)}
-                                        className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${isDark
-                                            ? 'bg-gray-800/80 border-gray-700/70 text-gray-300 hover:bg-gray-700/80 hover:border-gray-600'
-                                            : 'bg-gray-100 border-gray-200 text-gray-700 hover:bg-gray-200 hover:border-gray-300'
-                                            }`}
-                                        title="View attachments"
-                                    >
-                                        <HiPaperClip className="w-4 h-4" />
-                                        <span>{message.attachments.length} attachment{message.attachments.length > 1 ? 's' : ''}</span>
-                                    </button>
-                                </div>
-                            )}
-
-                            {!isBotLoading && !isEditing && (
-                                <div
-                                    className="mt-3 flex items-center gap-2 select-none"
-                                    // Force the action buttons to inherit the AI text color (or body text for user messages)
-                                    style={{ color: message.sender === 'bot' ? 'var(--aida-bot-msg-text)' : 'inherit' }}
-                                >
-                                    {/* Copy */}
-                                    <button
-                                        type="button"
-                                        onClick={() => handleCopy(messageText, message.id)}
-                                        className="opacity-50 hover:opacity-100 transition-opacity p-1"
-                                        aria-label="Copy message"
-                                        title="Copy message"
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                                            <path d="M16 1H4c-1.1 0-2 .9-2 2v12h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
-                                        </svg>
-                                    </button>
-
-                                    {/* Speech */}
-                                    {speechApiSupported && trimmedText !== '' && (
-                                        <button
-                                            type="button"
-                                            onClick={() => handleToggleSpeech(message)}
-                                            className="opacity-50 hover:opacity-100 transition-opacity p-1"
-                                            aria-label={
-                                                speakingMessageId === message.id && speechStatus === 'speaking' ? 'Pause speech'
-                                                    : speakingMessageId === message.id && speechStatus === 'paused' ? 'Resume speech'
-                                                        : 'Read message aloud'
-                                            }
-                                            title={
-                                                speakingMessageId === message.id && speechStatus === 'speaking' ? 'Pause speech'
-                                                    : speakingMessageId === message.id && speechStatus === 'paused' ? 'Resume speech'
-                                                        : 'Read message aloud'
-                                            }
-                                        >
-                                            {speakingMessageId === message.id && speechStatus !== 'idle' ? (
-                                                speechStatus === 'speaking' ? <HiPause className="w-4 h-4" /> : <HiPlay className="w-4 h-4" />
-                                            ) : (
-                                                <HiSpeakerWave className="w-4 h-4" />
-                                            )}
-                                        </button>
-                                    )}
-
-                                    {/* Retry / Regenerate (user messages) */}
-                                    {message.sender === 'user' && onRegenerateResponse && (
-                                        <button
-                                            type="button"
-                                            onClick={() => onRegenerateResponse(message.id)}
-                                            disabled={isLoading}
-                                            className="opacity-50 hover:opacity-100 transition-opacity p-1 disabled:opacity-20 disabled:cursor-not-allowed"
-                                            aria-label="Regenerate response"
-                                            title="Regenerate response"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                                                <path d="M12 6V3L8 7l4 4V8c2.76 0 5 2.24 5 5 0 1.01-.3 1.95-.82 2.73l1.46 1.46C18.54 15.77 19 14.44 19 13c0-3.87-3.13-7-7-7zm-6.64.64L3.9 8.1C3.27 9.36 3 10.66 3 12c0 3.87 3.13 7 7 7v3l4-4-4-4v3c-2.76 0-5-2.24-5-5 0-1.01.3-1.95.82-2.73L5.36 6.64z" />
-                                            </svg>
-                                        </button>
-                                    )}
-
-                                    {/* Retry (bot messages) */}
-                                    {message.sender === 'bot' && onRetryBotMessage && canRetry && (
-                                        <button
-                                            type="button"
-                                            onClick={() => onRetryBotMessage(message.id)}
-                                            disabled={isLoading}
-                                            className="opacity-50 hover:opacity-100 transition-opacity p-1 disabled:opacity-20 disabled:cursor-not-allowed"
-                                            aria-label="Retry response"
-                                            title="Retry response"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                                                <path d="M12 6V3L8 7l4 4V8c2.76 0 5 2.24 5 5 0 1.01-.3 1.95-.82 2.73l1.46 1.46C18.54 15.77 19 14.44 19 13c0-3.87-3.13-7-7-7zm-6.64.64L3.9 8.1C3.27 9.36 3 10.66 3 12c0 3.87 3.13 7 7 7v3l4-4-4-4v3c-2.76 0-5-2.24-5-5 0-1.01.3-1.95.82-2.73L5.36 6.64z" />
-                                            </svg>
-                                        </button>
-                                    )}
-
-                                    {/* Edit */}
-                                    {onStartEdit && (
-                                        <button
-                                            type="button"
-                                            onClick={() => onStartEdit(message)}
-                                            className="opacity-50 hover:opacity-100 transition-opacity p-1"
-                                            aria-label="Edit message"
-                                            title="Edit message"
-                                        >
-                                            <HiPencilSquare className="w-4 h-4" />
-                                        </button>
-                                    )}
-
-                                    {/* --- Delete: two-click confirmation ---------------- */}
-                                    {onDeleteMessage && (
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                if (isPendingDelete) {
-                                                    // Second click -> actually delete
-                                                    onDeleteMessage(message.id);
-                                                    setPendingDeleteId(null);
-                                                } else {
-                                                    // First click -> arm the button
-                                                    setPendingDeleteId(message.id);
-                                                }
-                                            }}
-                                            disabled={isLoading}
-                                            className={`transition-all p-1 rounded disabled:opacity-20 disabled:cursor-not-allowed ${isPendingDelete
-                                                ? 'text-red-500 bg-red-500/15 ring-1 ring-red-500/40 scale-110 opacity-100'
-                                                : 'opacity-50 hover:opacity-100 hover:text-red-500'
-                                                }`}
-                                            aria-label={isPendingDelete ? 'Click again to confirm delete' : 'Delete message'}
-                                            title={isPendingDelete ? 'Click again to confirm delete' : 'Delete message'}
-                                        >
-                                            <HiTrash className="w-4 h-4" />
-                                        </button>
-                                    )}
-                                    {/* -------------------------------------------------- */}
-
-                                    {/* Response metadata info (bot messages only) */}
-                                    {message.sender === 'bot' && message.meta && (
-                                        <MessageInfoPopover meta={message.meta} theme={theme} />
-                                    )}
-
-                                    {copiedId === message.id && (
-                                        <span className="text-xs text-green-600">Copied</span>
-                                    )}
-                                </div>
-                            )}
                         </div>
+                    );
+                })}
+                {pinnedMessageId && <div ref={spacerRef} aria-hidden="true" style={{ height: 0 }} />}
+            </div>
+
+            {/* --- NEW: scroll to previous message button ------------------------- */}
+            {messagesAboveCount > 0 && (
+                <button
+                    type="button"
+                    onClick={scrollToPreviousMessage}
+                    aria-label={`Scroll up to previous message, ${messagesAboveCount} above`}
+                    title={`${messagesAboveCount} message${messagesAboveCount === 1 ? '' : 's'} above - click to scroll up`}
+                    className={`absolute top-4 right-4 z-10 rounded-full p-2 shadow-lg border transition-all hover:scale-105 ${isDark
+                            ? 'bg-gray-800 border-gray-700 text-gray-300 hover:text-white'
+                            : 'bg-white border-gray-200 text-gray-500 hover:text-gray-800'
+                        }`}
+                >
+                    <div className="flex items-center gap-1">
+                        <span className="text-xs font-semibold min-w-[1rem] text-center">
+                            {messagesAboveCount}
+                        </span>
+                        <HiArrowUp className="w-4 h-4" />
                     </div>
-                );
-            })}
-        </div>
-        {!isAtBottom && (
-            <button
-                type="button"
-                onClick={scrollToBottom}
-                aria-label="Scroll to latest message"
-                title="Scroll to latest message"
-                className={`absolute bottom-4 right-4 z-10 rounded-full p-2 shadow-lg border transition-all hover:scale-105 ${isDark
-                    ? 'bg-gray-800 border-gray-700 text-gray-300 hover:text-white'
-                    : 'bg-white border-gray-200 text-gray-500 hover:text-gray-800'
-                    }`}
-            >
-                <HiArrowDown className="w-4 h-4" />
-            </button>
-        )}
+                </button>
+            )}
+            {/* ------------------------------------------------------------------ */}
+
+            {!isAtBottom && (
+                <button
+                    type="button"
+                    onClick={scrollToBottom}
+                    aria-label="Scroll to latest message"
+                    title={hasNewContent ? 'New message. Click to scroll.' : 'Scroll to latest message'}
+                    className={`absolute bottom-4 right-4 z-10 rounded-full p-2 shadow-lg border transition-all hover:scale-105 ${hasNewContent
+                            ? (isDark
+                                ? 'bg-gray-800 border-green-400 text-green-400 hover:bg-gray-700 hover:text-green-300'
+                                : 'bg-white border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700')
+                            : (isDark
+                                ? 'bg-gray-800 border-gray-700 text-gray-300 hover:text-white'
+                                : 'bg-white border-gray-200 text-gray-500 hover:text-gray-800')
+                        }`}
+                >
+                    <HiArrowDown className="w-4 h-4" />
+                </button>
+            )}
         </div>
     );
 };
