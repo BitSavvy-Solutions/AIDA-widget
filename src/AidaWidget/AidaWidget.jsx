@@ -230,11 +230,7 @@ const AidaWidget = (props) => {
     const [sessionToShare, setSessionToShare] = useState(null);
 
     const inputRef = useRef(null);
-    const messagesEndRef = useRef(null);
-    const programmaticScrollRef = useRef(false);
     const [isMobileViewport, setIsMobileViewport] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
-    const [isAtBottom, setIsAtBottom] = useState(true);
-    const [isAutoScrollPaused, setIsAutoScrollPaused] = useState(false);
     const siteLanguage = language || 'en';
 
     const { isOpen, isClosing, isFullscreen, theme, setTheme, setIsFullscreen, toggleChatVisibility } = useWidgetState();
@@ -443,17 +439,6 @@ const AidaWidget = (props) => {
         if (loadMessagesForSession) loadMessagesForSession(currentSessionId);
     }, [currentSessionId, loadMessagesForSession]);
 
-    useEffect(() => { if (!isLoading) setIsAutoScrollPaused(false); }, [isLoading]);
-
-    const handleScrollStateChange = useCallback((atBottom) => {
-        setIsAtBottom(atBottom);
-        if (atBottom) setIsAutoScrollPaused(false);
-    }, []);
-
-    const handleUserScrollAway = useCallback(() => {
-        if (isLoading) setIsAutoScrollPaused(true);
-    }, [isLoading]);
-
     const handleViewAttachments = useCallback((message) => {
         setViewingMessageAttachments(message);
     }, []);
@@ -512,8 +497,6 @@ const AidaWidget = (props) => {
     const handleOpenEmbed = useCallback((url) => {
         setEmbedUrl(url);
     }, []);
-
-    const shouldAutoScroll = isLoading ? !isAutoScrollPaused : isAtBottom;
 
     const getLocalizedGreeting = (lang) => ({ 'ar': "✨ مرحبًا! أنا آيدا، مساعدتك الرقمية الذكية 🤖💖 كيف يمكنني مساعدتك اليوم؟ 😊", 'fr': "👋 Coucou ! Moi c'est Aida, ta super assistante numérique ✨💻 Comment puis-je t'aider aujourd'hui ? 😄" }[lang] || "Hey hey! 👋 I'm Aida, your sparkly smart digital assistant 🤖💖 How can I help you today? 😄");
 
@@ -688,11 +671,6 @@ const AidaWidget = (props) => {
                             liveReasoning={liveReasoning}
                             siteLanguage={siteLanguage}
                             theme={baseTheme}
-                            messagesEndRef={messagesEndRef}
-                            programmaticScrollRef={programmaticScrollRef}
-                            shouldAutoScroll={shouldAutoScroll}
-                            onScrollStateChange={handleScrollStateChange}
-                            onUserScrollAway={handleUserScrollAway}
                             editingMessageId={editingMessageId}
                             editDraft={editDraft}
                             setEditDraft={setEditDraft}
