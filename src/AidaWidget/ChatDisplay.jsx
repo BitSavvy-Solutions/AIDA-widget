@@ -321,7 +321,7 @@ const MessageInfoPopover = ({ meta, theme }) => {
 
                             {reasoningTokens > 0 && (
                                 <div className="flex items-center justify-between gap-3 mb-1.5 pl-3">
-                                    <span className="opacity-50 text-[10px]">&#x2192; Reasoning</span>
+                                    <span className="opacity-50 text-[10px]">↳ Reasoning</span>
                                     <span className="font-mono text-purple-400">
                                         {reasoningTokens.toLocaleString()}
                                         <span className="opacity-40"> tok</span>
