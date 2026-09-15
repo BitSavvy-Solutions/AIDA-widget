@@ -1061,17 +1061,36 @@ const ChatDisplay = ({
                     onClick={scrollToPreviousMessage}
                     aria-label={`Scroll up to previous user message, ${messagesAboveCount} above`}
                     title={`${messagesAboveCount} user message${messagesAboveCount === 1 ? '' : 's'} above - click to scroll up`}
-                    className={`absolute top-4 right-4 z-10 rounded-full p-2 shadow-lg border transition-all hover:scale-105 ${isDark
-                            ? 'bg-gray-800 border-gray-700 text-gray-300 hover:text-white'
-                            : 'bg-white border-gray-200 text-gray-500 hover:text-gray-800'
+                    className={`absolute right-4 bottom-[4.5rem] z-10 rounded-full px-2 py-3 shadow-lg border transition-all hover:scale-105 ${isDark
+                        ? 'bg-gray-800 border-gray-700 text-gray-300 hover:text-white'
+                        : 'bg-white border-gray-200 text-gray-500 hover:text-gray-800'
                         }`}
                 >
-                    <div className="flex items-center gap-1">
-                        <span className="text-xs font-semibold min-w-[1rem] text-center">
+                    <div className="flex flex-col items-center gap-1">
+                        <span className="text-xs font-semibold min-w-[1rem] text-center leading-none">
                             {messagesAboveCount}
                         </span>
                         <HiArrowUp className="w-4 h-4" />
                     </div>
+                </button>
+            )}
+
+            {!isAtBottom && (
+                <button
+                    type="button"
+                    onClick={scrollToBottom}
+                    aria-label="Scroll to latest message"
+                    title={hasNewContent ? 'New message. Click to scroll.' : 'Scroll to latest message'}
+                    className={`absolute bottom-4 right-4 z-10 rounded-full p-2 shadow-lg border transition-all hover:scale-105 ${hasNewContent
+                        ? (isDark
+                            ? 'bg-gray-800 border-green-400 text-green-400 hover:bg-gray-700 hover:text-green-300'
+                            : 'bg-white border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700')
+                        : (isDark
+                            ? 'bg-gray-800 border-gray-700 text-gray-300 hover:text-white'
+                            : 'bg-white border-gray-200 text-gray-500 hover:text-gray-800')
+                        }`}
+                >
+                    <HiArrowDown className="w-4 h-4" />
                 </button>
             )}
             {/* ------------------------------------------------------------------ */}
@@ -1083,12 +1102,12 @@ const ChatDisplay = ({
                     aria-label="Scroll to latest message"
                     title={hasNewContent ? 'New message. Click to scroll.' : 'Scroll to latest message'}
                     className={`absolute bottom-4 right-4 z-10 rounded-full p-2 shadow-lg border transition-all hover:scale-105 ${hasNewContent
-                            ? (isDark
-                                ? 'bg-gray-800 border-green-400 text-green-400 hover:bg-gray-700 hover:text-green-300'
-                                : 'bg-white border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700')
-                            : (isDark
-                                ? 'bg-gray-800 border-gray-700 text-gray-300 hover:text-white'
-                                : 'bg-white border-gray-200 text-gray-500 hover:text-gray-800')
+                        ? (isDark
+                            ? 'bg-gray-800 border-green-400 text-green-400 hover:bg-gray-700 hover:text-green-300'
+                            : 'bg-white border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700')
+                        : (isDark
+                            ? 'bg-gray-800 border-gray-700 text-gray-300 hover:text-white'
+                            : 'bg-white border-gray-200 text-gray-500 hover:text-gray-800')
                         }`}
                 >
                     <HiArrowDown className="w-4 h-4" />
