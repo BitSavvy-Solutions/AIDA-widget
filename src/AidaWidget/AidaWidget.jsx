@@ -504,7 +504,6 @@ const AidaWidget = (props) => {
         if (isOpen) {
             cancelAutoSendTimer(); cancelAutoRecordTimer();
             if (isRecording) stopRecording();
-            if (isLoading) stopStreaming();
             if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel();
         } else if (messages.length === 0) {
             setMessages([{ id: `bot-${Date.now()}`, text: getLocalizedGreeting(siteLanguage), sender: 'bot' }]);
