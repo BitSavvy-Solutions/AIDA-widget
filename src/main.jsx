@@ -30,12 +30,20 @@ function render(selector, props) {
   }
 }
 
-// ✅ NEW: Expose a method for the host page to push context into the widget programmatically
+// Expose a method for the host page to push context into the widget programmatically
 function pushContext(content, name = 'Page Context.md') {
   const event = new CustomEvent('aida-push-context', { 
     detail: { content, name } 
   });
   window.dispatchEvent(event);
+}
+
+/**
+ * Tell the widget to open a specific chat. If the widget is closed, it opens.
+ * Pass null or omit to start a new empty chat.
+ */
+function openChat(chatId) {
+  window.dispatchEvent(new CustomEvent('aida-open-chat', { detail: { chatId } }));
 }
 
 if (import.meta.env.DEV) {
@@ -71,5 +79,10 @@ if (import.meta.env.DEV) {
   });
 }
 
+// Expose a stable API on window so the frontend can call these directly
+if (typeof window !== 'undefined') {
+  window.AidaWidget = { render, pushContext, openChat };
+}
+
 // ✅ Export both render and pushContext
-export { render, pushContext };
+export { render, pushContext, openChat };

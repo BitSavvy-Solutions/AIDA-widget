@@ -184,7 +184,7 @@ const AidaWidget = (props) => {
 
     const [selectedModel, setSelectedModel] = useState(() => {
         const saved = localStorage.getItem('aida-selected-model');
-        if (saved?.startsWith('ollama:') || saved?.startsWith('chrome:')) return saved;        const exists = availableModels.some(m => m.value === saved);
+        if (saved?.startsWith('ollama:') || saved?.startsWith('chrome:')) return saved; const exists = availableModels.some(m => m.value === saved);
         return exists ? saved : availableModels[0].value;
     });
 
@@ -241,7 +241,7 @@ const AidaWidget = (props) => {
     const chromeAI = useChromeAI(true);
     const ollama = useOllama();
     const [isLocalModelsModalOpen, setIsLocalModelsModalOpen] = useState(false);
-    const [localModelsTab, setLocalModelsTab] = useState('ollama');    const {
+    const [localModelsTab, setLocalModelsTab] = useState('ollama'); const {
         attachments, setAttachments, addImageAttachments, addTextAttachment, addFolderAttachments,
         addUrlAttachment, addContextAttachment,
         removeAttachment, clearAttachments, isAttachmentModalOpen, openModal: openAttachmentModal, closeModal: closeAttachmentModal
@@ -512,6 +512,18 @@ const AidaWidget = (props) => {
         toggleChatVisibility();
     }, [isOpen, isRecording, isLoading, messages.length, siteLanguage, stopRecording, stopStreaming, toggleChatVisibility, setMessages, cancelAutoSendTimer, cancelAutoRecordTimer]);
 
+    // Listen for frontend requests to open a specific chat
+    useEffect(() => {
+        const handler = (e) => {
+            const { chatId } = e.detail || {};
+            if (!chatId) return;
+            setCurrentSessionId(chatId);
+            if (!isOpen) toggleChatVisibility();
+        };
+        window.addEventListener('aida-open-chat', handler);
+        return () => window.removeEventListener('aida-open-chat', handler);
+    }, [isOpen, setCurrentSessionId, toggleChatVisibility]);
+
     const resetChat = () => { saveCurrentChatToHistory(); setMessages([]); setCurrentSessionId(null); clearAttachments(); };
     const handleRecordButtonClick = useCallback(() => { if (isLoading) return; cancelAutoRecordTimer(); isRecording ? stopRecording() : startRecording(); }, [isRecording, isLoading, stopRecording, startRecording, cancelAutoRecordTimer]);
 
@@ -686,7 +698,7 @@ const AidaWidget = (props) => {
                             onEmbedUrl={handleOpenEmbed}
                             onDeleteMessage={handleDeleteMessage}
                         />
-                                                <ChatInput
+                        <ChatInput
                             handleSendMessage={stableHandleSendMessage}
                             handleRecordButtonClick={handleRecordButtonClick}
                             inputRef={inputRef}
@@ -736,7 +748,7 @@ const AidaWidget = (props) => {
                             isLocalModelsModalOpen={isLocalModelsModalOpen}
                             onOllamaRefresh={() => ollama.fetchModels()}
                             onOpenOllamaSettings={() => { setLocalModelsTab('ollama'); setIsLocalModelsModalOpen(true); }}
-                            onOpenChromeAISettings={() => { setLocalModelsTab('chrome'); setIsLocalModelsModalOpen(true); }}                        />
+                            onOpenChromeAISettings={() => { setLocalModelsTab('chrome'); setIsLocalModelsModalOpen(true); }} />
                         <AppearanceModal
                             isOpen={isAppearanceModalOpen}
                             onClose={() => setIsAppearanceModalOpen(false)}
@@ -827,7 +839,7 @@ const AidaWidget = (props) => {
                 theme={baseTheme}
             />
 
-<LocalModelsModal
+            <LocalModelsModal
                 isOpen={isLocalModelsModalOpen}
                 onClose={() => setIsLocalModelsModalOpen(false)}
                 activeTab={localModelsTab}
