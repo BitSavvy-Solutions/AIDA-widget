@@ -503,13 +503,12 @@ const AidaWidget = (props) => {
     const toggleChat = useCallback(() => {
         if (isOpen) {
             cancelAutoSendTimer(); cancelAutoRecordTimer();
-            if (isRecording) stopRecording();
             if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel();
         } else if (messages.length === 0) {
             setMessages([{ id: `bot-${Date.now()}`, text: getLocalizedGreeting(siteLanguage), sender: 'bot' }]);
         }
         toggleChatVisibility();
-    }, [isOpen, isRecording, isLoading, messages.length, siteLanguage, stopRecording, stopStreaming, toggleChatVisibility, setMessages, cancelAutoSendTimer, cancelAutoRecordTimer]);
+    }, [isOpen, isLoading, messages.length, siteLanguage, stopStreaming, toggleChatVisibility, setMessages, cancelAutoSendTimer, cancelAutoRecordTimer]);
 
     // Listen for frontend requests to open a specific chat
     useEffect(() => {
