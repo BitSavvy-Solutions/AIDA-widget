@@ -197,7 +197,7 @@ const AidaWidget = (props) => {
 
     const [contextLimit, setContextLimit] = useState(() => {
         const stored = localStorage.getItem('aida-context-limit');
-        return stored ? Number(stored) : 10;
+        return stored ? Number(stored) : 1000;
     });
 
     const [textSize, setTextSize] = useState(() => {
@@ -522,7 +522,7 @@ const AidaWidget = (props) => {
         return () => window.removeEventListener('aida-open-chat', handler);
     }, [isOpen, setCurrentSessionId, toggleChatVisibility]);
 
-    const resetChat = () => { saveCurrentChatToHistory(); setMessages([]); setCurrentSessionId(null); clearAttachments(); };
+    const resetChat = () => { saveCurrentChatToHistory(); setMessages([]); setCurrentSessionId(null); setContextLimit(1000); };
     const handleRecordButtonClick = useCallback(() => { if (isLoading) return; cancelAutoRecordTimer(); isRecording ? stopRecording() : startRecording(); }, [isRecording, isLoading, stopRecording, startRecording, cancelAutoRecordTimer]);
 
     const handleRetry = useCallback(async (botMessageId) => {
