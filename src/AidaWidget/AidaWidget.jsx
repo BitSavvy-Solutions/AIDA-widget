@@ -622,8 +622,15 @@ const AidaWidget = (props) => {
                     </button>
                 </div>
             )}
-            {isOpen && (
-                <div className={`aida-widget-viewport z-50 ${isFullscreen ? 'aida-widget-viewport--fullscreen' : 'aida-widget-viewport--docked'}`}>
+           <div
+                 aria-hidden={!isOpen}
+    style={{ display: isOpen ? 'flex' : 'none' }}
+                className={`aida-widget-viewport z-50 ${
+                   isFullscreen
+                       ? 'aida-widget-viewport--fullscreen'
+                       : 'aida-widget-viewport--docked'
+               }`}
+           >
                     <div ref={sidebarRef} data-theme={baseTheme} style={{ ...sidebarInlineStyle, backgroundColor: 'var(--aida-body-bg)', color: 'var(--aida-body-text)', borderColor: 'var(--aida-card-border)' }} className={containerClasses} {...dropZoneProps}>
                         {features.resizable && !isFullscreen && !isMobileViewport && <div {...resizeHandleProps} />}
                         {attachmentsEnabled && isDragOverWidget && (
@@ -758,7 +765,7 @@ const AidaWidget = (props) => {
                         />
                     </div>
                 </div>
-            )}
+            
 
             {isPromptModalOpen && (
                 <div role="dialog" aria-modal="true" className="fixed inset-0 z-[60] flex items-center justify-center">
