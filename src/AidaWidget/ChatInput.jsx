@@ -37,6 +37,20 @@ const formatPrice = (priceValue) => {
     return `$${n.toFixed(2)}/M`;
 };
 
+const formatContextSize = (contextLength) => {
+    const value = Number(contextLength);
+
+    if (!Number.isFinite(value) || value <= 0) {
+        return null;
+    }
+
+    return new Intl.NumberFormat('en', {
+        notation: 'compact',
+        maximumFractionDigits: 1,
+    }).format(value);
+};
+
+
 const formatTime = (seconds) => {
     const m = Math.floor(seconds / 60).toString().padStart(2, '0');
     const s = (seconds % 60).toString().padStart(2, '0');
@@ -698,6 +712,11 @@ const ChatInput = ({
         } else {
             rowClass += isDark ? 'hover:bg-gray-700/30 border-gray-700/50 hover:border-gray-600 ' : 'hover:bg-gray-50 border-gray-200 ';
         }
+
+        const contextSize = formatContextSize(
+    opt.contextLength ?? opt.context_length
+);
+
         const promptPrice = formatPrice(opt.pricing?.prompt);
         const completionPrice = formatPrice(opt.pricing?.completion);
         return (
@@ -713,13 +732,44 @@ const ChatInput = ({
                     <div className="flex items-center gap-2 flex-wrap">
                         {opt.modality && <ModularBadges modality={opt.modality} />}
                     </div>
-                    {(promptPrice || completionPrice) && (
-                        <div className={`flex items-center gap-2 flex-wrap text-xs font-mono px-2 py-1 rounded mt-1 ${isDark ? 'bg-gray-900/60 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
-                            {promptPrice && (<span className="flex items-center gap-1"><span className="opacity-60">In</span><span className="text-emerald-400 font-semibold">{promptPrice}</span></span>)}
-                            {promptPrice && completionPrice && (<span className="opacity-40">·</span>)}
-                            {completionPrice && (<span className="flex items-center gap-1"><span className="opacity-60">Out</span><span className="text-blue-400 font-semibold">{completionPrice}</span></span>)}
-                        </div>
-                    )}
+                    {(contextSize || promptPrice || completionPrice) && (
+    <div className={`flex items-center gap-2 flex-wrap text-xs font-mono px-2 py-1 rounded mt-1 ${isDark ? 'bg-gray-900/60 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
+        {contextSize && (
+            <span className="flex items-center gap-1">
+                <span className="opacity-60">Context</span>
+                <span className="text-purple-400 font-semibold">
+                    {contextSize}
+                </span>
+            </span>
+        )}
+
+        {contextSize && (promptPrice || completionPrice) && (
+            <span className="opacity-40">·</span>
+        )}
+
+        {promptPrice && (
+            <span className="flex items-center gap-1">
+                <span className="opacity-60">In</span>
+                <span className="text-emerald-400 font-semibold">
+                    {promptPrice}
+                </span>
+            </span>
+        )}
+
+        {promptPrice && completionPrice && (
+            <span className="opacity-40">·</span>
+        )}
+
+        {completionPrice && (
+            <span className="flex items-center gap-1">
+                <span className="opacity-60">Out</span>
+                <span className="text-blue-400 font-semibold">
+                    {completionPrice}
+                </span>
+            </span>
+        )}
+    </div>
+)}
                 </div>
             </button>
         );
