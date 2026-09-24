@@ -1,6 +1,6 @@
 /* src/AidaWidget/AttachmentModal.jsx */
 import React, { useRef, useState } from 'react';
-import { HiXMark, HiPhoto, HiDocumentText, HiGlobeAlt, HiArrowPath, HiOutlineFolder, HiOutlineComputerDesktop } from 'react-icons/hi2';
+import { HiXMark, HiPhoto, HiDocumentText, HiDocument, HiGlobeAlt, HiArrowPath, HiOutlineFolder, HiOutlineComputerDesktop } from 'react-icons/hi2';
 import AttachmentItem from './AttachmentItem';
 import AttachmentPreview from './AttachmentPreview';
 
@@ -9,6 +9,7 @@ const AttachmentModal = ({
     onClose,
     attachments,
     onAddImages,
+    onAddPdfs,
     onAddText,
     onAddFolder,
     onAddUrl,
@@ -21,6 +22,7 @@ const AttachmentModal = ({
     isReadOnly = false
 }) => {
     const imageInputRef = useRef(null);
+    const pdfInputRef = useRef(null);
     const textInputRef = useRef(null);
     const folderInputRef = useRef(null);
     const [urlInput, setUrlInput] = useState('');
@@ -43,6 +45,8 @@ const AttachmentModal = ({
     const handlePreview = (attachment) => {
         if (attachment.type === 'image') {
             if (onImagePreview) onImagePreview(attachment);
+        } else if (attachment.type === 'pdf') {
+            if (attachment.src) window.open(attachment.src, '_blank', 'noopener,noreferrer');
         } else if (attachment.type === 'text') {
             setPreviewingAttachment(attachment);
         }
@@ -52,6 +56,7 @@ const AttachmentModal = ({
         ? attachments
         : attachments.filter(att => {
             if (activeTab === 'images') return att.type === 'image';
+            if (activeTab === 'pdfs') return att.type === 'pdf';
             if (activeTab === 'text') return att.type === 'text';
             // Also show scraped URLs in the 'text' tab after success
             if (activeTab === 'urls') return att.type === 'url';
@@ -97,7 +102,7 @@ const AttachmentModal = ({
                             </button>
                         </div>
                         <div className={`flex gap-1 px-4 pt-3 border-b ${borderClasses}`}>
-                            {['all', 'images', 'text', 'urls'].map(tab => (
+                            {['all', 'images', 'pdfs', 'text', 'urls'].map(tab => (
                                 <button
                                     key={tab}
                                     type="button"
@@ -107,7 +112,7 @@ const AttachmentModal = ({
                                             : (isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-600 hover:text-gray-900')
                                         }`}
                                 >
-                                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                                    {tab === 'pdfs' ? 'PDFs' : tab.charAt(0).toUpperCase() + tab.slice(1)}
                                 </button>
                             ))}
                         </div>
@@ -115,7 +120,7 @@ const AttachmentModal = ({
                             {filteredAttachments.length === 0 ? (
                                 <div className={`text-center py-8 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                                     <p>No attachments yet</p>
-                                    <p className="text-sm mt-1">Add images, text files, or URLs below</p>
+                                    <p className="text-sm mt-1">Add images, PDFs, text files, or URLs below</p>
                                 </div>
                             ) : (
                                 filteredAttachments.map(attachment => (
@@ -135,6 +140,7 @@ const AttachmentModal = ({
 
                                 {/* Hidden file inputs */}
                                 <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files || []); if (files.length) onAddImages(files); e.target.value = ''; }} />
+                                <input ref={pdfInputRef} type="file" accept="application/pdf" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files || []); if (files.length) onAddPdfs(files); e.target.value = ''; }} />
                                 <input ref={textInputRef} type="file" accept="text/*,.md,.json,.yml,.yaml,.ini,.log,.env,.py,.js,.jsx,.ts,.tsx,.html,.css,.scss,.sh,.bat,.ps1,.xml,.csv,.java,.c,.cpp,.h,.cs,.go,.rb,.php,.sql" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) onAddText(file); e.target.value = ''; }} />
 
                                 <input
@@ -158,10 +164,14 @@ const AttachmentModal = ({
                                 />
 
                                 {/* Action buttons */}
-                                <div className="grid grid-cols-3 gap-3">
+                                <div className="grid grid-cols-4 gap-3">
                                     <button type="button" onClick={() => imageInputRef.current?.click()} className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg border transition-colors ${isDark ? 'border-gray-700 bg-gray-800/50 hover:bg-gray-800' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}`} title="Add Images">
                                         <HiPhoto className="w-6 h-6" />
                                         <span className="text-xs font-medium">Images</span>
+                                    </button>
+                                    <button type="button" onClick={() => pdfInputRef.current?.click()} className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg border transition-colors ${isDark ? 'border-gray-700 bg-gray-800/50 hover:bg-gray-800' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}`} title="Add PDFs">
+                                        <HiDocument className="w-6 h-6" />
+                                        <span className="text-xs font-medium">PDF</span>
                                     </button>
                                     <button type="button" onClick={() => textInputRef.current?.click()} className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg border transition-colors ${isDark ? 'border-gray-700 bg-gray-800/50 hover:bg-gray-800' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}`} title="Add Text File">
                                         <HiDocumentText className="w-6 h-6" />
