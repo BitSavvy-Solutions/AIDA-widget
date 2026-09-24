@@ -544,6 +544,8 @@ export const useChatAPI = ({
         const detectedLanguageCode = supportedLanguages.includes(langMap[detectedLang]) ? langMap[detectedLang] : "en";
         const imageAttachments = (userMessage.attachments || []).filter(att => att.type === 'image');
         const imageUrls = imageAttachments.map(img => img.src).filter(Boolean);
+        const pdfAttachments = (userMessage.attachments || []).filter(att => att.type === 'pdf');
+        const pdfUrls = pdfAttachments.map(pdf => pdf.src).filter(Boolean);
 
         let limitedHistory = historyForPayload;
         if (typeof contextLimit === 'number' && contextLimit > 0) {
@@ -572,6 +574,10 @@ export const useChatAPI = ({
 
             if (imageUrls.length > 0) {
                 payload.image_data_urls = imageUrls;
+            }
+
+            if (pdfUrls.length > 0) {
+                payload.pdf_attachments = pdfUrls;
             }
 
             const response = await fetch(apiConfig.chatUrl, {

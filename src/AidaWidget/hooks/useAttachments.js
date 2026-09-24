@@ -2,6 +2,8 @@
 import { useState, useCallback } from 'react';
 import { SCRAPE_URL } from '../utils/apiConfig';
 
+const MAX_PDF_BYTES = 20 * 1024 * 1024; // matches backend MAX_PDF_SIZE_BYTES
+
 const TEXT_MIME_TYPES = /^text\//;
 // From AttachmentModal's file input `accept` attribute
 const TEXT_EXTS = new Set([
@@ -118,6 +120,35 @@ export const useAttachments = (setSelectedModel) => {
             console.error('Failed to process image(s)', e);
         }
     }, [setSelectedModel]);
+
+    const addPdfAttachments = useCallback(async (files) => {
+        if (!files || files.length === 0) return;
+
+        try {
+            const results = [];
+            for (const file of Array.from(files)) {
+                if (file.size > MAX_PDF_BYTES) {
+                    alert(`PDF "${file.name}" exceeds the 20 MB limit.`);
+                    continue;
+                }
+                const dataUrl = await readAsDataURL(file);
+                results.push({
+                    id: `pdf-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                    type: 'pdf',
+                    src: dataUrl,
+                    name: file.name,
+                    size: file.size
+                });
+            }
+
+            if (results.length > 0) {
+                setAttachments(prev => [...prev, ...results]);
+            }
+        } catch (e) {
+            console.error('Failed to process PDF(s)', e);
+            alert('Failed to process PDF file(s). Please try again.');
+        }
+    }, []);
 
     const addTextAttachment = useCallback(async (file) => {
         try {
@@ -275,6 +306,7 @@ export const useAttachments = (setSelectedModel) => {
         attachments,
         setAttachments, // Expose setter for editing functionality
         addImageAttachments,
+        addPdfAttachments,
         addTextAttachment,
         addFolderAttachments,
         addUrlAttachment,

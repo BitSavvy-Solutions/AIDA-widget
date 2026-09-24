@@ -1,5 +1,4 @@
 // src/AidaWidget/AidaWidget.jsx
-/* src/AidaWidget/AidaWidget.jsx */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import SevenSegmentDisplay from './SevenSegmentDisplay';
 import ChatHeader from './ChatHeader';
@@ -241,8 +240,8 @@ const AidaWidget = (props) => {
     const chromeAI = useChromeAI(true);
     const ollama = useOllama();
     const [isLocalModelsModalOpen, setIsLocalModelsModalOpen] = useState(false);
-    const [localModelsTab, setLocalModelsTab] = useState('ollama'); const {
-        attachments, setAttachments, addImageAttachments, addTextAttachment, addFolderAttachments,
+    const [localModelsTab, setLocalModelsTab] = useState('ollama');    const {
+        attachments, setAttachments, addImageAttachments, addPdfAttachments, addTextAttachment, addFolderAttachments,
         addUrlAttachment, addContextAttachment,
         removeAttachment, clearAttachments, isAttachmentModalOpen, openModal: openAttachmentModal, closeModal: closeAttachmentModal
     } = useAttachments(setSelectedModel);
@@ -281,6 +280,7 @@ const AidaWidget = (props) => {
     const { isDragOverWidget, dropZoneProps } = useDragAndDrop({
         isEnabled: attachmentsEnabled,
         addImageAttachments,
+        addPdfAttachments,
         addTextAttachment,
         addFolderAttachments
     });
@@ -796,6 +796,7 @@ const AidaWidget = (props) => {
             <AttachmentModal
                 isOpen={isAttachmentModalOpen} onClose={closeAttachmentModal}
                 attachments={attachments} onAddImages={addImageAttachments}
+                onAddPdfs={addPdfAttachments}
                 onAddText={addTextAttachment} onAddFolder={addFolderAttachments}
                 onAddUrl={addUrlAttachment} onRemove={removeAttachment}
                 onClearAll={clearAttachments} onImagePreview={setImagePreview}

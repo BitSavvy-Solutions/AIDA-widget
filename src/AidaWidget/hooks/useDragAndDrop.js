@@ -11,6 +11,7 @@ const TEXT_EXTS = new Set([
 ]);
 
 const isImageFile = (file) => file?.type.startsWith('image/') || (typeof file?.name === 'string' && IMAGE_FILE_PATTERN.test(file.name));
+const isPdfFile = (file) => file?.type === 'application/pdf' || (typeof file?.name === 'string' && /\.pdf$/i.test(file.name));
 
 const isKnownTextFile = (file) => {
     if (!file || !file.name) return false;
@@ -87,6 +88,7 @@ const readDirectory = (entry) => {
  */
 export const useDragAndDrop = ({
     addImageAttachments,
+    addPdfAttachments,
     addTextAttachment,
     addFolderAttachments,
     isEnabled
@@ -146,6 +148,7 @@ export const useDragAndDrop = ({
             const allItems = allFilesNested.flat().filter(Boolean);
 
             const imageFiles = [];
+            const pdfFiles = [];
             const textFilesFromFolders = [];
             const individualTextFiles = [];
 
@@ -154,14 +157,18 @@ export const useDragAndDrop = ({
                 if (item.file && item.path) {
                     if (isImageFile(item.file)) {
                         imageFiles.push(item.file);
+                    } else if (isPdfFile(item.file)) {
+                        pdfFiles.push(item.file);
                     } else if (isKnownTextFile(item.file)) {
                         textFilesFromFolders.push(item);
                     }
-                } 
+                }
                 // Case 2: Item is a standard File object from a single file drop
                 else if (item instanceof File) {
                     if (isImageFile(item)) {
                         imageFiles.push(item);
+                    } else if (isPdfFile(item)) {
+                        pdfFiles.push(item);
                     } else if (isKnownTextFile(item)) {
                         individualTextFiles.push(item);
                     }
@@ -170,6 +177,9 @@ export const useDragAndDrop = ({
 
             if (imageFiles.length > 0) {
                 addImageAttachments(imageFiles);
+            }
+            if (pdfFiles.length > 0) {
+                addPdfAttachments(pdfFiles);
             }
             if (textFilesFromFolders.length > 0) {
                 addFolderAttachments(textFilesFromFolders);
@@ -181,7 +191,7 @@ export const useDragAndDrop = ({
             console.error("Error processing dropped files:", error);
             alert("An error occurred while trying to attach the dropped files. Please try again.");
         }
-    }, [isEnabled, addImageAttachments, addTextAttachment, addFolderAttachments]);
+    }, [isEnabled, addImageAttachments, addPdfAttachments, addTextAttachment, addFolderAttachments]);
     
     return {
         isDragOverWidget,

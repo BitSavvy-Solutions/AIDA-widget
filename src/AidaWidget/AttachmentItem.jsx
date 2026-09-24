@@ -1,6 +1,6 @@
 /* src/AidaWidget/AttachmentItem.jsx */
 import React from 'react';
-import { HiXMark, HiDocumentText, HiPhoto, HiGlobeAlt, HiArrowPath, HiExclamationCircle } from 'react-icons/hi2';
+import { HiXMark, HiDocumentText, HiPhoto, HiGlobeAlt, HiArrowPath, HiExclamationCircle, HiDocument } from 'react-icons/hi2';
 
 const AttachmentItem = ({ attachment, onRemove, onPreview, theme = 'dark' }) => {
     const formatSize = (bytes) => {
@@ -21,6 +21,8 @@ const AttachmentItem = ({ attachment, onRemove, onPreview, theme = 'dark' }) => 
         switch (attachment.type) {
             case 'image':
                 return <HiPhoto className="w-5 h-5 text-blue-400" />;
+            case 'pdf':
+                return <HiDocument className="w-5 h-5 text-red-400" />;
             case 'text':
                 return <HiDocumentText className="w-5 h-5 text-green-400" />;
             case 'url':
@@ -84,6 +86,7 @@ const AttachmentItem = ({ attachment, onRemove, onPreview, theme = 'dark' }) => 
                 {attachment.status !== 'scraping' && attachment.status !== 'error' && (
                     <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
                         {attachment.type === 'image' && formatSize(attachment.size)}
+                        {attachment.type === 'pdf' && formatSize(attachment.size)}
                         {attachment.type === 'text' && `Scraped page, ${formatSize(attachment.size)}`}
                     </p>
                 )}
