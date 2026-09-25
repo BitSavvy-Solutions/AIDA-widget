@@ -97,7 +97,12 @@ export const useChatAPI = ({
 }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [lastCost, setLastCost] = useState(0);
-    const [liveReasoning, setLiveReasoning] = useState({ text: '', botId: null, contentHasStarted: false });
+    const [liveReasoning, setLiveReasoning] = useState({
+        text: '',
+        botId: null,
+        contentHasStarted: false,
+        startTime: null
+    });
     const [apiError, setApiError] = useState(null);
 
     const liveReasoningTextRef = useRef('');
@@ -211,7 +216,12 @@ export const useChatAPI = ({
     const streamOllamaResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit = 10 }) => {
         setIsLoading(true);
         setLastCost(0);
-        setLiveReasoning({ text: '', botId: botMessageId, contentHasStarted: false });
+        setLiveReasoning({
+            text: '',
+            botId: botMessageId,
+            contentHasStarted: false,
+            startTime: null
+        });
         setApiError(null);
         liveReasoningTextRef.current = '';
 
@@ -310,6 +320,9 @@ export const useChatAPI = ({
                                 text: combinedReasoning,
                                 botId: botMessageId,
                                 contentHasStarted: prev.contentHasStarted || content.length > 0,
+                                startTime: combinedReasoning
+                                    ? (prev.startTime ?? Date.now())
+                                    : prev.startTime,
                             }));
                             setMessages(prev => {
                                 const updated = prev.map(m =>
@@ -378,7 +391,12 @@ export const useChatAPI = ({
                 streamAbortControllerRef.current = null;
             }
             setIsLoading(false);
-            setLiveReasoning({ text: '', botId: null, contentHasStarted: false });
+            setLiveReasoning({
+                text: '',
+                botId: null,
+                contentHasStarted: false,
+                startTime: null
+            });
         }
     };
 
@@ -388,7 +406,12 @@ export const useChatAPI = ({
     const streamChromeResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit = 10 }) => {
         setIsLoading(true);
         setLastCost(0);
-        setLiveReasoning({ text: '', botId: botMessageId, contentHasStarted: false });
+        setLiveReasoning({
+            text: '',
+            botId: botMessageId,
+            contentHasStarted: false,
+            startTime: null
+        });
         setApiError(null);
         liveReasoningTextRef.current = '';
 
@@ -511,7 +534,12 @@ export const useChatAPI = ({
                 streamAbortControllerRef.current = null;
             }
             setIsLoading(false);
-            setLiveReasoning({ text: '', botId: null, contentHasStarted: false });
+            setLiveReasoning({
+                text: '',
+                botId: null,
+                contentHasStarted: false,
+                startTime: null
+            });
         }
     };
 
@@ -528,7 +556,12 @@ export const useChatAPI = ({
 
         setIsLoading(true);
         setLastCost(0);
-        setLiveReasoning({ text: '', botId: botMessageId, contentHasStarted: false });
+        setLiveReasoning({
+            text: '',
+            botId: botMessageId,
+            contentHasStarted: false,
+            startTime: null
+        });
         setApiError(null);
         liveReasoningTextRef.current = '';
 
@@ -680,7 +713,12 @@ export const useChatAPI = ({
 
                             if (data.reasoning_content) {
                                 liveReasoningTextRef.current += data.reasoning_content;
-                                setLiveReasoning(prev => ({ ...prev, text: liveReasoningTextRef.current }));
+
+                                setLiveReasoning(prev => ({
+                                    ...prev,
+                                    text: liveReasoningTextRef.current,
+                                    startTime: prev.startTime ?? Date.now()
+                                }));
                             }
 
                             if (data.cost !== undefined) {
@@ -734,7 +772,12 @@ export const useChatAPI = ({
                 streamAbortControllerRef.current = null;
             }
             setIsLoading(false);
-            setLiveReasoning({ text: '', botId: null, contentHasStarted: false });
+            setLiveReasoning({
+                text: '',
+                botId: null,
+                contentHasStarted: false,
+                startTime: null
+            });
         }
     };
 

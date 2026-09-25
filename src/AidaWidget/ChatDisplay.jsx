@@ -643,22 +643,42 @@ const ChatDisplay = ({
             !liveReasoning.contentHasStarted;
 
         const currentLiveBotId = liveReasoning?.botId;
+        const currentStartTime = liveReasoning?.startTime;
 
         if (isTimerTicking) {
-            if (currentLiveBotId && currentLiveBotId !== liveReasoningInfo.botId) {
-                setLiveReasoningInfo({ botId: currentLiveBotId, startTime: Date.now() });
+            if (
+                currentLiveBotId &&
+                currentStartTime &&
+                (
+                    currentLiveBotId !== liveReasoningInfo.botId ||
+                    currentStartTime !== liveReasoningInfo.startTime
+                )
+            ) {
+                setLiveReasoningInfo({
+                    botId: currentLiveBotId,
+                    startTime: currentStartTime
+                });
             }
-        } else {
-            if (liveReasoningInfo.startTime) {
-                const finalDuration = (Date.now() - liveReasoningInfo.startTime) / 1000;
-                setFinalReasoningDurations(prev => ({
-                    ...prev,
-                    [liveReasoningInfo.botId]: finalDuration,
-                }));
-                setLiveReasoningInfo({ botId: null, startTime: null });
-            }
+        } else if (liveReasoningInfo.startTime) {
+            const finalDuration =
+                (Date.now() - liveReasoningInfo.startTime) / 1000;
+
+            setFinalReasoningDurations(prev => ({
+                ...prev,
+                [liveReasoningInfo.botId]: finalDuration,
+            }));
+
+            setLiveReasoningInfo({
+                botId: null,
+                startTime: null
+            });
         }
-    }, [isLoading, liveReasoning, liveReasoningInfo.botId, liveReasoningInfo.startTime]);
+    }, [
+        isLoading,
+        liveReasoning,
+        liveReasoningInfo.botId,
+        liveReasoningInfo.startTime
+    ]);
 
     useEffect(() => {
         return () => {
