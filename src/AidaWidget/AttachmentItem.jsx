@@ -34,7 +34,7 @@ const AttachmentItem = ({ attachment, onRemove, onPreview, theme = 'dark' }) => 
     };
 
     const renderPreview = () => {
-        const isActionable = attachment.type === 'image' || attachment.type === 'text';
+        const isActionable = attachment.type === 'image' || attachment.type === 'text' || (attachment.type === 'pdf' && !!attachment.src);
 
         if (isActionable) {
             return (
@@ -42,7 +42,7 @@ const AttachmentItem = ({ attachment, onRemove, onPreview, theme = 'dark' }) => 
                     type="button"
                     onClick={() => onPreview && onPreview(attachment)}
                     className="w-12 h-12 rounded flex items-center justify-center hover:opacity-80 transition-opacity"
-                    title={attachment.type === 'image' ? "Preview image" : "Preview text"}
+                    title={attachment.type === 'image' ? "Preview image" : attachment.type === 'pdf' ? "Open PDF" : "Preview text"}
                 >
                     {attachment.type === 'image' ? (
                         <img src={attachment.src} alt={attachment.name} className="w-full h-full object-cover rounded border border-gray-300 dark:border-gray-700" />

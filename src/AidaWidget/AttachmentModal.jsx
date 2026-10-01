@@ -42,11 +42,28 @@ const AttachmentModal = ({
         }
     };
 
+    // Browsers block opening data: URLs in a new tab, so convert to a blob: URL first.
+    // Uses atob instead of fetch(dataUrl) because host pages' CSP may block fetching data: URLs.
+    const openPdf = (dataUrl) => {
+        try {
+            const binary = atob(dataUrl.split(',')[1]);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+            window.open(url, '_blank', 'noopener,noreferrer');
+            // Give the new tab time to load before freeing the memory
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+        } catch (e) {
+            console.error('Failed to open PDF', e);
+            alert('Could not open this PDF.');
+        }
+    };
+
     const handlePreview = (attachment) => {
         if (attachment.type === 'image') {
             if (onImagePreview) onImagePreview(attachment);
         } else if (attachment.type === 'pdf') {
-            if (attachment.src) window.open(attachment.src, '_blank', 'noopener,noreferrer');
+            if (attachment.src) openPdf(attachment.src);
         } else if (attachment.type === 'text') {
             setPreviewingAttachment(attachment);
         }
