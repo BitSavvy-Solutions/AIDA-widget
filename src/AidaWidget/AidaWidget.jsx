@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import SevenSegmentDisplay from './SevenSegmentDisplay';
 import ChatHeader from './ChatHeader';
-import ChatHistoryPanel from './ChatHistoryPanel';
 import ChatDisplay from './ChatDisplay';
 import AttachmentModal from './AttachmentModal';
 import ErrorModal from './ErrorModal';
@@ -65,6 +64,7 @@ const defaultProps = {
     pageContext: {},
     models: [],
     audioModels: [],
+    memoryAdapter: null,
     features: {
         resizable: true,
         modelSelection: true,
@@ -79,7 +79,18 @@ const defaultProps = {
 };
 
 const AidaWidget = (props) => {
-    const { apiConfig, user, language, translations, pageContext, features, models, audioModels } = { ...defaultProps, ...props };
+    const {
+        apiConfig,
+        user,
+        language,
+        translations,
+        pageContext,
+        features,
+        models,
+        audioModels,
+        memoryAdapter,
+    } = { ...defaultProps, ...props };
+
     const attachmentsEnabled = Boolean(features?.imageUpload);
 
     const [fetchedModels, setFetchedModels] = useState([]);
@@ -105,7 +116,7 @@ const AidaWidget = (props) => {
                 if (!res.ok) throw new Error('Failed to fetch models');
                 const data = await res.json();
 
-                const normalize = (list = []) => list.map(m => ({
+                const normalize = (list = []) => list.map((m) => ({
                     value: m.id,
                     label: m.name,
                     category: m.category,
@@ -143,7 +154,7 @@ const AidaWidget = (props) => {
                 const res = await fetch(`${MODELS_URL}?q=${encodeURIComponent(query)}`);
                 if (!res.ok) throw new Error('Failed to search models');
                 const data = await res.json();
-                const normalize = (list = []) => list.map(m => ({
+                const normalize = (list = []) => list.map((m) => ({
                     value: m.id,
                     label: m.name,
                     category: m.category,
@@ -167,10 +178,10 @@ const AidaWidget = (props) => {
     }, []);
 
     const addRecentModel = useCallback((modelValue, modelType) => {
-        setRecentModelValues(prev => {
+        setRecentModelValues((prev) => {
             const next = [
                 { value: modelValue, type: modelType },
-                ...prev.filter(m => m.value !== modelValue)
+                ...prev.filter((m) => m.value !== modelValue)
             ].slice(0, 5);
             try {
                 localStorage.setItem('aida-recent-models', JSON.stringify(next));
@@ -183,14 +194,15 @@ const AidaWidget = (props) => {
 
     const [selectedModel, setSelectedModel] = useState(() => {
         const saved = localStorage.getItem('aida-selected-model');
-        if (saved?.startsWith('ollama:') || saved?.startsWith('chrome:')) return saved; const exists = availableModels.some(m => m.value === saved);
+        if (saved?.startsWith('ollama:') || saved?.startsWith('chrome:')) return saved;
+        const exists = availableModels.some((m) => m.value === saved);
         return exists ? saved : availableModels[0].value;
     });
 
     const [selectedAudioModel, setSelectedAudioModel] = useState(() => {
         const saved = localStorage.getItem('aida-selected-audio-model');
         if (saved?.startsWith('chrome:')) return saved;
-        const exists = availableAudioModels.some(m => m.value === saved);
+        const exists = availableAudioModels.some((m) => m.value === saved);
         return exists ? saved : availableAudioModels[0].value;
     });
 
@@ -233,14 +245,29 @@ const AidaWidget = (props) => {
     const siteLanguage = language || 'en';
 
     const { isOpen, isClosing, isFullscreen, theme, setTheme, setIsFullscreen, toggleChatVisibility } = useWidgetState();
-    const { messages, setMessages, getSanitizedMessages, loadMessagesForSession } = useChatMessages();
-    const { isPanelOpen, openPanel, closePanel, historyItems, projects, currentSessionId, setCurrentSessionId, createNewSession, updateCurrentSession, saveCurrentChatToHistory, historyHandlers } = useChatHistory(getSanitizedMessages);
+    const { messages, setMessages, getSanitizedMessages, loadMessagesForSession } = useChatMessages(memoryAdapter);
+    const {
+        historyItems,
+        projects,
+        currentSession,
+        currentSessionId,
+        setCurrentSessionId,
+        createNewSession,
+        updateCurrentSession,
+        saveCurrentChatToHistory,
+        historyHandlers,
+    } = useChatHistory(memoryAdapter, getSanitizedMessages);
+
+    const historyEnabled = Boolean(features.historyProjects && memoryAdapter);
+
     const { isOpen: isPromptModalOpen, open: openPromptModal, close: closePromptModal } = useModal();
     const { isOpen: isShareModalOpen, open: openShareModal, close: closeShareModal } = useModal();
     const chromeAI = useChromeAI(true);
     const ollama = useOllama();
     const [isLocalModelsModalOpen, setIsLocalModelsModalOpen] = useState(false);
-    const [localModelsTab, setLocalModelsTab] = useState('ollama');    const {
+    const [localModelsTab, setLocalModelsTab] = useState('ollama');
+
+    const {
         attachments, setAttachments, addImageAttachments, addPdfAttachments, addTextAttachment, addFolderAttachments,
         addUrlAttachment, addContextAttachment,
         removeAttachment, clearAttachments, isAttachmentModalOpen, openModal: openAttachmentModal, closeModal: closeAttachmentModal
@@ -286,21 +313,55 @@ const AidaWidget = (props) => {
     });
 
     const requestFullscreen = useCallback(() => setIsFullscreen(true), [setIsFullscreen]);
-    const { sidebarRef, sidebarInlineStyle, resizeHandleProps, isResizing } = useResizableSidebar({ isOpen, isFullscreen, isMobileViewport, isEnabled: features.resizable, onRequestFullscreen: requestFullscreen });
-    const { isLoading, lastCost, liveReasoning, streamResponse, stopStreaming, apiError, clearApiError } = useChatAPI({ apiConfig, messages, setMessages, currentSessionId, updateCurrentSession, user, pageContext, customPrompt, ollama });
+    const { sidebarRef, sidebarInlineStyle, resizeHandleProps, isResizing } = useResizableSidebar({
+        isOpen,
+        isFullscreen,
+        isMobileViewport,
+        isEnabled: features.resizable,
+        onRequestFullscreen: requestFullscreen
+    });
 
-    const { isRecording, elapsedTime, recordings, startRecording, stopRecording, retryTranscription, removeRecording, isNearingTimeLimit } = useVoiceInput({
+    const {
+        isLoading,
+        lastCost,
+        liveReasoning,
+        streamResponse,
+        stopStreaming,
+        apiError,
+        clearApiError
+    } = useChatAPI({
+        apiConfig,
+        messages,
+        setMessages,
+        currentSessionId,
+        updateCurrentSession,
+        user,
+        pageContext,
+        customPrompt,
+        ollama
+    });
+
+    const {
+        isRecording,
+        elapsedTime,
+        recordings,
+        startRecording,
+        stopRecording,
+        retryTranscription,
+        removeRecording,
+        isNearingTimeLimit
+    } = useVoiceInput({
         transcriptionUrl: apiConfig.transcriptionUrl,
         selectedAudioModel
     });
 
-    const isTranscribing = recordings.some(r => r.isTranscribing);
+    const isTranscribing = recordings.some((r) => r.isTranscribing);
 
     const getMessageText = useCallback(() => {
         const div = inputRef.current;
         if (!div) return '';
         let text = '';
-        div.childNodes.forEach(node => {
+        div.childNodes.forEach((node) => {
             if (node.nodeType === Node.TEXT_NODE) {
                 text += node.textContent;
             } else if (node.nodeType === Node.ELEMENT_NODE) {
@@ -332,7 +393,7 @@ const AidaWidget = (props) => {
         cancelAutoRecordTimer();
         const botMessageId = `bot-${Date.now()}`;
         const finalModelName = resolveModelName(selectedModel);
-        const imageAttachments = attachments.filter(a => a.type === 'image');
+        const imageAttachments = attachments.filter((a) => a.type === 'image');
         let nextMessages = [];
         let activeSessionId = currentSessionId;
 
@@ -347,10 +408,13 @@ const AidaWidget = (props) => {
         };
         nextMessages = [...messages, userMessage, { id: botMessageId, sender: 'bot', text: '' }];
         setMessages(nextMessages);
-        if (!activeSessionId) {
-            activeSessionId = await createNewSession(nextMessages);
-        } else {
-            updateCurrentSession(nextMessages);
+
+        if (historyEnabled) {
+            if (!activeSessionId) {
+                activeSessionId = await createNewSession(nextMessages);
+            } else {
+                updateCurrentSession(nextMessages);
+            }
         }
 
         clearAttachments();
@@ -359,7 +423,24 @@ const AidaWidget = (props) => {
 
         const historyForPayload = nextMessages.slice(0, -1);
         await streamResponse({ userMessage, botMessageId, historyForPayload, sessionId: activeSessionId, contextLimit });
-    }, [attachments, isLoading, selectedModel, isWebSearchEnabled, messages, currentSessionId, streamResponse, setMessages, createNewSession, updateCurrentSession, cancelAutoSendTimer, cancelAutoRecordTimer, clearAttachments, contextLimit, resolveModelName]);
+    }, [
+        attachments,
+        isLoading,
+        selectedModel,
+        isWebSearchEnabled,
+        messages,
+        currentSessionId,
+        historyEnabled,
+        createNewSession,
+        updateCurrentSession,
+        streamResponse,
+        setMessages,
+        cancelAutoSendTimer,
+        cancelAutoRecordTimer,
+        clearAttachments,
+        contextLimit,
+        resolveModelName,
+    ]);
 
     const handleAutoSend = useCallback(() => {
         const text = getMessageText();
@@ -429,7 +510,7 @@ const AidaWidget = (props) => {
         }
     }, [theme]);
 
-    const selectedThemeObj = Object.values(THEMES).find(t => t.id === theme) || THEMES.coral;
+    const selectedThemeObj = Object.values(THEMES).find((t) => t.id === theme) || THEMES.coral;
     const baseTheme = ['dark', 'azure'].includes(theme) ||
         (theme === 'custom' && selectedThemeObj.body.background.match(/#([0-9a-f]{2}){1,2}/i) &&
             parseInt(selectedThemeObj.body.background.slice(1), 16) < 0x808080)
@@ -444,19 +525,19 @@ const AidaWidget = (props) => {
     }, []);
 
     const handleRemoveAttachmentFromMessage = useCallback((messageId, attachmentId) => {
-        setMessages(prevMessages =>
-            prevMessages.map(msg => {
+        setMessages((prevMessages) =>
+            prevMessages.map((msg) => {
                 if (msg.id === messageId) {
-                    const updatedAttachments = (msg.attachments || []).filter(att => att.id !== attachmentId);
-                    const updatedImages = (msg.images || []).filter(img => img.id !== attachmentId);
+                    const updatedAttachments = (msg.attachments || []).filter((att) => att.id !== attachmentId);
+                    const updatedImages = (msg.images || []).filter((img) => img.id !== attachmentId);
                     return { ...msg, attachments: updatedAttachments, images: updatedImages };
                 }
                 return msg;
             })
         );
-        setViewingMessageAttachments(prevViewingMsg => {
+        setViewingMessageAttachments((prevViewingMsg) => {
             if (prevViewingMsg && prevViewingMsg.id === messageId) {
-                const updatedAttachments = (prevViewingMsg.attachments || []).filter(att => att.id !== attachmentId);
+                const updatedAttachments = (prevViewingMsg.attachments || []).filter((att) => att.id !== attachmentId);
                 return { ...prevViewingMsg, attachments: updatedAttachments };
             }
             return prevViewingMsg;
@@ -475,34 +556,38 @@ const AidaWidget = (props) => {
 
     const handleSaveEdit = useCallback(() => {
         if (!editingMessageId) return;
-        setMessages(prevMessages => {
-            const updatedMessages = prevMessages.map(msg =>
+        setMessages((prevMessages) => {
+            const updatedMessages = prevMessages.map((msg) =>
                 msg.id === editingMessageId ? { ...msg, text: editDraft } : msg
             );
-            if (currentSessionId) updateCurrentSession(updatedMessages);
+            if (historyEnabled && currentSessionId) updateCurrentSession(updatedMessages);
             return updatedMessages;
         });
         setEditingMessageId(null);
         setEditDraft('');
-    }, [editingMessageId, editDraft, currentSessionId, updateCurrentSession, setMessages]);
+    }, [editingMessageId, editDraft, currentSessionId, updateCurrentSession, setMessages, historyEnabled]);
 
     const handleDeleteMessage = useCallback((messageId) => {
-        setMessages(prevMessages => {
-            const updatedMessages = prevMessages.filter(msg => msg.id !== messageId);
-            if (currentSessionId) updateCurrentSession(updatedMessages);
+        setMessages((prevMessages) => {
+            const updatedMessages = prevMessages.filter((msg) => msg.id !== messageId);
+            if (historyEnabled && currentSessionId) updateCurrentSession(updatedMessages);
             return updatedMessages;
         });
-    }, [setMessages, currentSessionId, updateCurrentSession]);
+    }, [setMessages, currentSessionId, updateCurrentSession, historyEnabled]);
 
     const handleOpenEmbed = useCallback((url) => {
         setEmbedUrl(url);
     }, []);
 
-    const getLocalizedGreeting = (lang) => ({ 'ar': "✨ مرحبًا! أنا آيدا، مساعدتك الرقمية الذكية 🤖💖 كيف يمكنني مساعدتك اليوم؟ 😊", 'fr': "👋 Coucou ! Moi c'est Aida, ta super assistante numérique ✨💻 Comment puis-je t'aider aujourd'hui ? 😄" }[lang] || "Hey hey! 👋 I'm Aida, your sparkly smart digital assistant 🤖💖 How can I help you today? 😄");
+    const getLocalizedGreeting = (lang) => ({
+        'ar': "✨ مرحبًا! أنا آيدا، مساعدتك الرقمية الذكية 🤖💖 كيف يمكنني مساعدتك اليوم؟ 😊",
+        'fr': "👋 Coucou ! Moi c'est Aida, ta super assistante numérique ✨💻 Comment puis-je t'aider aujourd'hui ? 😄"
+    }[lang] || "Hey hey! 👋 I'm Aida, your sparkly smart digital assistant 🤖💖 How can I help you today? 😄");
 
     const toggleChat = useCallback(() => {
         if (isOpen) {
-            cancelAutoSendTimer(); cancelAutoRecordTimer();
+            cancelAutoSendTimer();
+            cancelAutoRecordTimer();
             if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel();
         } else if (messages.length === 0) {
             setMessages([{ id: `bot-${Date.now()}`, text: getLocalizedGreeting(siteLanguage), sender: 'bot' }]);
@@ -510,24 +595,33 @@ const AidaWidget = (props) => {
         toggleChatVisibility();
     }, [isOpen, isLoading, messages.length, siteLanguage, stopStreaming, toggleChatVisibility, setMessages, cancelAutoSendTimer, cancelAutoRecordTimer]);
 
-    // Listen for frontend requests to open a specific chat
     useEffect(() => {
         const handler = (e) => {
             const { chatId } = e.detail || {};
-            if (!chatId) return;
+            if (!chatId || !historyEnabled) return;
             setCurrentSessionId(chatId);
             if (!isOpen) toggleChatVisibility();
         };
         window.addEventListener('aida-open-chat', handler);
         return () => window.removeEventListener('aida-open-chat', handler);
-    }, [isOpen, setCurrentSessionId, toggleChatVisibility]);
+    }, [isOpen, setCurrentSessionId, toggleChatVisibility, historyEnabled]);
 
-    const resetChat = () => { saveCurrentChatToHistory(); setMessages([]); setCurrentSessionId(null); clearAttachments(); };
-    const handleRecordButtonClick = useCallback(() => { if (isLoading) return; cancelAutoRecordTimer(); isRecording ? stopRecording() : startRecording(); }, [isRecording, isLoading, stopRecording, startRecording, cancelAutoRecordTimer]);
+    const resetChat = () => {
+        saveCurrentChatToHistory();
+        setMessages([]);
+        setCurrentSessionId(null);
+        clearAttachments();
+    };
+
+    const handleRecordButtonClick = useCallback(() => {
+        if (isLoading) return;
+        cancelAutoRecordTimer();
+        isRecording ? stopRecording() : startRecording();
+    }, [isRecording, isLoading, stopRecording, startRecording, cancelAutoRecordTimer]);
 
     const handleRetry = useCallback(async (botMessageId) => {
         if (isLoading) return;
-        const botIndex = messages.findIndex(m => m.id === botMessageId);
+        const botIndex = messages.findIndex((m) => m.id === botMessageId);
         if (botIndex === -1) return;
         let userIndex = -1;
         for (let i = botIndex - 1; i >= 0; i--) {
@@ -541,13 +635,13 @@ const AidaWidget = (props) => {
         const newBotMessageId = `bot-${Date.now()}`;
         const nextMessages = [...previousHistory, userMessageToRetry, { id: newBotMessageId, sender: 'bot', text: '' }];
         setMessages(nextMessages);
-        if (currentSessionId) updateCurrentSession(nextMessages);
+        if (historyEnabled && currentSessionId) updateCurrentSession(nextMessages);
         await streamResponse({ userMessage: userMessageToRetry, botMessageId: newBotMessageId, historyForPayload, sessionId: currentSessionId, contextLimit });
-    }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession, selectedModel, isWebSearchEnabled, contextLimit, resolveModelName]);
+    }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession, selectedModel, isWebSearchEnabled, contextLimit, resolveModelName, historyEnabled]);
 
     const handleRegenerate = useCallback(async (userMessageId) => {
         if (isLoading) return;
-        const userIndex = messages.findIndex(m => m.id === userMessageId);
+        const userIndex = messages.findIndex((m) => m.id === userMessageId);
         if (userIndex === -1) return;
         const finalModelName = resolveModelName(selectedModel);
         const userMessageToRegenerate = { ...messages[userIndex], model: finalModelName, webSearchEnabled: isWebSearchEnabled };
@@ -556,16 +650,10 @@ const AidaWidget = (props) => {
         const newBotMessageId = `bot-${Date.now()}`;
         const nextMessages = [...previousHistory, userMessageToRegenerate, { id: newBotMessageId, sender: 'bot', text: '' }];
         setMessages(nextMessages);
-        if (currentSessionId) updateCurrentSession(nextMessages);
+        if (historyEnabled && currentSessionId) updateCurrentSession(nextMessages);
         await streamResponse({ userMessage: userMessageToRegenerate, botMessageId: newBotMessageId, historyForPayload, sessionId: currentSessionId, contextLimit });
-    }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession, selectedModel, isWebSearchEnabled, contextLimit, resolveModelName]);
+    }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession, selectedModel, isWebSearchEnabled, contextLimit, resolveModelName, historyEnabled]);
 
-    const handleHistorySelect = useCallback((session) => {
-        setCurrentSessionId(session.id);
-        closePanel();
-    }, [setCurrentSessionId, closePanel]);
-
-    const currentSession = historyItems.find(h => h.id === currentSessionId);
     const currentSessionTitle = currentSession?.title || "New Chat";
 
     useEffect(() => {
@@ -577,8 +665,10 @@ const AidaWidget = (props) => {
     }, [currentSessionTitle, isOpen]);
 
     const handleRenameCurrentSession = useCallback((newTitle) => {
-        if (currentSessionId) historyHandlers.onRename(currentSessionId, newTitle);
-    }, [currentSessionId, historyHandlers]);
+        if (historyEnabled && currentSessionId && historyHandlers.onRename) {
+            historyHandlers.onRename(currentSessionId, newTitle);
+        }
+    }, [historyEnabled, currentSessionId, historyHandlers]);
 
     useEffect(() => { if (isOpen && !isLoading) inputRef.current?.focus(); }, [isOpen, isLoading]);
     useEffect(() => { const handleResize = () => setIsMobileViewport(window.innerWidth <= 768); window.addEventListener('resize', handleResize); return () => window.removeEventListener('resize', handleResize); }, []);
@@ -621,150 +711,135 @@ const AidaWidget = (props) => {
                     </button>
                 </div>
             )}
-           <div
-                 aria-hidden={!isOpen}
-    style={{ display: isOpen ? 'flex' : 'none' }}
-                className={`aida-widget-viewport z-50 ${
-                   isFullscreen
-                       ? 'aida-widget-viewport--fullscreen'
-                       : 'aida-widget-viewport--docked'
-               }`}
-           >
-                    <div ref={sidebarRef} data-theme={baseTheme} style={{ ...sidebarInlineStyle, backgroundColor: 'var(--aida-body-bg)', color: 'var(--aida-body-text)', borderColor: 'var(--aida-card-border)' }} className={containerClasses} {...dropZoneProps}>
-                        {features.resizable && !isFullscreen && !isMobileViewport && <div {...resizeHandleProps} />}
-                        {attachmentsEnabled && isDragOverWidget && (
-                            <div className="absolute inset-0 z-[55] pointer-events-none flex items-center justify-center px-4">
-                                <div className={`pointer-events-none flex max-w-sm flex-col items-center gap-2 rounded-2xl border-2 border-dashed px-6 py-5 text-sm font-medium ${baseTheme === 'dark' ? 'border-pink-400/80 bg-gray-900/80 text-pink-100' : 'border-pink-500/60 bg-white/80 text-pink-600'}`}>
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" strokeWidth="1.5" className="h-10 w-10" fill="none" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m.75 12 3 3m0 0 3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
-                                    </svg>
-                                    <span>Drop files or folders to attach</span>
-                                </div>
+            <div
+                aria-hidden={!isOpen}
+                style={{ display: isOpen ? 'flex' : 'none' }}
+                className={`aida-widget-viewport z-50 ${isFullscreen ? 'aida-widget-viewport--fullscreen' : 'aida-widget-viewport--docked'}`}
+            >
+                <div ref={sidebarRef} data-theme={baseTheme} style={{ ...sidebarInlineStyle, backgroundColor: 'var(--aida-body-bg)', color: 'var(--aida-body-text)', borderColor: 'var(--aida-card-border)' }} className={containerClasses} {...dropZoneProps}>
+                    {features.resizable && !isFullscreen && !isMobileViewport && <div {...resizeHandleProps} />}
+                    {attachmentsEnabled && isDragOverWidget && (
+                        <div className="absolute inset-0 z-[55] pointer-events-none flex items-center justify-center px-4">
+                            <div className={`pointer-events-none flex max-w-sm flex-col items-center gap-2 rounded-2xl border-2 border-dashed px-6 py-5 text-sm font-medium ${baseTheme === 'dark' ? 'border-pink-400/80 bg-gray-900/80 text-pink-100' : 'border-pink-500/60 bg-white/80 text-pink-600'}`}>
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" strokeWidth="1.5" className="h-10 w-10" fill="none" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m.75 12 3 3m0 0 3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                                </svg>
+                                <span>Drop files or folders to attach</span>
                             </div>
-                        )}
-                        <ChatHeader
-                            displayText={displayText}
-                            lastCost={lastCost}
-                            userId={user?.id}
-                            paymentLinkConfig={features.paymentLink}
-                            resetChat={resetChat}
-                            toggleFullscreen={() => setIsFullscreen(p => !p)}
-                            showFullscreenToggle={!isMobileViewport}
-                            isMobileViewport={isMobileViewport}
-                            toggleChat={toggleChat}
-                            theme={baseTheme}
-                            onOpenAppearance={() => setIsAppearanceModalOpen(true)}
-                            onToggleHistory={openPanel}
-                            onShare={messages.length > 0 ? () => {
-                                setSessionToShare({ messages, title: currentSessionTitle });
-                                openShareModal();
-                            } : undefined}
-                            onDisplayClick={features.customInstructions ? openPromptModal : undefined}
-                            sessionTitle={currentSessionTitle}
-                            onRenameSession={handleRenameCurrentSession}
-                            isSessionActive={!!currentSessionId}
-                            currentSessionId={currentSessionId}
-                            projects={projects}
-                            onCreateProject={historyHandlers.onCreateProject}
-                            onAssignChatToProject={historyHandlers.onAssignChatToProject}
-                            onRemoveChatFromProject={historyHandlers.onRemoveChatFromProject}
-                            onUpdateProjectAppearance={historyHandlers.onUpdateProjectAppearance}
-                        />
-                        {features.historyProjects && (
-                            <ChatHistoryPanel
-                                theme={baseTheme} open={isPanelOpen} onClose={closePanel}
-                                sessions={historyItems} projects={projects}
-                                onSelect={handleHistorySelect} currentSessionId={currentSessionId}
-                                {...historyHandlers}
-                                onShare={(session) => {
-                                    setSessionToShare({ messages: session.messages, title: session.title });
-                                    openShareModal();
-                                }}
-                            />
-                        )}
-                        <ChatDisplay
-                            messages={messages}
-                            isLoading={isLoading}
-                            liveReasoning={liveReasoning}
-                            siteLanguage={siteLanguage}
-                            theme={baseTheme}
-                            editingMessageId={editingMessageId}
-                            editDraft={editDraft}
-                            setEditDraft={setEditDraft}
-                            onStartEdit={handleStartEdit}
-                            onCancelEdit={handleCancelEdit}
-                            onSaveEdit={handleSaveEdit}
-                            onImagePreview={setImagePreview}
-                            onRetryBotMessage={features.retryMessage ? handleRetry : undefined}
-                            onRegenerateResponse={features.retryMessage ? handleRegenerate : undefined}
-                            onViewAttachments={handleViewAttachments}
-                            contextLimit={contextLimit}
-                            onScrapeUrl={addUrlAttachment}
-                            onEmbedUrl={handleOpenEmbed}
-                            onDeleteMessage={handleDeleteMessage}
-                        />
-                        <ChatInput
-                            handleSendMessage={stableHandleSendMessage}
-                            handleRecordButtonClick={handleRecordButtonClick}
-                            inputRef={inputRef}
-                            isLoading={isLoading}
-                            isTranscribing={isTranscribing}
-                            isRecording={isRecording}
-                            elapsedTime={elapsedTime}
-                            siteLanguage={siteLanguage}
-                            theme="dark"
-                            autoSendCountdown={autoSendCountdown}
-                            cancelAutoSendTimer={cancelAutoSendTimer}
-                            setIsSendTimerPaused={setIsSendTimerPaused}
-                            autoRecordCountdown={autoRecordCountdown}
-                            cancelAutoRecordTimer={cancelAutoRecordTimer}
-                            setIsRecordTimerPaused={setIsRecordTimerPaused}
-                            selectedModel={selectedModel}
-                            setSelectedModel={setSelectedModel}
-                            availableModels={availableModels}
-                            selectedAudioModel={selectedAudioModel}
-                            setSelectedAudioModel={setSelectedAudioModel}
-                            availableAudioModels={availableAudioModels}
-                            translations={translations}
-                            attachmentCount={attachments.length}
-                            onOpenAttachments={openAttachmentModal}
-                            isWebSearchEnabled={isWebSearchEnabled}
-                            setIsWebSearchEnabled={setIsWebSearchEnabled}
-                            onStopStreaming={stopStreaming}
-                            features={features}
-                            recordings={recordings}
-                            retryTranscription={retryTranscription}
-                            removeRecording={removeRecording}
-                            isNearingTimeLimit={isNearingTimeLimit}
-                            onAddImages={addImageAttachments}
-                            contextLimit={contextLimit}
-                            setContextLimit={setContextLimit}
-                            onScrapeUrl={addUrlAttachment}
-                            onEmbedUrl={handleOpenEmbed}
-                            onSearchModels={handleSearchModels}
-                            isSearchingModels={isSearchingModels}
-                            searchedModels={searchedModels}
-                            recentModelValues={recentModelValues}
-                            onModelSelected={addRecentModel}
-                            ollamaModels={ollama.models}
-                            ollamaStatus={ollama.status}
-                            chromeModels={chromeAI.chatModels}
-                            chromeAudioModels={chromeAI.audioModels}
-                            isLocalModelsModalOpen={isLocalModelsModalOpen}
-                            onOllamaRefresh={() => ollama.fetchModels()}
-                            onOpenOllamaSettings={() => { setLocalModelsTab('ollama'); setIsLocalModelsModalOpen(true); }}
-                            onOpenChromeAISettings={() => { setLocalModelsTab('chrome'); setIsLocalModelsModalOpen(true); }} />
-                        <AppearanceModal
-                            isOpen={isAppearanceModalOpen}
-                            onClose={() => setIsAppearanceModalOpen(false)}
-                            currentTheme={theme}
-                            onSelectTheme={setTheme}
-                            textSize={textSize}
-                            onChangeTextSize={setTextSize}
-                        />
-                    </div>
+                        </div>
+                    )}
+                    <ChatHeader
+                        displayText={displayText}
+                        lastCost={lastCost}
+                        userId={user?.id}
+                        paymentLinkConfig={features.paymentLink}
+                        resetChat={resetChat}
+                        toggleFullscreen={() => setIsFullscreen((p) => !p)}
+                        showFullscreenToggle={!isMobileViewport}
+                        isMobileViewport={isMobileViewport}
+                        toggleChat={toggleChat}
+                        theme={baseTheme}
+                        onOpenAppearance={() => setIsAppearanceModalOpen(true)}
+                        onToggleHistory={historyEnabled ? () => {} : undefined}
+                        onShare={messages.length > 0 ? () => {
+                            setSessionToShare({ messages, title: currentSessionTitle });
+                            openShareModal();
+                        } : undefined}
+                        onDisplayClick={features.customInstructions ? openPromptModal : undefined}
+                        sessionTitle={currentSessionTitle}
+                        onRenameSession={historyEnabled ? handleRenameCurrentSession : undefined}
+                        isSessionActive={historyEnabled ? Boolean(currentSessionId) : false}
+                        currentSessionId={currentSessionId}
+                        projects={historyEnabled ? projects : []}
+                        sessionTagIds={historyEnabled ? currentSession?.tagIds || [] : []}
+                        onCreateProject={historyEnabled ? historyHandlers.onCreateProject : undefined}
+                        onAssignChatToProject={historyEnabled ? historyHandlers.onAssignChatToProject : undefined}
+                        onRemoveChatFromProject={historyEnabled ? historyHandlers.onRemoveChatFromProject : undefined}
+                        onUpdateProjectAppearance={historyEnabled ? historyHandlers.onUpdateProjectAppearance : undefined}
+                    />
+                    <ChatDisplay
+                        messages={messages}
+                        isLoading={isLoading}
+                        liveReasoning={liveReasoning}
+                        siteLanguage={siteLanguage}
+                        theme={baseTheme}
+                        editingMessageId={editingMessageId}
+                        editDraft={editDraft}
+                        setEditDraft={setEditDraft}
+                        onStartEdit={handleStartEdit}
+                        onCancelEdit={handleCancelEdit}
+                        onSaveEdit={handleSaveEdit}
+                        onImagePreview={setImagePreview}
+                        onRetryBotMessage={features.retryMessage ? handleRetry : undefined}
+                        onRegenerateResponse={features.retryMessage ? handleRegenerate : undefined}
+                        onViewAttachments={handleViewAttachments}
+                        contextLimit={contextLimit}
+                        onScrapeUrl={addUrlAttachment}
+                        onEmbedUrl={handleOpenEmbed}
+                        onDeleteMessage={handleDeleteMessage}
+                    />
+                    <ChatInput
+                        handleSendMessage={stableHandleSendMessage}
+                        handleRecordButtonClick={handleRecordButtonClick}
+                        inputRef={inputRef}
+                        isLoading={isLoading}
+                        isTranscribing={isTranscribing}
+                        isRecording={isRecording}
+                        elapsedTime={elapsedTime}
+                        siteLanguage={siteLanguage}
+                        theme="dark"
+                        autoSendCountdown={autoSendCountdown}
+                        cancelAutoSendTimer={cancelAutoSendTimer}
+                        setIsSendTimerPaused={setIsSendTimerPaused}
+                        autoRecordCountdown={autoRecordCountdown}
+                        cancelAutoRecordTimer={cancelAutoRecordTimer}
+                        setIsRecordTimerPaused={setIsRecordTimerPaused}
+                        selectedModel={selectedModel}
+                        setSelectedModel={setSelectedModel}
+                        availableModels={availableModels}
+                        selectedAudioModel={selectedAudioModel}
+                        setSelectedAudioModel={setSelectedAudioModel}
+                        availableAudioModels={availableAudioModels}
+                        translations={translations}
+                        attachmentCount={attachments.length}
+                        onOpenAttachments={openAttachmentModal}
+                        isWebSearchEnabled={isWebSearchEnabled}
+                        setIsWebSearchEnabled={setIsWebSearchEnabled}
+                        onStopStreaming={stopStreaming}
+                        features={features}
+                        recordings={recordings}
+                        retryTranscription={retryTranscription}
+                        removeRecording={removeRecording}
+                        isNearingTimeLimit={isNearingTimeLimit}
+                        onAddImages={addImageAttachments}
+                        contextLimit={contextLimit}
+                        setContextLimit={setContextLimit}
+                        onScrapeUrl={addUrlAttachment}
+                        onEmbedUrl={handleOpenEmbed}
+                        onSearchModels={handleSearchModels}
+                        isSearchingModels={isSearchingModels}
+                        searchedModels={searchedModels}
+                        recentModelValues={recentModelValues}
+                        onModelSelected={addRecentModel}
+                        ollamaModels={ollama.models}
+                        ollamaStatus={ollama.status}
+                        chromeModels={chromeAI.chatModels}
+                        chromeAudioModels={chromeAI.audioModels}
+                        isLocalModelsModalOpen={isLocalModelsModalOpen}
+                        onOllamaRefresh={() => ollama.fetchModels()}
+                        onOpenOllamaSettings={() => { setLocalModelsTab('ollama'); setIsLocalModelsModalOpen(true); }}
+                        onOpenChromeAISettings={() => { setLocalModelsTab('chrome'); setIsLocalModelsModalOpen(true); }}
+                    />
+                    <AppearanceModal
+                        isOpen={isAppearanceModalOpen}
+                        onClose={() => setIsAppearanceModalOpen(false)}
+                        currentTheme={theme}
+                        onSelectTheme={setTheme}
+                        textSize={textSize}
+                        onChangeTextSize={setTextSize}
+                    />
                 </div>
-            
+            </div>
 
             {isPromptModalOpen && (
                 <div role="dialog" aria-modal="true" className="fixed inset-0 z-[60] flex items-center justify-center">
@@ -794,12 +869,17 @@ const AidaWidget = (props) => {
             )}
 
             <AttachmentModal
-                isOpen={isAttachmentModalOpen} onClose={closeAttachmentModal}
-                attachments={attachments} onAddImages={addImageAttachments}
+                isOpen={isAttachmentModalOpen}
+                onClose={closeAttachmentModal}
+                attachments={attachments}
+                onAddImages={addImageAttachments}
                 onAddPdfs={addPdfAttachments}
-                onAddText={addTextAttachment} onAddFolder={addFolderAttachments}
-                onAddUrl={addUrlAttachment} onRemove={removeAttachment}
-                onClearAll={clearAttachments} onImagePreview={setImagePreview}
+                onAddText={addTextAttachment}
+                onAddFolder={addFolderAttachments}
+                onAddUrl={addUrlAttachment}
+                onRemove={removeAttachment}
+                onClearAll={clearAttachments}
+                onImagePreview={setImagePreview}
                 theme={baseTheme}
                 onReadPage={features.getPageContext ? handleReadPage : undefined}
                 isReadingPage={isReadingPage}

@@ -36,6 +36,7 @@ const ChatHeader = ({
     isSessionActive = false,
     currentSessionId,
     projects = [],
+    sessionTagIds = [],
     onCreateProject,
     onAssignChatToProject,
     onRemoveChatFromProject,
@@ -105,8 +106,8 @@ const ChatHeader = ({
 
     const assignedProjects = useMemo(() => {
         if (!currentSessionId) return [];
-        return projects.filter(p => p.chatIds.includes(currentSessionId));
-    }, [projects, currentSessionId]);
+        return projects.filter((p) => sessionTagIds.includes(p.id));
+    }, [projects, currentSessionId, sessionTagIds]);
 
     useLayoutEffect(() => {
         if (!tagsContainerRef.current || !hiddenMeasureRef.current || assignedProjects.length === 0) {
@@ -174,9 +175,7 @@ const ChatHeader = ({
 
     const handleToggleTag = (projectId) => {
         if (!currentSessionId) return;
-        const project = projects.find(p => p.id === projectId);
-        if (!project) return;
-        const isAssigned = project.chatIds.includes(currentSessionId);
+        const isAssigned = sessionTagIds.includes(projectId);
         if (isAssigned) onRemoveChatFromProject(projectId, currentSessionId);
         else onAssignChatToProject(projectId, currentSessionId);
     };
@@ -202,7 +201,7 @@ const ChatHeader = ({
             >
                 <Icon className="w-3 h-3 shrink-0" style={{ color }} />
                 <span className="text-[10px] font-medium leading-none whitespace-nowrap" style={{ color }}>
-                    {p.name}
+                    {p.title}
                 </span>
             </div>
         );
@@ -315,7 +314,7 @@ const ChatHeader = ({
                                             <div className="max-h-56 overflow-y-auto custom-scrollbar p-1 space-y-0.5">
                                                 {projects.length === 0 && <div className="px-3 py-4 text-xs italic text-center opacity-60">No tags created yet</div>}
                                                 {projects.map(project => {
-                                                    const isSelected = project.chatIds.includes(currentSessionId);
+                                                    const isSelected = sessionTagIds.includes(project.id);
                                                     const Icon = PROJECT_ICON_OPTIONS.find(opt => opt.key === project.iconKey)?.Icon || NotebookIcon;
                                                     const color = project.iconColor || DEFAULT_PROJECT_ICON_COLOR;
                                                     return (
@@ -326,7 +325,7 @@ const ChatHeader = ({
                                                                 </div>
                                                                 <div className="flex items-center gap-2 min-w-0">
                                                                     <Icon className="w-4 h-4 shrink-0" style={{ color }} />
-                                                                    <span className={`truncate text-xs ${isSelected ? 'font-medium' : ''}`}>{project.name}</span>
+                                                                    <span className={`truncate text-xs ${isSelected ? 'font-medium' : ''}`}>{project.title}</span>
                                                                 </div>
                                                             </button>
                                                             <button onClick={(e) => { e.stopPropagation(); setEditingProjectId(project.id); }} className="p-1.5 rounded opacity-0 group-hover:opacity-100 transition-all aida-menu-item" title="Customize Tag">

@@ -58,6 +58,7 @@ if (import.meta.env.DEV) {
   render(`#${widgetContainerId}`, {
     language: 'en',
     user: { email: 'dev-user@example.com', id: 'dev-id' },
+    memoryAdapter: window.__AIDA_DEV_MEMORY__,
     translations: { transcribing: 'Transcribing...', inputPlaceholder: 'Type a message to Aida...' },
     features: {
       resizable: true,
@@ -68,7 +69,6 @@ if (import.meta.env.DEV) {
       retryMessage: true,
       customInstructions: true,
       historyProjects: true,
-      // ✅ NEW: Mock getPageContext for local dev testing
       getPageContext: async () => {
         return {
           name: 'Dev Page Content.md',

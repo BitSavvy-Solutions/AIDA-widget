@@ -2,45 +2,32 @@
 import { useState, useCallback, useRef } from 'react';
 import { franc } from 'franc-min';
 
-// Helper to extract a clean, human-readable error message from various error formats
 const extractCleanErrorMessage = (rawError) => {
     if (!rawError) return 'An unknown error occurred.';
-
-    // If it's already an object, try to extract the message
     if (typeof rawError === 'object') {
         if (rawError.message) return rawError.message;
         if (rawError.error?.message) return rawError.error.message;
         try { return JSON.stringify(rawError); } catch { return 'An unknown error occurred.'; }
     }
-
-    // Try to extract message from Python-style dict: 'message': "..."
     const msgMatch = rawError.match(/'message':\s*"((?:[^"\\]|\\.)*)"/);
     if (msgMatch) return msgMatch[1].replace(/\\"/g, '"');
-
-    // Try: 'message': '...'
     const msgMatch2 = rawError.match(/'message':\s*'([^']+)'/);
     if (msgMatch2) return msgMatch2[1];
-
-    // Try standard JSON: "message": "..."
     const msgMatch3 = rawError.match(/"message":\s*"((?:[^"\\]|\\.)*)"/);
     if (msgMatch3) return msgMatch3[1].replace(/\\"/g, '"');
-
     return rawError;
 };
 
-// --- Ollama helpers ---------------------------------------------------------
-const THINK_OPEN = '<think>';
-const THINK_CLOSE = '</think>';
+const THINK_OPEN = ' thinking';
+const THINK_CLOSE = ' response';
 const DEFAULT_OLLAMA_URL = 'http://localhost:11434';
 
-// Ollama expects raw base64, not data URLs
 const stripDataUrlPrefix = (dataUrl) => {
     const str = String(dataUrl || '');
     const idx = str.indexOf(',');
     return idx >= 0 ? str.slice(idx + 1) : str;
 };
 
-// Detects a trailing partial tag so it never flashes in the UI
 const longestPartialTagSuffix = (str) => {
     for (const tag of [THINK_OPEN, THINK_CLOSE]) {
         const max = Math.min(tag.length - 1, str.length);
@@ -51,8 +38,6 @@ const longestPartialTagSuffix = (str) => {
     return 0;
 };
 
-// Splits accumulated model output into reasoning (think blocks) and visible content.
-// Re-parsing the full string on every chunk keeps the result idempotent.
 const parseThinkContent = (raw) => {
     let reasoning = '';
     let content = '';
@@ -75,14 +60,10 @@ const parseThinkContent = (raw) => {
     return { reasoning: reasoning.trim(), content };
 };
 
-// --- Chrome Built-in AI (Prompt API) helpers --------------------------------
-// Converts a data URL (how image attachments are stored) into a Blob, which is
-// one of the accepted image value types for the Prompt API.
 const dataUrlToBlob = async (dataUrl) => {
     const res = await fetch(dataUrl);
     return await res.blob();
 };
-// ----------------------------------------------------------------------------
 
 export const useChatAPI = ({
     apiConfig,
@@ -111,12 +92,14 @@ export const useChatAPI = ({
         let content = message.text || '';
 
         if (Array.isArray(message.attachments) && message.attachments.length > 0) {
-            const textAndUrlAttachments = message.attachments.filter(att => att.type === 'text' || att.type === 'url');
+            const textAndUrlAttachments = message.attachments.filter(
+                (att) => att.type === 'text' || att.type === 'url' || typeof att.content === 'string'
+            );
 
             if (textAndUrlAttachments.length > 0) {
                 let attachmentContent = '';
-                textAndUrlAttachments.forEach(att => {
-                    if (att.type === 'text' && att.content) {
+                textAndUrlAttachments.forEach((att) => {
+                    if ((att.type === 'text' || typeof att.content === 'string') && att.content) {
                         attachmentContent = `\n\`\`\`${att.name}\n${att.content}\n\`\`\`\n` + attachmentContent;
                     } else if (att.type === 'url') {
                         attachmentContent += `\n[url: ${att.url}]\n`;
@@ -142,13 +125,13 @@ export const useChatAPI = ({
             messageHistory.push({ type: 'human', content: customPrompt.trim() });
         }
 
-        (history || []).forEach(m => {
+        (history || []).forEach((m) => {
             const messagePayload = {
                 type: m.sender === 'user' ? 'human' : 'ai',
                 content: formatMessageContent(m)
             };
             if (m.sender === 'user' && Array.isArray(m.images) && m.images.length > 0) {
-                const imageUrls = m.images.map(img => img.src).filter(Boolean);
+                const imageUrls = m.images.map((img) => img.src).filter(Boolean);
                 if (imageUrls.length > 0) {
                     messagePayload.image_data_urls = imageUrls;
                 }
@@ -159,7 +142,6 @@ export const useChatAPI = ({
         return messageHistory;
     }, [customPrompt, pageContext, formatMessageContent]);
 
-    // Builds the message array Ollama expects: system + user/assistant pairs.
     const buildOllamaMessages = useCallback((history = []) => {
         const result = [];
         const systemParts = [];
@@ -173,11 +155,11 @@ export const useChatAPI = ({
             result.push({ role: 'system', content: systemParts.join('\n\n') });
         }
 
-        (history || []).forEach(m => {
+        (history || []).forEach((m) => {
             const content = formatMessageContent(m);
             if (m.sender === 'user') {
                 const msg = { role: 'user', content };
-                const images = (m.images || []).map(img => stripDataUrlPrefix(img.src)).filter(Boolean);
+                const images = (m.images || []).map((img) => stripDataUrlPrefix(img.src)).filter(Boolean);
                 if (images.length > 0) msg.images = images;
                 result.push(msg);
             } else if ((content || '').trim()) {
@@ -187,12 +169,9 @@ export const useChatAPI = ({
         return result;
     }, [pageContext, customPrompt, formatMessageContent]);
 
-    // Builds Prompt API content for a message: a plain string for text-only
-    // messages, or a multimodal content array when a user message has images.
-    // Assistant messages stay text-only (the API rejects non-text assistant content).
     const buildChromeContent = useCallback(async (m) => {
         const text = formatMessageContent(m);
-        const images = m.sender === 'user' ? (m.images || []).filter(img => img?.src) : [];
+        const images = m.sender === 'user' ? (m.images || []).filter((img) => img?.src) : [];
         if (images.length === 0) return text;
 
         const parts = [];
@@ -207,7 +186,6 @@ export const useChatAPI = ({
         return parts.length > 0 ? parts : text;
     }, [formatMessageContent]);
 
-    // Streams a chat completion from an Ollama server (NDJSON over /api/chat).
     const streamOllamaResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit = 10 }) => {
         setIsLoading(true);
         setLastCost(0);
@@ -254,7 +232,7 @@ export const useChatAPI = ({
                 }
                 const errorObj = { message: errorMessage, status: response.status };
                 setApiError(errorObj);
-                setMessages(prev => prev.map(m => m.id === botMessageId ? { ...m, text: '', error: errorMessage } : m));
+                setMessages((prev) => prev.map((m) => (m.id === botMessageId ? { ...m, text: '', error: errorMessage } : m)));
                 throw new Error(errorMessage);
             }
 
@@ -283,7 +261,7 @@ export const useChatAPI = ({
                             const msg = typeof data.error === 'string' ? data.error : 'Ollama stream error';
                             setApiError({ message: msg });
                             ollama?.reportRuntimeError?.(msg);
-                            setMessages(prev => prev.map(m => m.id === botMessageId ? { ...m, error: msg } : m));
+                            setMessages((prev) => prev.map((m) => (m.id === botMessageId ? { ...m, error: msg } : m)));
                             streamError = true;
                             break;
                         }
@@ -306,13 +284,13 @@ export const useChatAPI = ({
                                 (embeddedReasoning ? '\n\n' + embeddedReasoning : '')
                             ).trim();
 
-                            setLiveReasoning(prev => ({
+                            setLiveReasoning((prev) => ({
                                 text: combinedReasoning,
                                 botId: botMessageId,
                                 contentHasStarted: prev.contentHasStarted || content.length > 0,
                             }));
-                            setMessages(prev => {
-                                const updated = prev.map(m =>
+                            setMessages((prev) => {
+                                const updated = prev.map((m) =>
                                     m.id === botMessageId ? { ...m, text: content } : m
                                 );
                                 finalMessages = updated;
@@ -345,8 +323,8 @@ export const useChatAPI = ({
                 cost: null,
             };
 
-            setMessages(prev => {
-                const updated = prev.map(m => {
+            setMessages((prev) => {
+                const updated = prev.map((m) => {
                     if (m.id !== botMessageId) return m;
                     return {
                         ...m,
@@ -359,7 +337,7 @@ export const useChatAPI = ({
             });
 
             const targetSessionId = sessionId || currentSessionId;
-            if (targetSessionId && finalMessages) {
+            if (targetSessionId && finalMessages && finalMessages.some((m) => m.id === botMessageId)) {
                 updateCurrentSession(finalMessages, targetSessionId);
             }
         } catch (error) {
@@ -370,7 +348,7 @@ export const useChatAPI = ({
                 const friendly = /failed to fetch|networkerror/i.test(error?.message || '')
                     ? `Cannot reach Ollama at ${ollamaBase}. Make sure it is running and allows this origin.`
                     : (error.message || 'Ollama request failed.');
-                setApiError(prev => prev || { message: friendly });
+                setApiError((prev) => prev || { message: friendly });
                 if (!streamError) ollama?.reportRuntimeError?.(friendly);
             }
         } finally {
@@ -382,9 +360,6 @@ export const useChatAPI = ({
         }
     };
 
-    // Streams a completion from Chrome's built-in Browser Local AI (Prompt API).
-    // Multimodal: text input always, image input when the on-device model
-    // reports it as available and the conversation actually carries images.
     const streamChromeResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit = 10 }) => {
         setIsLoading(true);
         setLastCost(0);
@@ -408,8 +383,7 @@ export const useChatAPI = ({
                 limitedHistory = historyForPayload.slice(-contextLimit);
             }
 
-            // Declare image input only when a message in scope actually has images
-            const hasImages = limitedHistory.some(m => (m.images || []).length > 0);
+            const hasImages = limitedHistory.some((m) => (m.images || []).length > 0);
             const expectedInputs = [{ type: 'text', languages: ['en'] }];
             if (hasImages) expectedInputs.push({ type: 'image' });
 
@@ -435,7 +409,6 @@ export const useChatAPI = ({
             if (systemParts.length > 0) {
                 initialPrompts.push({ role: 'system', content: systemParts.join('\n\n') });
             }
-            // Everything except the latest user message becomes session context
             for (const m of limitedHistory.slice(0, -1)) {
                 const content = await buildChromeContent(m);
                 const isEmpty = typeof content === 'string' ? !content.trim() : content.length === 0;
@@ -451,8 +424,6 @@ export const useChatAPI = ({
             });
 
             const currentUserContent = await buildChromeContent(userMessage);
-            // A bare array is parsed as LanguageModelMessage[], so multimodal
-            // parts must be wrapped in a message object with role + content.
             const promptInput = Array.isArray(currentUserContent)
                 ? [{ role: 'user', content: currentUserContent }]
                 : currentUserContent;
@@ -461,15 +432,14 @@ export const useChatAPI = ({
             let fullText = '';
             for await (const chunk of stream) {
                 const piece = String(chunk ?? '');
-                // Some Chrome builds stream deltas, others cumulative snapshots
                 fullText = piece.startsWith(fullText) ? piece : fullText + piece;
 
-                setMessages(prev => {
-                    const updated = prev.map(m => m.id === botMessageId ? { ...m, text: fullText } : m);
+                setMessages((prev) => {
+                    const updated = prev.map((m) => (m.id === botMessageId ? { ...m, text: fullText } : m));
                     finalMessages = updated;
                     return updated;
                 });
-                setLiveReasoning(prev => prev.contentHasStarted ? prev : { ...prev, contentHasStarted: true });
+                setLiveReasoning((prev) => (prev.contentHasStarted ? prev : { ...prev, contentHasStarted: true }));
             }
 
             const tokenUsage =
@@ -484,14 +454,14 @@ export const useChatAPI = ({
                 cost: null,
             };
 
-            setMessages(prev => {
-                const updated = prev.map(m => m.id === botMessageId ? { ...m, meta: finalMeta } : m);
+            setMessages((prev) => {
+                const updated = prev.map((m) => (m.id === botMessageId ? { ...m, meta: finalMeta } : m));
                 finalMessages = updated;
                 return updated;
             });
 
             const targetSessionId = sessionId || currentSessionId;
-            if (targetSessionId && finalMessages) {
+            if (targetSessionId && finalMessages && finalMessages.some((m) => m.id === botMessageId)) {
                 updateCurrentSession(finalMessages, targetSessionId);
             }
         } catch (error) {
@@ -500,8 +470,8 @@ export const useChatAPI = ({
             } else {
                 console.error('Chrome AI error:', error);
                 const message = error?.message || 'Browser Local AI request failed.';
-                setApiError(prev => prev || { message });
-                setMessages(prev => prev.map(m =>
+                setApiError((prev) => prev || { message });
+                setMessages((prev) => prev.map((m) =>
                     m.id === botMessageId && !m.text ? { ...m, error: message } : m
                 ));
             }
@@ -516,12 +486,10 @@ export const useChatAPI = ({
     };
 
     const streamResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit = 10 }) => {
-        // Local Ollama models use a completely different API shape
         if (userMessage?.model?.startsWith('ollama:')) {
             return streamOllamaResponse({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit });
         }
 
-        // Chrome built-in Browser Local AI uses the LanguageModel API
         if (userMessage?.model?.startsWith('chrome:')) {
             return streamChromeResponse({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit });
         }
@@ -542,10 +510,10 @@ export const useChatAPI = ({
         const currentUserInput = formatMessageContent(userMessage);
         const detectedLang = franc(currentUserInput);
         const detectedLanguageCode = supportedLanguages.includes(langMap[detectedLang]) ? langMap[detectedLang] : "en";
-        const imageAttachments = (userMessage.attachments || []).filter(att => att.type === 'image');
-        const imageUrls = imageAttachments.map(img => img.src).filter(Boolean);
-        const pdfAttachments = (userMessage.attachments || []).filter(att => att.type === 'pdf');
-        const pdfUrls = pdfAttachments.map(pdf => pdf.src).filter(Boolean);
+        const imageAttachments = (userMessage.attachments || []).filter((att) => att.type === 'image');
+        const imageUrls = imageAttachments.map((img) => img.src).filter(Boolean);
+        const pdfAttachments = (userMessage.attachments || []).filter((att) => att.type === 'pdf');
+        const pdfUrls = pdfAttachments.map((pdf) => pdf.src).filter(Boolean);
 
         let limitedHistory = historyForPayload;
         if (typeof contextLimit === 'number' && contextLimit > 0) {
@@ -607,7 +575,7 @@ export const useChatAPI = ({
 
                 const errorObj = { message: errorMessage, status: response.status };
                 setApiError(errorObj);
-                setMessages(prev => prev.map(m => m.id === botMessageId ? { ...m, text: "An error occurred. Please check the details.", error: errorMessage } : m));
+                setMessages((prev) => prev.map((m) => (m.id === botMessageId ? { ...m, text: "An error occurred. Please check the details.", error: errorMessage } : m)));
                 throw new Error(errorMessage);
             }
 
@@ -631,26 +599,25 @@ export const useChatAPI = ({
                         try {
                             const data = JSON.parse(part.substring(6));
 
-                            // Handle stream errors sent by the backend
                             if (data.error) {
                                 const cleanMessage = extractCleanErrorMessage(data.error);
                                 setApiError({ message: cleanMessage, status: null });
-                                setMessages(prev => prev.map(m =>
+                                setMessages((prev) => prev.map((m) =>
                                     m.id === botMessageId
                                         ? { ...m, text: m.text || '', error: cleanMessage }
                                         : m
                                 ));
                                 streamError = true;
-                                break; // Break the for loop
+                                break;
                             }
 
                             if (data.delta_content) {
-                                setMessages(prev => {
-                                    const updated = prev.map(m => m.id === botMessageId ? { ...m, text: m.text + data.delta_content } : m);
+                                setMessages((prev) => {
+                                    const updated = prev.map((m) => (m.id === botMessageId ? { ...m, text: m.text + data.delta_content } : m));
                                     finalMessages = updated;
                                     return updated;
                                 });
-                                setLiveReasoning(prev => {
+                                setLiveReasoning((prev) => {
                                     if (!prev.contentHasStarted) {
                                         return { ...prev, contentHasStarted: true };
                                     }
@@ -659,14 +626,14 @@ export const useChatAPI = ({
                             }
 
                             if (data.images && Array.isArray(data.images)) {
-                                const newImages = data.images.map(img => ({
+                                const newImages = data.images.map((img) => ({
                                     src: img.image_url.url,
                                     id: `gen-img-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                                     name: 'Generated Image'
                                 }));
 
-                                setMessages(prev => {
-                                    const updated = prev.map(m => {
+                                setMessages((prev) => {
+                                    const updated = prev.map((m) => {
                                         if (m.id === botMessageId) {
                                             const currentImages = m.images || [];
                                             return { ...m, images: [...currentImages, ...newImages] };
@@ -680,7 +647,7 @@ export const useChatAPI = ({
 
                             if (data.reasoning_content) {
                                 liveReasoningTextRef.current += data.reasoning_content;
-                                setLiveReasoning(prev => ({ ...prev, text: liveReasoningTextRef.current }));
+                                setLiveReasoning((prev) => ({ ...prev, text: liveReasoningTextRef.current }));
                             }
 
                             if (data.cost !== undefined) {
@@ -694,7 +661,7 @@ export const useChatAPI = ({
                         } catch (e) { console.error("Stream parse error:", part, e); }
                     }
                 }
-                if (streamError) break; // Break the while loop
+                if (streamError) break;
             }
 
             const finalMeta = {
@@ -704,8 +671,8 @@ export const useChatAPI = ({
                 cost: localCost > 0 ? localCost : null,
             };
 
-            setMessages(prev => {
-                const updated = prev.map(m => {
+            setMessages((prev) => {
+                const updated = prev.map((m) => {
                     if (m.id !== botMessageId) return m;
                     return {
                         ...m,
@@ -718,7 +685,7 @@ export const useChatAPI = ({
             });
 
             const targetSessionId = sessionId || currentSessionId;
-            if (targetSessionId && finalMessages) {
+            if (targetSessionId && finalMessages && finalMessages.some((m) => m.id === botMessageId)) {
                 updateCurrentSession(finalMessages, targetSessionId);
             }
 
@@ -727,7 +694,7 @@ export const useChatAPI = ({
                 console.info("Chat streaming was stopped by the user.");
             } else {
                 console.error("Chatbot API error:", error);
-                setApiError(prev => prev || { message: error.message || "Network error or API unreachable." });
+                setApiError((prev) => prev || { message: error.message || "Network error or API unreachable." });
             }
         } finally {
             if (streamAbortControllerRef.current === abortController) {
@@ -741,7 +708,7 @@ export const useChatAPI = ({
     const stopStreaming = useCallback(() => {
         if (streamAbortControllerRef.current) {
             streamAbortControllerRef.current.abort();
-            setMessages(prev => {
+            setMessages((prev) => {
                 let finalMessagesOnStop = prev;
                 if (currentSessionId) {
                     updateCurrentSession(finalMessagesOnStop);

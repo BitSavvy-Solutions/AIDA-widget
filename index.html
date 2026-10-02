@@ -4,6 +4,47 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AIDA Widget - Dev Environment</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        padding: 1rem;
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      .chat-list {
+        margin-top: 2rem;
+        padding: 1rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background: #f9f9f9;
+      }
+      .chat-list h2 {
+        margin-top: 0;
+        font-size: 1.2rem;
+      }
+      .chat-item {
+        display: block;
+        width: 100%;
+        text-align: left;
+        padding: 0.75rem 1rem;
+        margin-bottom: 0.5rem;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        background: white;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .chat-item:hover {
+        background: #eef;
+      }
+      .chat-item .title {
+        font-weight: 600;
+      }
+      .chat-item .meta {
+        font-size: 0.85rem;
+        color: #666;
+      }
+    </style>
   </head>
   <body>
     <h1>This is the Host Page (for testing)</h1>
@@ -11,6 +52,197 @@
 
     <!-- The widget will be mounted here by src/main.jsx in dev mode -->
     <div id="root"></div>
+
+    <!-- Chat list for testing open-chat functionality -->
+    <div class="chat-list">
+      <h2>Sample Chats</h2>
+      <p>Click a chat to open it in the AIDA widget.</p>
+      <div id="chat-list-container"></div>
+    </div>
+
+    <!-- Development-only memory adapter for testing chat history and tags -->
+    <script>
+      (function () {
+        const sessions = new Map();
+        const tags = new Map();
+        const listeners = new Set();
+        const notify = () => listeners.forEach((fn) => fn());
+        let sessionCounter = 0;
+        let tagCounter = 0;
+
+        const ensureSession = (id) => {
+          if (!sessions.has(id)) {
+            sessions.set(id, {
+              id,
+              title: 'New Chat',
+              messages: [],
+              tagIds: [],
+              createdAt: new Date().toISOString(),
+            });
+          }
+          return sessions.get(id);
+        };
+
+        // Pre-populate sample chats
+        const sampleChats = [
+          {
+            id: 'sample-chat-1',
+            title: 'Welcome to AIDA',
+            createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
+            messages: [
+              { id: 'msg-1', sender: 'bot', text: 'Hello! I am AIDA, your assistant. How can I help you today?' },
+              { id: 'msg-2', sender: 'user', text: 'Can you explain what you can do?' },
+              { id: 'msg-3', sender: 'bot', text: 'I can answer questions, help with research, generate images, and much more. Just ask!' },
+            ],
+          },
+          {
+            id: 'sample-chat-2',
+            title: 'Project Ideas',
+            createdAt: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(),
+            messages: [
+              { id: 'msg-4', sender: 'user', text: 'Give me some project ideas for a hackathon.' },
+              { id: 'msg-5', sender: 'bot', text: 'Sure! Here are a few:\n1. AI-powered personal finance tracker\n2. Real-time language translation app\n3. Smart home energy optimizer' },
+            ],
+          },
+          {
+            id: 'sample-chat-3',
+            title: 'Travel Planning',
+            createdAt: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(),
+            messages: [
+              { id: 'msg-6', sender: 'user', text: 'Plan a 3-day trip to Paris.' },
+              { id: 'msg-7', sender: 'bot', text: 'Day 1: Visit the Eiffel Tower and Louvre.\nDay 2: Explore Montmartre and Notre-Dame.\nDay 3: Day trip to Versailles.' },
+            ],
+          },
+        ];
+
+        sampleChats.forEach((chat) => {
+          sessions.set(chat.id, {
+            id: chat.id,
+            title: chat.title,
+            messages: chat.messages.map((m) => ({ ...m })),
+            tagIds: [],
+            createdAt: chat.createdAt,
+          });
+        });
+
+        window.__AIDA_DEV_MEMORY__ = {
+          getSessionMeta: async (id) => sessions.get(id) || null,
+
+          getMessages: async (id) => {
+            const session = sessions.get(id);
+            return session ? session.messages : [];
+          },
+
+          listSessions: async () =>
+            Array.from(sessions.values()).sort(
+              (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
+            ),
+
+          createSession: async ({ id, title, messages = [] }) => {
+            const newId = id || `session_${Date.now()}_${sessionCounter++}`;
+            sessions.set(newId, {
+              id: newId,
+              title: title || 'New Chat',
+              messages: messages.map((m) => ({ ...m })),
+              tagIds: [],
+              createdAt: new Date().toISOString(),
+            });
+            notify();
+            return newId;
+          },
+
+          updateSession: async (id, { title, messages, tagIds }) => {
+            const session = ensureSession(id);
+            if (title !== undefined) session.title = title;
+            if (messages !== undefined) session.messages = messages.map((m) => ({ ...m }));
+            if (tagIds !== undefined) session.tagIds = [...tagIds];
+            notify();
+          },
+
+          deleteSession: async (id) => {
+            sessions.delete(id);
+            notify();
+          },
+
+          renameSession: async (id, title) => {
+            const session = ensureSession(id);
+            session.title = title;
+            notify();
+          },
+
+          listTags: async () =>
+            Array.from(tags.values()).sort((a, b) => a.title.localeCompare(b.title)),
+
+          createTag: async (name) => {
+            const trimmed = name.trim();
+            const existing = Array.from(tags.values()).find(
+              (t) => t.title.toLowerCase() === trimmed.toLowerCase(),
+            );
+            if (existing) return existing.id;
+
+            const id = `tag_${Date.now()}_${tagCounter++}`;
+            tags.set(id, {
+              id,
+              title: trimmed,
+              iconKey: 'notebook',
+              iconColor: '#9CA3AF',
+            });
+            notify();
+            return id;
+          },
+
+          assignTag: async (sessionId, tagId) => {
+            const session = ensureSession(sessionId);
+            if (!session.tagIds.includes(tagId)) {
+              session.tagIds = [...session.tagIds, tagId];
+              notify();
+            }
+          },
+
+          removeTag: async (sessionId, tagId) => {
+            const session = ensureSession(sessionId);
+            session.tagIds = session.tagIds.filter((t) => t !== tagId);
+            notify();
+          },
+
+          updateTag: async (tagId, updates = {}) => {
+            const tag = tags.get(tagId);
+            if (tag) {
+              Object.assign(tag, updates);
+              notify();
+            }
+          },
+
+          subscribe: (listener) => {
+            listeners.add(listener);
+            return () => listeners.delete(listener);
+          },
+        };
+      })();
+    </script>
+
+    <!-- Render the chat list and attach click handlers -->
+    <script>
+      (async () => {
+        const container = document.getElementById('chat-list-container');
+        if (!container || !window.__AIDA_DEV_MEMORY__) return;
+
+        const sessions = await window.__AIDA_DEV_MEMORY__.listSessions();
+        sessions.forEach((session) => {
+          const button = document.createElement('button');
+          button.className = 'chat-item';
+          button.innerHTML = `
+            <div class="title">${session.title}</div>
+            <div class="meta">${session.messages.length} messages · ${new Date(session.createdAt).toLocaleString()}</div>
+          `;
+          button.addEventListener('click', () => {
+            // Dispatch the event the widget listens for
+            window.dispatchEvent(new CustomEvent('aida-open-chat', { detail: { chatId: session.id } }));
+          });
+          container.appendChild(button);
+        });
+      })();
+    </script>
 
     <script type="module" src="/src/main.jsx"></script>
   </body>

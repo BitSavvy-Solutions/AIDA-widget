@@ -1,49 +1,30 @@
 /* src/AidaWidget/hooks/useChatMessages.js */
-import { useState, useEffect, useCallback } from 'react';
-import { db } from '../db';
+import { useState, useCallback } from 'react';
 
-// Helper to remove heavy data if we still want to use sessionStorage as a backup/cache
-const sanitizeMessagesForStorage = (msgs) => {
-    if (!Array.isArray(msgs)) return [];
-    return msgs.map(msg => {
-        // We can keep images in memory, but maybe strip them for sessionStorage if we use it
-        const { ...safeMessage } = msg;
-        return safeMessage;
-    });
-};
-
-export const useChatMessages = () => {
+export const useChatMessages = (adapter) => {
     const [messages, setMessages] = useState([]);
 
-    // We expose a method to load messages specifically for a session ID
-    // This is called by AidaWidget when currentSessionId changes
     const loadMessagesForSession = useCallback(async (sessionId) => {
-        if (!sessionId) {
+        if (!adapter || !sessionId) {
             setMessages([]);
             return;
         }
+
         try {
-            const session = await db.chats.get(sessionId);
-            if (session && session.messages) {
-                setMessages(session.messages);
-            } else {
-                setMessages([]);
-            }
+            const msgs = await adapter.getMessages(sessionId);
+            setMessages(msgs || []);
         } catch (e) {
-            console.error("Error loading messages from DB:", e);
+            console.error('Error loading messages via memory adapter:', e);
             setMessages([]);
         }
-    }, []);
+    }, [adapter]);
 
-    // We still return getSanitizedMessages for the history hook to use when saving
-    const getSanitizedMessages = useCallback(() => {
-        return sanitizeMessagesForStorage(messages);
-    }, [messages]);
+    const getSanitizedMessages = useCallback(() => messages, [messages]);
 
-    return { 
-        messages, 
-        setMessages, 
+    return {
+        messages,
+        setMessages,
         getSanitizedMessages,
-        loadMessagesForSession 
+        loadMessagesForSession,
     };
 };
