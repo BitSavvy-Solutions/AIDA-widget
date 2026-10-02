@@ -456,8 +456,16 @@ const AidaWidget = (props) => {
     }, [getMessageText, stableHandleSendMessage, attachments.length]);
 
     const handleOpenHistory = useCallback(() => {
-        if (isFullscreen) {
-            setIsFullscreen(false);
+        if (isMobileViewport) {
+            // On mobile, close the widget completely before navigating
+            if (isOpen) {
+                toggleChatVisibility();
+            }
+        } else {
+            // On desktop, just exit fullscreen if needed
+            if (isFullscreen) {
+                setIsFullscreen(false);
+            }
         }
     
         if (!historyUrl) return;
@@ -472,7 +480,14 @@ const AidaWidget = (props) => {
         }
     
         window.location.assign(historyUrl);
-    }, [historyUrl, isFullscreen, setIsFullscreen]);
+    }, [
+        historyUrl,
+        isFullscreen,
+        setIsFullscreen,
+        isMobileViewport,
+        isOpen,
+        toggleChatVisibility,
+    ]);
 
     useEffect(() => {
         autoSendCallbackRef.current = handleAutoSend;

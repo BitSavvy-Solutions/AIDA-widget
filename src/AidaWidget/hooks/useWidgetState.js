@@ -44,9 +44,13 @@ export const useWidgetState = () => {
         }
     }, [isOpen, theme]);
 
+
     const toggleChatVisibility = useCallback(() => {
         if (isOpen) {
             setIsClosing(true);
+            try {
+                localStorage.setItem('aida-is-open', 'false');
+            } catch { /* ignore */ }
             setTimeout(() => {
                 setIsOpen(false);
                 setIsClosing(false);
