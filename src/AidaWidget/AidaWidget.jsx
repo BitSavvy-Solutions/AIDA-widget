@@ -65,6 +65,7 @@ const defaultProps = {
     models: [],
     audioModels: [],
     memoryAdapter: null,
+    historyUrl: null,
     features: {
         resizable: true,
         modelSelection: true,
@@ -89,6 +90,7 @@ const AidaWidget = (props) => {
         models,
         audioModels,
         memoryAdapter,
+        historyUrl,
     } = { ...defaultProps, ...props };
 
     const attachmentsEnabled = Boolean(features?.imageUpload);
@@ -453,6 +455,25 @@ const AidaWidget = (props) => {
         }
     }, [getMessageText, stableHandleSendMessage, attachments.length]);
 
+    const handleOpenHistory = useCallback(() => {
+        if (isFullscreen) {
+            setIsFullscreen(false);
+        }
+    
+        if (!historyUrl) return;
+    
+        try {
+            const target = new URL(historyUrl, window.location.href);
+            if (target.href === window.location.href) {
+                return; // Already on the history page; no navigation needed
+            }
+        } catch {
+            // If URL parsing fails, fall through and attempt navigation
+        }
+    
+        window.location.assign(historyUrl);
+    }, [historyUrl, isFullscreen, setIsFullscreen]);
+
     useEffect(() => {
         autoSendCallbackRef.current = handleAutoSend;
     }, [handleAutoSend]);
@@ -740,8 +761,7 @@ const AidaWidget = (props) => {
                         toggleChat={toggleChat}
                         theme={baseTheme}
                         onOpenAppearance={() => setIsAppearanceModalOpen(true)}
-                        onToggleHistory={historyEnabled ? () => {} : undefined}
-                        onShare={messages.length > 0 ? () => {
+                        onToggleHistory={historyUrl ? handleOpenHistory : undefined}                        onShare={messages.length > 0 ? () => {
                             setSessionToShare({ messages, title: currentSessionTitle });
                             openShareModal();
                         } : undefined}

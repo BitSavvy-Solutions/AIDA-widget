@@ -46,43 +46,10 @@ function openChat(chatId) {
   window.dispatchEvent(new CustomEvent('aida-open-chat', { detail: { chatId } }));
 }
 
-if (import.meta.env.DEV) {
-  const widgetContainerId = 'aida-widget-container';
-
-  if (!document.getElementById(widgetContainerId)) {
-    const container = document.createElement('div');
-    container.id = widgetContainerId;
-    document.body.appendChild(container);
-  }
-
-  render(`#${widgetContainerId}`, {
-    language: 'en',
-    user: { email: 'dev-user@example.com', id: 'dev-id' },
-    memoryAdapter: window.__AIDA_DEV_MEMORY__,
-    translations: { transcribing: 'Transcribing...', inputPlaceholder: 'Type a message to Aida...' },
-    features: {
-      resizable: true,
-      modelSelection: true,
-      voiceInput: true,
-      webSearch: true,
-      imageUpload: true,
-      retryMessage: true,
-      customInstructions: true,
-      historyProjects: true,
-      getPageContext: async () => {
-        return {
-          name: 'Dev Page Content.md',
-          content: 'This is mock content extracted from the host page during local development.'
-        };
-      }
-    },
-  });
-}
-
 // Expose a stable API on window so the frontend can call these directly
 if (typeof window !== 'undefined') {
   window.AidaWidget = { render, pushContext, openChat };
 }
 
-// ✅ Export both render and pushContext
+// Export both render and pushContext
 export { render, pushContext, openChat };

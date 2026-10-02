@@ -53,6 +53,9 @@
     <h1>This is the Host Page (for testing)</h1>
     <p>The AIDA widget will be rendered below.</p>
 
+    <!-- The widget will be mounted by the integration script below -->
+    <div id="aida-widget-container"></div>
+
     <!-- The widget will be mounted here by src/main.jsx in dev mode -->
     <div id="root"></div>
 
@@ -399,6 +402,39 @@
           refreshButton.addEventListener('click', renderInspector);
         }
       })();
+    </script>
+    <script type="module">
+      import { render } from '/src/main.jsx';
+    
+      // Sample integration for local development.
+      // In a real host page, you would call window.AidaWidget.render(...)
+      // with your own props.
+      render('#aida-widget-container', {
+        language: 'en',
+        user: { email: 'dev-user@example.com', id: 'dev-id' },
+        memoryAdapter: window.__AIDA_DEV_MEMORY__,
+        historyUrl: '/pkb',   // clicking "Chat history" in the widget menu opens this URL
+        translations: {
+          transcribing: 'Transcribing...',
+          inputPlaceholder: 'Type a message to Aida...'
+        },
+        features: {
+          resizable: true,
+          modelSelection: true,
+          voiceInput: true,
+          webSearch: true,
+          imageUpload: true,
+          retryMessage: true,
+          customInstructions: true,
+          historyProjects: true,
+          getPageContext: async () => {
+            return {
+              name: 'Dev Page Content.md',
+              content: 'This is mock content extracted from the host page during local development.'
+            };
+          }
+        },
+      });
     </script>
 
     <script type="module" src="/src/main.jsx"></script>
