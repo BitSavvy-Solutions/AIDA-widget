@@ -1,215 +1,188 @@
 /* src/AidaWidget/hooks/useChatHistory.js */
-import { useState, useCallback, useMemo, useEffect } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db, migrateFromLocalStorage } from '../db';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 
 const CURRENT_SESSION_KEY = 'aida-current-session-id';
 
-const DEFAULT_PROJECT_ICON_KEY = 'notebook';
-const DEFAULT_PROJECT_ICON_COLOR = '#9CA3AF';
-
-const ensureProjectDefaults = (project = {}) => {
-    const {
-        iconKey = DEFAULT_PROJECT_ICON_KEY,
-        iconColor = DEFAULT_PROJECT_ICON_COLOR,
-    } = project;
-
-    return { ...project, iconKey, iconColor };
+const buildTitleFromMessages = (msgs) => {
+    const firstUser = (msgs || []).find(
+        (m) => m.sender === 'user' && (m.text || '').trim(),
+    );
+    const base = firstUser ? firstUser.text.trim() : 'New Chat';
+    return base.length > 60 ? `${base.slice(0, 57)}…` : base;
 };
 
-const sanitizeForHistory = (msgs) => {
-    if (!Array.isArray(msgs)) return [];
-    return msgs.map(msg => {
-        const { ...safeMessage } = msg; 
-        return safeMessage;
-    });
-};
-
-export const useChatHistory = (getSanitizedMessages) => {
-    const [isPanelOpen, setIsPanelOpen] = useState(false);
-
-    useEffect(() => {
-        migrateFromLocalStorage();
-    }, []);
-
-    const historyItems = useLiveQuery(
-        () => db.chats.orderBy('createdAt').reverse().toArray(),
-        []
-    ) || [];
-
-    const projects = useLiveQuery(
-        () => db.projects.toArray(),
-        []
-    ) || [];
-
-    const [currentSessionId, _setCurrentSessionIdState] = useState(() => {
+/**
+ * Chat history backed by a host-provided memory adapter.
+ * If no adapter is supplied, all history functionality is disabled.
+ */
+export const useChatHistory = (adapter, getSanitizedMessages) => {
+    const [currentSessionId, _setCurrentSessionId] = useState(() => {
         if (typeof window === 'undefined') return null;
         return sessionStorage.getItem(CURRENT_SESSION_KEY) || null;
     });
 
+    const [sessions, setSessions] = useState([]);
+    const [tags, setTags] = useState([]);
+    const [currentSession, setCurrentSession] = useState(null);
+
     const setCurrentSessionId = useCallback((id) => {
-        _setCurrentSessionIdState(id);
-        if (id) {
-            sessionStorage.setItem(CURRENT_SESSION_KEY, id);
-        } else {
-            sessionStorage.removeItem(CURRENT_SESSION_KEY);
-        }
+        _setCurrentSessionId(id);
+        if (id) sessionStorage.setItem(CURRENT_SESSION_KEY, id);
+        else sessionStorage.removeItem(CURRENT_SESSION_KEY);
     }, []);
 
-    const buildTitleFromMessages = useCallback((msgs) => {
-        const firstUser = (msgs || []).find(m => m.sender === 'user' && (m.text || '').trim());
-        const base = firstUser ? firstUser.text.trim() : 'New Chat';
-        return base.length > 60 ? `${base.slice(0, 57)}…` : base;
-    }, []);
+    const loadMeta = useCallback(async () => {
+        if (!adapter) {
+            setSessions([]);
+            setTags([]);
+            setCurrentSession(null);
+            return;
+        }
+
+        try {
+            const [sessionsList, tagsList] = await Promise.all([
+                adapter.listSessions(),
+                adapter.listTags(),
+            ]);
+            setSessions(sessionsList || []);
+            setTags(tagsList || []);
+        } catch (e) {
+            console.error('Failed to load chat history meta:', e);
+        }
+    }, [adapter]);
+
+    // Subscribe to adapter changes when available.
+    useEffect(() => {
+        if (!adapter || !adapter.subscribe) return undefined;
+        const unsubscribe = adapter.subscribe(() => {
+            loadMeta();
+        });
+        return unsubscribe;
+    }, [adapter, loadMeta]);
+
+    useEffect(() => {
+        loadMeta();
+    }, [loadMeta]);
+
+    // Load current session metadata (title, tagIds) only, never full messages.
+    useEffect(() => {
+        if (!adapter || !currentSessionId) {
+            setCurrentSession(null);
+            return;
+        }
+
+        let cancelled = false;
+        adapter.getSessionMeta(currentSessionId)
+            .then((meta) => {
+                if (!cancelled) setCurrentSession(meta || null);
+            })
+            .catch(() => {
+                if (!cancelled) setCurrentSession(null);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [adapter, currentSessionId, sessions]);
 
     const createNewSession = useCallback(async (currentMsgs) => {
-        const id = `chat-${Date.now()}`;
-        const title = buildTitleFromMessages(currentMsgs);
-        const safeMessages = sanitizeForHistory(currentMsgs);
-        
-        const newSession = { 
-            id, 
-            title, 
-            createdAt: Date.now(), 
-            messages: safeMessages, 
-            customTitle: false 
-        };
-        
+        if (!adapter) return null;
+
+        const id = `session_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
         try {
-            await db.chats.add(newSession);
+            await adapter.createSession({
+                id,
+                title: buildTitleFromMessages(currentMsgs),
+                messages: currentMsgs,
+            });
             setCurrentSessionId(id);
+            loadMeta();
             return id;
         } catch (e) {
-            console.error("Failed to create session in DB", e);
+            console.error('Failed to create session via memory adapter:', e);
             return null;
         }
-    }, [buildTitleFromMessages, setCurrentSessionId]);
-    
+    }, [adapter, setCurrentSessionId, loadMeta]);
+
     const updateCurrentSession = useCallback(async (currentMsgs, explicitId = null) => {
+        if (!adapter) return;
+
         const targetId = explicitId || currentSessionId;
         if (!targetId) return;
-        
-        const autoTitle = buildTitleFromMessages(currentMsgs);
-        const safeMessages = sanitizeForHistory(currentMsgs);
-        
+
         try {
-            const existing = await db.chats.get(targetId);
-            
-            if (!existing) {
-                await db.chats.put({
-                    id: targetId,
-                    title: autoTitle,
-                    createdAt: Date.now(),
-                    messages: safeMessages,
-                    customTitle: false
-                });
-            } else {
-                const finalTitle = existing.customTitle ? existing.title : autoTitle;
-                await db.chats.update(targetId, {
-                    title: finalTitle,
-                    messages: safeMessages
-                });
-            }
+            await adapter.updateSession(targetId, {
+                messages: currentMsgs,
+                title: buildTitleFromMessages(currentMsgs),
+            });
+            loadMeta();
         } catch (e) {
-            console.error("Failed to update session in DB", e);
+            console.error('Failed to update session via memory adapter:', e);
         }
-    }, [currentSessionId, buildTitleFromMessages]);
+    }, [adapter, currentSessionId, loadMeta]);
 
     const saveCurrentChatToHistory = useCallback(() => {
-        const msgs = getSanitizedMessages(); 
+        const msgs = getSanitizedMessages();
         if (!msgs || msgs.length === 0) return;
-        
+
         if (currentSessionId) {
             updateCurrentSession(msgs);
-        } else {
+        } else if (adapter && msgs.some((m) => m.sender === 'user')) {
             createNewSession(msgs);
         }
-    }, [getSanitizedMessages, currentSessionId, createNewSession, updateCurrentSession]);
+    }, [
+        getSanitizedMessages,
+        currentSessionId,
+        updateCurrentSession,
+        createNewSession,
+        adapter,
+    ]);
 
-    const handlers = useMemo(() => ({
-        onDelete: async (chatId) => {
-            try {
-                await db.chats.delete(chatId);
-                const projectsToUpdate = projects.filter(p => (p.chatIds || []).includes(chatId));
-                for (const p of projectsToUpdate) {
-                    const newChatIds = p.chatIds.filter(id => id !== chatId);
-                    await db.projects.update(p.id, { chatIds: newChatIds });
-                }
-                if (chatId === currentSessionId) setCurrentSessionId(null);
-            } catch (e) {
-                console.error("Delete failed", e);
-            }
-        },
-        onRename: async (id, newTitle) => {
-            try {
-                await db.chats.update(id, { 
-                    title: newTitle.trim() || 'Untitled Chat', 
-                    customTitle: true 
-                });
-            } catch (e) { console.error("Rename failed", e); }
-        },
-        onCreateProject: async (projectName, initialChatId = null) => {
-            const trimmed = projectName.trim();
-            if (!trimmed) return null;
-            
-            const exists = projects.some(p => p.name.toLowerCase() === trimmed.toLowerCase());
-            if (exists) return null;
-
-            const newId = `project-${Date.now()}`;
-            const chatIds = initialChatId ? [initialChatId] : [];
-            const newProject = ensureProjectDefaults({ id: newId, name: trimmed, chatIds });
-            
-            try {
-                await db.projects.add(newProject);
-                return newId;
-            } catch (e) { console.error("Create project failed", e); return null; }
-        },
-        onDeleteProject: async (projectId) => {
-            try { await db.projects.delete(projectId); } catch (e) { console.error(e); }
-        },
-        onAssignChatToProject: async (projectId, chatId) => {
-            try {
-                const project = await db.projects.get(projectId);
-                if (project && !(project.chatIds || []).includes(chatId)) {
-                    await db.projects.update(projectId, {
-                        chatIds: [...(project.chatIds || []), chatId]
-                    });
-                }
-            } catch (e) { console.error(e); }
-        },
-        onRemoveChatFromProject: async (projectId, chatId) => {
-            try {
-                const project = await db.projects.get(projectId);
-                if (project) {
-                    await db.projects.update(projectId, {
-                        chatIds: (project.chatIds || []).filter(id => id !== chatId)
-                    });
-                }
-            } catch (e) { console.error(e); }
-        },
-        onRenameProject: async (projectId, name) => {
-            const trimmed = (name || '').trim();
-            if (!trimmed) return;
-            try { await db.projects.update(projectId, { name: trimmed }); } catch (e) { console.error(e); }
-        },
-        onUpdateProjectAppearance: async (projectId, updates = {}) => {
-            if (!projectId || !updates) return;
-            try { await db.projects.update(projectId, updates); } catch (e) { console.error(e); }
+    const historyHandlers = useMemo(() => {
+        if (!adapter) {
+            return {
+                onRename: null,
+                onDelete: null,
+                onCreateProject: null,
+                onAssignChatToProject: null,
+                onRemoveChatFromProject: null,
+                onUpdateProjectAppearance: null,
+                onDeleteProject: null,
+            };
         }
-        // Removed onShare from here, it's now handled by the modal in AidaWidget.jsx
-    }), [projects, currentSessionId, setCurrentSessionId]);
+
+        return {
+            onRename: (id, newTitle) => adapter.renameSession(id, newTitle),
+            onDelete: (id) => adapter.deleteSession(id),
+            onCreateProject: async (name, initialChatId = null) => {
+                const tagId = await adapter.createTag(name);
+                if (tagId && initialChatId) {
+                    await adapter.assignTag(initialChatId, tagId);
+                }
+                loadMeta();
+                return tagId;
+            },
+            onAssignChatToProject: (tagId, chatId) => adapter.assignTag(chatId, tagId),
+            onRemoveChatFromProject: (tagId, chatId) => adapter.removeTag(chatId, tagId),
+            onUpdateProjectAppearance: (tagId, updates) => adapter.updateTag(tagId, updates),
+            onDeleteProject: (tagId) => {
+                if (typeof adapter.deleteTag === 'function') {
+                    return adapter.deleteTag(tagId);
+                }
+                return null;
+            },
+        };
+    }, [adapter, loadMeta]);
 
     return {
-        isPanelOpen,
-        openPanel: () => setIsPanelOpen(true),
-        closePanel: () => setIsPanelOpen(false),
-        historyItems,
-        projects,
+        historyItems: sessions,
+        projects: tags,
+        currentSession,
         currentSessionId,
         setCurrentSessionId,
         createNewSession,
         updateCurrentSession,
         saveCurrentChatToHistory,
-        historyHandlers: handlers,
+        historyHandlers,
     };
 };

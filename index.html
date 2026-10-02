@@ -4,13 +4,438 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AIDA Widget - Dev Environment</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        padding: 1rem;
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      .chat-list {
+        margin-top: 2rem;
+        padding: 1rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background: #f9f9f9;
+      }
+      .chat-list h2 {
+        margin-top: 0;
+        font-size: 1.2rem;
+      }
+      .chat-item {
+        display: block;
+        width: 100%;
+        text-align: left;
+        padding: 0.75rem 1rem;
+        margin-bottom: 0.5rem;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        background: white;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .chat-item:hover {
+        background: #eef;
+      }
+      .chat-item .title {
+        font-weight: 600;
+      }
+      .chat-item .meta {
+        font-size: 0.85rem;
+        color: #666;
+      }
+      .storage-inspector {
+        margin-top: 2rem;
+      }
+    </style>
   </head>
   <body>
     <h1>This is the Host Page (for testing)</h1>
     <p>The AIDA widget will be rendered below.</p>
 
+    <!-- The widget will be mounted by the integration script below -->
+    <div id="aida-widget-container"></div>
+
     <!-- The widget will be mounted here by src/main.jsx in dev mode -->
     <div id="root"></div>
+
+    <!-- Chat list for testing open-chat functionality -->
+    <div class="chat-list">
+      <h2>Sample Chats</h2>
+      <p>Click a chat to open it in the AIDA widget.</p>
+      <div id="chat-list-container"></div>
+    </div>
+
+    <!-- Memory Adapter Inspector -->
+    <div class="chat-list storage-inspector">
+      <h2>Memory Adapter Inspector</h2>
+      <p>This panel refreshes when the widget or host page changes the adapter.</p>
+      <button id="refresh-inspector">Refresh Inspector</button>
+      <div id="storage-inspector-container"></div>
+    </div>
+
+    <!-- Development-only memory adapter for testing chat history and tags -->
+    <script>
+      (function () {
+        const sessions = new Map();
+        const tags = new Map();
+        const listeners = new Set();
+        const notify = () => listeners.forEach((fn) => fn());
+        let sessionCounter = 0;
+        let tagCounter = 0;
+
+        const ensureSession = (id) => {
+          if (!sessions.has(id)) {
+            sessions.set(id, {
+              id,
+              title: 'New Chat',
+              messages: [],
+              tagIds: [],
+              createdAt: new Date().toISOString(),
+            });
+          }
+          return sessions.get(id);
+        };
+
+        // Seed sample tags
+        const sampleTags = [
+          { id: 'tag-welcome', title: 'Welcome', iconKey: 'spark', iconColor: '#F472B6' },
+          { id: 'tag-ideas', title: 'Ideas', iconKey: 'bulb', iconColor: '#FACC15' },
+          { id: 'tag-travel', title: 'Travel', iconKey: 'globe', iconColor: '#38BDF8' },
+          { id: 'tag-admin', title: 'Admin', iconKey: 'shield', iconColor: '#34D399' }
+        ];
+
+        sampleTags.forEach((tag) => tags.set(tag.id, { ...tag }));
+
+        // Sample chats with metadata on AI messages and tagIds on sessions
+        const sampleChats = [
+          {
+            id: 'sample-chat-1',
+            title: 'Welcome to AIDA',
+            createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
+            tagIds: ['tag-welcome', 'tag-admin'],
+            messages: [
+              {
+                id: 'msg-1',
+                sender: 'bot',
+                text: 'Hello! I am AIDA, your assistant. How can I help you today?',
+                meta: {
+                  model: 'deepseek/deepseek-v4.1-flash',
+                  webSearchEnabled: false,
+                  tokenUsage: {
+                    input_tokens: 244303,
+                    output_tokens: 1477,
+                    total_tokens: 245780,
+                    output_token_details: { reasoning: 403 }
+                  },
+                  cost: 0.0451
+                }
+              },
+              { id: 'msg-2', sender: 'user', text: 'Can you explain what you can do?' },
+              {
+                id: 'msg-3',
+                sender: 'bot',
+                text: 'I can answer questions, help with research, generate images, and much more. Just ask!',
+                meta: {
+                  model: 'openai/gpt-5.1',
+                  webSearchEnabled: false,
+                  tokenUsage: {
+                    input_tokens: 128450,
+                    output_tokens: 912,
+                    total_tokens: 129362,
+                    output_token_details: { reasoning: 0 }
+                  },
+                  cost: 0.0321
+                }
+              }
+            ]
+          },
+          {
+            id: 'sample-chat-2',
+            title: 'Project Ideas',
+            createdAt: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(),
+            tagIds: ['tag-ideas'],
+            messages: [
+              { id: 'msg-4', sender: 'user', text: 'Give me some project ideas for a hackathon.' },
+              {
+                id: 'msg-5',
+                sender: 'bot',
+                text: 'Sure! Here are a few:\n1. AI-powered personal finance tracker\n2. Real-time language translation app\n3. Smart home energy optimizer',
+                meta: {
+                  model: 'perplexity/sonar:online',
+                  webSearchEnabled: true,
+                  tokenUsage: {
+                    input_tokens: 84210,
+                    output_tokens: 1204,
+                    total_tokens: 85414,
+                    output_token_details: { reasoning: 128 }
+                  },
+                  cost: 0.0212
+                }
+              }
+            ]
+          },
+          {
+            id: 'sample-chat-3',
+            title: 'Travel Planning',
+            createdAt: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(),
+            tagIds: ['tag-travel'],
+            messages: [
+              { id: 'msg-6', sender: 'user', text: 'Plan a 3-day trip to Paris.' },
+              {
+                id: 'msg-7',
+                sender: 'bot',
+                text: 'Day 1: Visit the Eiffel Tower and Louvre.\nDay 2: Explore Montmartre and Notre-Dame.\nDay 3: Day trip to Versailles.',
+                meta: {
+                  model: 'google/gemini-3.1-pro-preview',
+                  webSearchEnabled: false,
+                  tokenUsage: {
+                    input_tokens: 103200,
+                    output_tokens: 816,
+                    total_tokens: 104016,
+                    output_token_details: { reasoning: 64 }
+                  },
+                  cost: 0.0187
+                }
+              }
+            ]
+          }
+        ];
+
+        sampleChats.forEach((chat) => {
+          sessions.set(chat.id, {
+            id: chat.id,
+            title: chat.title,
+            messages: chat.messages.map((m) => ({ ...m })),
+            tagIds: [...(chat.tagIds || [])],
+            createdAt: chat.createdAt,
+          });
+        });
+
+        window.__AIDA_DEV_MEMORY__ = {
+          getSessionMeta: async (id) => sessions.get(id) || null,
+
+          getMessages: async (id) => {
+            const session = sessions.get(id);
+            return session ? session.messages : [];
+          },
+
+          listSessions: async () =>
+            Array.from(sessions.values()).sort(
+              (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
+            ),
+
+          createSession: async ({ id, title, messages = [] }) => {
+            const newId = id || `session_${Date.now()}_${sessionCounter++}`;
+            sessions.set(newId, {
+              id: newId,
+              title: title || 'New Chat',
+              messages: messages.map((m) => ({ ...m })),
+              tagIds: [],
+              createdAt: new Date().toISOString(),
+            });
+            notify();
+            return newId;
+          },
+
+          updateSession: async (id, { title, messages, tagIds }) => {
+            const session = ensureSession(id);
+            if (title !== undefined) session.title = title;
+            if (messages !== undefined) session.messages = messages.map((m) => ({ ...m }));
+            if (tagIds !== undefined) session.tagIds = [...tagIds];
+            notify();
+          },
+
+          deleteSession: async (id) => {
+            sessions.delete(id);
+            notify();
+          },
+
+          renameSession: async (id, title) => {
+            const session = ensureSession(id);
+            session.title = title;
+            notify();
+          },
+
+          listTags: async () =>
+            Array.from(tags.values()).sort((a, b) => a.title.localeCompare(b.title)),
+
+          createTag: async (name) => {
+            const trimmed = name.trim();
+            const existing = Array.from(tags.values()).find(
+              (t) => t.title.toLowerCase() === trimmed.toLowerCase(),
+            );
+            if (existing) return existing.id;
+
+            const id = `tag_${Date.now()}_${tagCounter++}`;
+            tags.set(id, {
+              id,
+              title: trimmed,
+              iconKey: 'notebook',
+              iconColor: '#9CA3AF',
+            });
+            notify();
+            return id;
+          },
+
+          assignTag: async (sessionId, tagId) => {
+            const session = ensureSession(sessionId);
+            if (!session.tagIds.includes(tagId)) {
+              session.tagIds = [...session.tagIds, tagId];
+              notify();
+            }
+          },
+
+          removeTag: async (sessionId, tagId) => {
+            const session = ensureSession(sessionId);
+            session.tagIds = session.tagIds.filter((t) => t !== tagId);
+            notify();
+          },
+
+          updateTag: async (tagId, updates = {}) => {
+            const tag = tags.get(tagId);
+            if (tag) {
+              Object.assign(tag, updates);
+              notify();
+            }
+          },
+
+          subscribe: (listener) => {
+            listeners.add(listener);
+            return () => listeners.delete(listener);
+          },
+        };
+      })();
+    </script>
+
+    <!-- Render the chat list and attach click handlers -->
+    <script>
+      (async () => {
+        const container = document.getElementById('chat-list-container');
+        if (!container || !window.__AIDA_DEV_MEMORY__) return;
+
+        const sessions = await window.__AIDA_DEV_MEMORY__.listSessions();
+        sessions.forEach((session) => {
+          const button = document.createElement('button');
+          button.className = 'chat-item';
+          button.innerHTML = `
+            <div class="title">${session.title}</div>
+            <div class="meta">${session.messages.length} messages · ${new Date(session.createdAt).toLocaleString()}</div>
+          `;
+          button.addEventListener('click', () => {
+            window.dispatchEvent(new CustomEvent('aida-open-chat', { detail: { chatId: session.id } }));
+          });
+          container.appendChild(button);
+        });
+      })();
+    </script>
+
+    <!-- Memory adapter inspector for bidirectional updates -->
+    <script>
+      (async () => {
+        const memory = window.__AIDA_DEV_MEMORY__;
+        const container = document.getElementById('storage-inspector-container');
+        const refreshButton = document.getElementById('refresh-inspector');
+        if (!memory || !container) return;
+
+        async function renderInspector() {
+          const [sessions, tags] = await Promise.all([
+            memory.listSessions(),
+            memory.listTags()
+          ]);
+
+          const tagById = new Map(tags.map((tag) => [tag.id, tag]));
+          const tagName = (id) => tagById.get(id)?.title || id;
+          const totalCost = (msgs) => msgs.reduce((sum, m) => sum + (Number(m.meta?.cost) || 0), 0);
+          const totalTokens = (msgs) => msgs.reduce(
+            (sum, m) => sum + (Number(m.meta?.tokenUsage?.total_tokens) || 0),
+            0
+          );
+
+          const activeSessionId = sessionStorage.getItem('aida-current-session-id');
+
+          const tagRows = tags.map((tag) => `
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+              <span>${tag.title}</span>
+              <span class="meta">${tag.id}</span>
+              ${activeSessionId ? `<button data-assign-tag="${tag.id}">Assign to active chat</button>` : ''}
+            </div>
+          `).join('');
+
+          const sessionRows = sessions.map((session) => `
+            <div style="border:1px solid #ccc; border-radius:8px; padding:8px; margin-bottom:8px;">
+              <strong>${session.title}</strong>
+              <div class="meta">
+                ${session.messages.length} messages ·
+                tags: ${session.tagIds.map(tagName).join(', ') || 'none'}
+              </div>
+              <div class="meta">
+                Total tokens: ${totalTokens(session.messages).toLocaleString()} ·
+                Total cost: $${totalCost(session.messages).toFixed(4)}
+              </div>
+            </div>
+          `).join('');
+
+          container.innerHTML = `
+            <h3>Tags</h3>
+            ${tagRows || '<p>No tags</p>'}
+            <h3>Sessions</h3>
+            ${sessionRows || '<p>No sessions</p>'}
+          `;
+
+          container.querySelectorAll('[data-assign-tag]').forEach((button) => {
+            button.addEventListener('click', async () => {
+              const sessionId = sessionStorage.getItem('aida-current-session-id');
+              if (!sessionId) {
+                alert('Open a sample chat first, then assign a tag.');
+                return;
+              }
+              await memory.assignTag(sessionId, button.dataset.assignTag);
+            });
+          });
+        }
+
+        renderInspector();
+        memory.subscribe(renderInspector);
+
+        if (refreshButton) {
+          refreshButton.addEventListener('click', renderInspector);
+        }
+      })();
+    </script>
+    <script type="module">
+      import { render } from '/src/main.jsx';
+    
+      // Sample integration for local development.
+      // In a real host page, you would call window.AidaWidget.render(...)
+      // with your own props.
+      render('#aida-widget-container', {
+        language: 'en',
+        user: { email: 'dev-user@example.com', id: 'dev-id' },
+        memoryAdapter: window.__AIDA_DEV_MEMORY__,
+        historyUrl: '/pkb',   // clicking "Chat history" in the widget menu opens this URL
+        translations: {
+          transcribing: 'Transcribing...',
+          inputPlaceholder: 'Type a message to Aida...'
+        },
+        features: {
+          resizable: true,
+          modelSelection: true,
+          voiceInput: true,
+          webSearch: true,
+          imageUpload: true,
+          retryMessage: true,
+          customInstructions: true,
+          historyProjects: true,
+          getPageContext: async () => {
+            return {
+              name: 'Dev Page Content.md',
+              content: 'This is mock content extracted from the host page during local development.'
+            };
+          }
+        },
+      });
+    </script>
 
     <script type="module" src="/src/main.jsx"></script>
   </body>
