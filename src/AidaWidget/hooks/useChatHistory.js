@@ -106,14 +106,13 @@ export const useChatHistory = (adapter, getSanitizedMessages) => {
 
     const updateCurrentSession = useCallback(async (currentMsgs, explicitId = null) => {
         if (!adapter) return;
-
         const targetId = explicitId || currentSessionId;
         if (!targetId) return;
-
+    
         try {
+            // Only update messages – title stays as it is
             await adapter.updateSession(targetId, {
                 messages: currentMsgs,
-                title: buildTitleFromMessages(currentMsgs),
             });
             loadMeta();
         } catch (e) {
