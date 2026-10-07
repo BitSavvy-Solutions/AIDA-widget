@@ -130,10 +130,17 @@ export const useChatAPI = ({
                 type: m.sender === 'user' ? 'human' : 'ai',
                 content: formatMessageContent(m)
             };
-            if (m.sender === 'user' && Array.isArray(m.images) && m.images.length > 0) {
-                const imageUrls = m.images.map((img) => img.src).filter(Boolean);
+            if (m.sender === 'user') {
+                const imageUrls = (m.images || []).map(img => img.src).filter(Boolean);
                 if (imageUrls.length > 0) {
                     messagePayload.image_data_urls = imageUrls;
+                }
+                const pdfUrls = (m.attachments || [])
+                    .filter(att => att.type === 'pdf')
+                    .map(pdf => pdf.src)
+                    .filter(Boolean);
+                if (pdfUrls.length > 0) {
+                    messagePayload.pdf_attachments = pdfUrls;
                 }
             }
             messageHistory.push(messagePayload);
@@ -510,10 +517,6 @@ export const useChatAPI = ({
         const currentUserInput = formatMessageContent(userMessage);
         const detectedLang = franc(currentUserInput);
         const detectedLanguageCode = supportedLanguages.includes(langMap[detectedLang]) ? langMap[detectedLang] : "en";
-        const imageAttachments = (userMessage.attachments || []).filter((att) => att.type === 'image');
-        const imageUrls = imageAttachments.map((img) => img.src).filter(Boolean);
-        const pdfAttachments = (userMessage.attachments || []).filter((att) => att.type === 'pdf');
-        const pdfUrls = pdfAttachments.map((pdf) => pdf.src).filter(Boolean);
 
         let limitedHistory = historyForPayload;
         if (typeof contextLimit === 'number' && contextLimit > 0) {
@@ -538,14 +541,6 @@ export const useChatAPI = ({
 
             if (!apiToken) {
                 payload.user_id = user.id;
-            }
-
-            if (imageUrls.length > 0) {
-                payload.image_data_urls = imageUrls;
-            }
-
-            if (pdfUrls.length > 0) {
-                payload.pdf_attachments = pdfUrls;
             }
 
             const response = await fetch(apiConfig.chatUrl, {
