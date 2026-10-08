@@ -84,6 +84,92 @@ const dataUrlToBlob = async (dataUrl) => {
 };
 // ----------------------------------------------------------------------------
 
+const streamPostWithXHR = ({
+    url,
+    headers,
+    body,
+    signal,
+    onUploadProgress,
+    onUploadComplete,
+    onChunk,
+    onComplete,
+    onError,
+}) => {
+    const xhr = new XMLHttpRequest();
+
+    xhr.open('POST', url, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+
+    Object.entries(headers || {}).forEach(([key, value]) => {
+        if (key.toLowerCase() !== 'content-type') {
+            xhr.setRequestHeader(key, value);
+        }
+    });
+
+    let lastIndex = 0;
+
+    xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+            onUploadProgress?.(event.loaded, event.total);
+        }
+    };
+
+    xhr.upload.onload = () => {
+        onUploadComplete?.();
+    };
+
+    xhr.onreadystatechange = () => {
+        if (xhr.readyState === XMLHttpRequest.LOADING) {
+            const newText = xhr.responseText.slice(lastIndex);
+            lastIndex = xhr.responseText.length;
+
+            if (newText) {
+                onChunk?.(newText);
+            }
+        }
+    };
+
+    xhr.onload = () => {
+        const newText = xhr.responseText.slice(lastIndex);
+        lastIndex = xhr.responseText.length;
+
+        if (newText) {
+            onChunk?.(newText);
+        }
+
+        onComplete?.(xhr.status, xhr.responseText);
+    };
+
+    xhr.onerror = () => {
+        onError?.(new Error('Network error during request'));
+    };
+
+    xhr.ontimeout = () => {
+        onError?.(new Error('Request timed out'));
+    };
+
+    xhr.onabort = () => {
+        const error = new Error('Aborted');
+        error.name = 'AbortError';
+        onError?.(error);
+    };
+
+    if (signal) {
+        if (signal.aborted) {
+            xhr.abort();
+            return xhr;
+        }
+
+        signal.addEventListener('abort', () => xhr.abort(), {
+            once: true
+        });
+    }
+
+    xhr.send(body);
+    return xhr;
+};
+
+
 export const useChatAPI = ({
     apiConfig,
     messages,
@@ -96,12 +182,25 @@ export const useChatAPI = ({
     ollama = null,
 }) => {
     const [isLoading, setIsLoading] = useState(false);
+    const [requestPhase, setRequestPhase] = useState('idle');
+    const [uploadProgress, setUploadProgress] = useState({
+        loaded: 0,
+        total: 0
+    });
     const [lastCost, setLastCost] = useState(0);
     const [liveReasoning, setLiveReasoning] = useState({ text: '', botId: null, contentHasStarted: false });
     const [apiError, setApiError] = useState(null);
 
     const liveReasoningTextRef = useRef('');
     const streamAbortControllerRef = useRef(null);
+
+    const resetRequestPhase = useCallback(() => {
+        setRequestPhase('idle');
+        setUploadProgress({
+            loaded: 0,
+            total: 0
+        });
+    }, []);
 
     const langMap = { eng: "en", fra: "fr", ara: "ar", hin: "hi", tgl: "tl", ukr: "uk", san: "sa", nya: "ny" };
     const supportedLanguages = Object.values(langMap);
@@ -580,121 +679,230 @@ export const useChatAPI = ({
                 payload.pdf_attachments = pdfUrls;
             }
 
-            const response = await fetch(apiConfig.chatUrl, {
-                method: 'POST',
-                headers: requestHeaders,
-                body: JSON.stringify(payload),
-                signal: abortController.signal,
+            const bodyString = JSON.stringify(payload);
+
+            const totalBytes = new Blob([bodyString]).size;
+
+            setRequestPhase('uploading');
+            setUploadProgress({
+                loaded: 0,
+                total: totalBytes
             });
 
-            if (!response.ok) {
-                let errorMessage = `HTTP error! status: ${response.status}`;
+            let buffer = '';
+            let finalMessages;
+            let firstChunkReceived = false;
+            let httpStatus = 0;
+            let httpErrorBody = '';
+            let transportError = null;
+
+            const handleChunk = (chunk) => {
+                if (streamError) return;
+
+                if (!firstChunkReceived) {
+                    firstChunkReceived = true;
+                    setRequestPhase('streaming');
+                }
+
+                buffer += chunk;
+                const parts = buffer.split('\n\n');
+                buffer = parts.pop();
+
+                for (const part of parts) {
+                    if (!part.startsWith('data: ')) continue;
+
+                    try {
+                        const data = JSON.parse(part.substring(6));
+
+                        if (data.error) {
+                            const cleanMessage = extractCleanErrorMessage(data.error);
+
+                            setApiError({
+                                message: cleanMessage,
+                                status: null
+                            });
+
+                            setMessages(prev => prev.map(message =>
+                                message.id === botMessageId
+                                    ? {
+                                        ...message,
+                                        text: message.text || '',
+                                        error: cleanMessage
+                                    }
+                                    : message
+                            ));
+
+                            streamError = true;
+                            continue;
+                        }
+
+                        if (data.delta_content) {
+                            setMessages(prev => {
+                                const updated = prev.map(message =>
+                                    message.id === botMessageId
+                                        ? {
+                                            ...message,
+                                            text: message.text + data.delta_content
+                                        }
+                                        : message
+                                );
+
+                                finalMessages = updated;
+                                return updated;
+                            });
+
+                            setLiveReasoning(prev =>
+                                prev.contentHasStarted
+                                    ? prev
+                                    : {
+                                        ...prev,
+                                        contentHasStarted: true
+                                    }
+                            );
+                        }
+
+                        if (data.images && Array.isArray(data.images)) {
+                            const newImages = data.images.map(image => ({
+                                src: image.image_url.url,
+                                id: `gen-img-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                                name: 'Generated Image'
+                            }));
+
+                            setMessages(prev => {
+                                const updated = prev.map(message => {
+                                    if (message.id !== botMessageId) {
+                                        return message;
+                                    }
+
+                                    const currentImages = message.images || [];
+
+                                    return {
+                                        ...message,
+                                        images: [
+                                            ...currentImages,
+                                            ...newImages
+                                        ]
+                                    };
+                                });
+
+                                finalMessages = updated;
+                                return updated;
+                            });
+                        }
+
+                        if (data.reasoning_content) {
+                            liveReasoningTextRef.current += data.reasoning_content;
+
+                            setLiveReasoning(prev => ({
+                                ...prev,
+                                text: liveReasoningTextRef.current
+                            }));
+                        }
+
+                        if (data.cost !== undefined) {
+                            localCost = data.cost;
+                            setLastCost(data.cost);
+                        }
+
+                        if (data.token_usage) {
+                            localTokenUsage = data.token_usage;
+                        }
+                    } catch (error) {
+                        console.error('Stream parse error:', part, error);
+                    }
+                }
+            };
+
+            await new Promise((resolve) => {
+                streamPostWithXHR({
+                    url: apiConfig.chatUrl,
+                    headers: requestHeaders,
+                    body: bodyString,
+                    signal: abortController.signal,
+
+                    onUploadProgress: (loaded, total) => {
+                        setUploadProgress({
+                            loaded,
+                            total: total || totalBytes
+                        });
+                    },
+
+                    onUploadComplete: () => {
+                        setRequestPhase('processing');
+                    },
+
+                    onChunk: handleChunk,
+
+                    onComplete: (status, responseText) => {
+                        httpStatus = status;
+
+                        if (status < 200 || status >= 300) {
+                            httpErrorBody = responseText;
+                        }
+
+                        resolve();
+                    },
+
+                    onError: (error) => {
+                        transportError = error;
+                        resolve();
+                    }
+                });
+            });
+
+            if (transportError) {
+                throw transportError;
+            }
+
+            if (httpStatus < 200 || httpStatus >= 300) {
+                let errorMessage = `HTTP error! status: ${httpStatus}`;
+
                 try {
-                    const errorData = await response.json();
+                    const errorData = JSON.parse(httpErrorBody);
+
                     if (errorData._HttpResponse__body) {
                         try {
-                            const nestedBody = JSON.parse(errorData._HttpResponse__body);
-                            errorMessage = nestedBody.error || nestedBody.message || nestedBody.detail || errorMessage;
-                        } catch (e) {
+                            const nestedBody = JSON.parse(
+                                errorData._HttpResponse__body
+                            );
+
+                            errorMessage = (
+                                nestedBody.error
+                                || nestedBody.message
+                                || nestedBody.detail
+                                || errorMessage
+                            );
+                        } catch {
                             errorMessage = errorData._HttpResponse__body;
                         }
                     } else {
-                        errorMessage = errorData.error || errorData.message || errorData.detail || errorMessage;
+                        errorMessage = (
+                            errorData.error
+                            || errorData.message
+                            || errorData.detail
+                            || errorMessage
+                        );
                     }
-                } catch (e) {
-                    console.warn("Could not parse error response JSON", e);
+                } catch {
+                    // The response was not JSON, so retain the default message.
                 }
 
-                const errorObj = { message: errorMessage, status: response.status };
-                setApiError(errorObj);
-                setMessages(prev => prev.map(m => m.id === botMessageId ? { ...m, text: "An error occurred. Please check the details.", error: errorMessage } : m));
+                setApiError({
+                    message: errorMessage,
+                    status: httpStatus
+                });
+
+                setMessages(prev => prev.map(message =>
+                    message.id === botMessageId
+                        ? {
+                            ...message,
+                            text: 'An error occurred. Please check the details.',
+                            error: errorMessage
+                        }
+                        : message
+                ));
+
                 throw new Error(errorMessage);
-            }
-
-            if (!response.body) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-            let finalMessages;
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                buffer += decoder.decode(value, { stream: true });
-                const parts = buffer.split('\n\n');
-                buffer = parts.pop();
-                for (const part of parts) {
-                    if (part.startsWith('data: ')) {
-                        try {
-                            const data = JSON.parse(part.substring(6));
-
-                            // Handle stream errors sent by the backend
-                            if (data.error) {
-                                const cleanMessage = extractCleanErrorMessage(data.error);
-                                setApiError({ message: cleanMessage, status: null });
-                                setMessages(prev => prev.map(m =>
-                                    m.id === botMessageId
-                                        ? { ...m, text: m.text || '', error: cleanMessage }
-                                        : m
-                                ));
-                                streamError = true;
-                                break; // Break the for loop
-                            }
-
-                            if (data.delta_content) {
-                                setMessages(prev => {
-                                    const updated = prev.map(m => m.id === botMessageId ? { ...m, text: m.text + data.delta_content } : m);
-                                    finalMessages = updated;
-                                    return updated;
-                                });
-                                setLiveReasoning(prev => {
-                                    if (!prev.contentHasStarted) {
-                                        return { ...prev, contentHasStarted: true };
-                                    }
-                                    return prev;
-                                });
-                            }
-
-                            if (data.images && Array.isArray(data.images)) {
-                                const newImages = data.images.map(img => ({
-                                    src: img.image_url.url,
-                                    id: `gen-img-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                                    name: 'Generated Image'
-                                }));
-
-                                setMessages(prev => {
-                                    const updated = prev.map(m => {
-                                        if (m.id === botMessageId) {
-                                            const currentImages = m.images || [];
-                                            return { ...m, images: [...currentImages, ...newImages] };
-                                        }
-                                        return m;
-                                    });
-                                    finalMessages = updated;
-                                    return updated;
-                                });
-                            }
-
-                            if (data.reasoning_content) {
-                                liveReasoningTextRef.current += data.reasoning_content;
-                                setLiveReasoning(prev => ({ ...prev, text: liveReasoningTextRef.current }));
-                            }
-
-                            if (data.cost !== undefined) {
-                                localCost = data.cost;
-                                setLastCost(data.cost);
-                            }
-                            if (data.token_usage) {
-                                localTokenUsage = data.token_usage;
-                            }
-
-                        } catch (e) { console.error("Stream parse error:", part, e); }
-                    }
-                }
-                if (streamError) break; // Break the while loop
             }
 
             const finalMeta = {
@@ -722,6 +930,8 @@ export const useChatAPI = ({
                 updateCurrentSession(finalMessages, targetSessionId);
             }
 
+            setRequestPhase('done');
+
         } catch (error) {
             if (error?.name === 'AbortError') {
                 console.info("Chat streaming was stopped by the user.");
@@ -733,8 +943,19 @@ export const useChatAPI = ({
             if (streamAbortControllerRef.current === abortController) {
                 streamAbortControllerRef.current = null;
             }
+
             setIsLoading(false);
-            setLiveReasoning({ text: '', botId: null, contentHasStarted: false });
+            setLiveReasoning({
+                text: '',
+                botId: null,
+                contentHasStarted: false
+            });
+
+            setTimeout(() => {
+                if (!streamAbortControllerRef.current) {
+                    resetRequestPhase();
+                }
+            }, 300);
         }
     };
 
@@ -753,6 +974,8 @@ export const useChatAPI = ({
 
     return {
         isLoading,
+        requestPhase,
+        uploadProgress,
         lastCost,
         liveReasoning,
         streamResponse,

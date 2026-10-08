@@ -63,6 +63,74 @@ const SmoothMessage = ({ text, isStreaming, components }) => {
     );
 };
 
+const formatBytes = (bytes) => {
+    if (!bytes || bytes < 0) return '0 KB';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) {
+        return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+};
+
+
+const UploadProgressIndicator = ({ loaded, total, isDark }) => {
+    const percent = total > 0
+        ? Math.min(100, Math.round((loaded / total) * 100))
+        : 0;
+
+    return (
+        <div className="flex flex-col gap-2 py-1 min-w-[220px]">
+            <div className="flex items-center justify-between text-xs">
+                <span className={`font-medium ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                    Uploading...
+                </span>
+
+                <span className={`font-mono ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {formatBytes(loaded)} / {formatBytes(total)}
+                </span>
+            </div>
+
+            <div className={`h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                <div
+                    className="h-full rounded-full bg-brand-coral transition-all duration-150 ease-out"
+                    style={{ width: `${percent}%` }}
+                />
+            </div>
+        </div>
+    );
+};
+
+const ServerProcessingIndicator = ({ isDark }) => (
+    <div className="flex items-center gap-2 py-1">
+        <svg
+            className={`w-4 h-4 animate-spin ${isDark ? 'text-gray-400' : 'text-gray-500'}`}
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+        >
+            <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+            />
+            <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+            />
+        </svg>
+
+        <span className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+            Processing on server...
+        </span>
+    </div>
+);
+
+
 const SUPPORTED_LANGUAGES = new Set([
     'javascript', 'js', 'jsx', 'typescript', 'ts', 'tsx',
     'json', 'jsonc', 'html', 'css', 'scss', 'less',
@@ -360,6 +428,11 @@ const MessageInfoPopover = ({ meta, theme }) => {
 
 const ChatDisplay = ({
     messages,
+    requestPhase = 'idle',
+    uploadProgress = {
+        loaded: 0,
+        total: 0
+    },
     siteLanguage,
     editingMessageId,
     editDraft,
@@ -387,7 +460,23 @@ const ChatDisplay = ({
 
     const [isAtBottom, setIsAtBottom] = useState(true);
     const [hasNewContent, setHasNewContent] = useState(false);
+    const [showUploadDelayed, setShowUploadDelayed] = useState(false);
     const prevMessagesRef = useRef(messages);
+
+    useEffect(() => {
+        if (
+            requestPhase === 'uploading'
+            && uploadProgress.total > 50 * 1024
+        ) {
+            const timer = setTimeout(() => {
+                setShowUploadDelayed(true);
+            }, 150);
+
+            return () => clearTimeout(timer);
+        }
+
+        setShowUploadDelayed(false);
+    }, [requestPhase, uploadProgress.total]);
 
     // --- NEW: previous-message scroll state ---
     const [messagesAboveCount, setMessagesAboveCount] = useState(0);
@@ -755,7 +844,26 @@ const ChatDisplay = ({
                     const showReasoning = hasBakedInReasoning || isLiveReasoningActive;
                     const reasoningTextToShow = hasBakedInReasoning ? message.reasoning : (liveReasoning?.text || '');
 
-                    const showThinkingDots = isBotLoading && !showReasoning && trimmedText === '' && !hasImages && !message.error;
+                    const showUploadUI = (
+                        isBotLoading
+                        && requestPhase === 'uploading'
+                        && showUploadDelayed
+                    );
+
+                    const showProcessingUI = (
+                        isBotLoading
+                        && requestPhase === 'processing'
+                    );
+
+                    const showThinkingDots = (
+                        isBotLoading
+                        && !showUploadUI
+                        && !showProcessingUI
+                        && !showReasoning
+                        && trimmedText === ''
+                        && !hasImages
+                        && !message.error
+                    );
                     const hideBotMessage = isBot && !isBotLoading && trimmedText === '' && !hasBakedInReasoning && !message.error;
 
                     const isMessageActive = index >= activeStartIndex;
@@ -892,15 +1000,35 @@ const ChatDisplay = ({
                                                     components={markdownComponents}
                                                 />
                                             )
-                                        ) : (
-                                            showThinkingDots ? (
-                                                <div className="thinking-dots" role="status" aria-live="polite" aria-label="Assistant is thinking">
+                                        ) : showUploadUI ? (
+                                            <UploadProgressIndicator
+                                                loaded={uploadProgress.loaded}
+                                                total={uploadProgress.total}
+                                                isDark={isDark}
+                                            />
+                                        ) : showProcessingUI ? (
+                                            <ServerProcessingIndicator
+                                                isDark={isDark}
+                                            />
+                                        ) : showThinkingDots ? (
+                                            <div
+                                                className="flex items-center gap-2 py-1"
+                                                role="status"
+                                                aria-live="polite"
+                                            >
+                                                {requestPhase === 'streaming' && (
+                                                    <span className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                                        Waiting for server response
+                                                    </span>
+                                                )}
+
+                                                <span className="thinking-dots" aria-hidden="true">
                                                     <span className="dot" />
                                                     <span className="dot" />
                                                     <span className="dot" />
-                                                </div>
-                                            ) : null
-                                        )
+                                                </span>
+                                            </div>
+                                        ) : null
                                     )}
                                 </div>
 

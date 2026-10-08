@@ -287,7 +287,27 @@ const AidaWidget = (props) => {
 
     const requestFullscreen = useCallback(() => setIsFullscreen(true), [setIsFullscreen]);
     const { sidebarRef, sidebarInlineStyle, resizeHandleProps, isResizing } = useResizableSidebar({ isOpen, isFullscreen, isMobileViewport, isEnabled: features.resizable, onRequestFullscreen: requestFullscreen });
-    const { isLoading, lastCost, liveReasoning, streamResponse, stopStreaming, apiError, clearApiError } = useChatAPI({ apiConfig, messages, setMessages, currentSessionId, updateCurrentSession, user, pageContext, customPrompt, ollama });
+    const {
+        isLoading,
+        requestPhase,
+        uploadProgress,
+        lastCost,
+        liveReasoning,
+        streamResponse,
+        stopStreaming,
+        apiError,
+        clearApiError
+    } = useChatAPI({
+        apiConfig,
+        messages,
+        setMessages,
+        currentSessionId,
+        updateCurrentSession,
+        user,
+        pageContext,
+        customPrompt,
+        ollama
+    });
 
     const { isRecording, elapsedTime, recordings, startRecording, stopRecording, retryTranscription, removeRecording, isNearingTimeLimit } = useVoiceInput({
         transcriptionUrl: apiConfig.transcriptionUrl,
@@ -685,6 +705,8 @@ const AidaWidget = (props) => {
                         <ChatDisplay
                             messages={messages}
                             isLoading={isLoading}
+                            requestPhase={requestPhase}
+                            uploadProgress={uploadProgress}
                             liveReasoning={liveReasoning}
                             siteLanguage={siteLanguage}
                             theme={baseTheme}
