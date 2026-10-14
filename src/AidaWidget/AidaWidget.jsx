@@ -1,5 +1,5 @@
 // src/AidaWidget/AidaWidget.jsx
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import SevenSegmentDisplay from './SevenSegmentDisplay';
 import ChatHeader from './ChatHeader';
 import ChatDisplay from './ChatDisplay';
@@ -28,6 +28,7 @@ import {
 } from './hooks';
 
 import { CHAT_URL, TRANSCRIPTION_URL, MODELS_URL } from './utils/apiConfig';
+import { getSupportedEfforts, getDefaultEffort, resolveEffort, buildReasoningConfig } from './utils/reasoning';
 
 const DEFAULT_MODELS = [
     { value: 'deepseek/deepseek-v4-pro', label: 'Deepseek 4 Pro', category: 'reasoning' },
@@ -55,6 +56,19 @@ const DEFAULT_AUDIO_MODELS = [
     { value: 'saaras:v3', label: 'Sarvam Saaras v3', category: 'audio' },
     { value: 'saaras:v3|translate', label: 'Sarvam Saaras v3 (Translate to EN)', category: 'audio' }
 ];
+
+const normalizeModels = (list = []) => list.map((m) => ({
+    value: m.id,
+    label: m.name,
+    category: m.category,
+    modality: m.modality,
+    contextLength: m.context_length,
+    pricing: m.pricing,
+    description: m.description,
+    available: m.available,
+    reason: m.reason,
+    reasoning: m.reasoning || null
+}));
 
 const defaultProps = {
     apiConfig: { chatUrl: CHAT_URL, transcriptionUrl: TRANSCRIPTION_URL },
@@ -118,20 +132,8 @@ const AidaWidget = (props) => {
                 if (!res.ok) throw new Error('Failed to fetch models');
                 const data = await res.json();
 
-                const normalize = (list = []) => list.map((m) => ({
-                    value: m.id,
-                    label: m.name,
-                    category: m.category,
-                    modality: m.modality,
-                    contextLength: m.context_length,
-                    pricing: m.pricing,
-                    description: m.description,
-                    available: m.available,
-                    reason: m.reason
-                }));
-
-                setFetchedModels(normalize(data.text));
-                setFetchedAudioModels(normalize(data.audio));
+                setFetchedModels(normalizeModels(data.text));
+                setFetchedAudioModels(normalizeModels(data.audio));
             } catch (err) {
                 console.error('Failed to load models from API:', err);
             }
@@ -157,20 +159,9 @@ const AidaWidget = (props) => {
                 const res = await fetch(`${MODELS_URL}?q=${encodeURIComponent(query)}`);
                 if (!res.ok) throw new Error('Failed to search models');
                 const data = await res.json();
-                const normalize = (list = []) => list.map((m) => ({
-                    value: m.id,
-                    label: m.name,
-                    category: m.category,
-                    modality: m.modality,
-                    contextLength: m.context_length,
-                    pricing: m.pricing,
-                    description: m.description,
-                    available: m.available,
-                    reason: m.reason
-                }));
                 setSearchedModels({
-                    text: normalize(data.text),
-                    audio: normalize(data.audio)
+                    text: normalizeModels(data.text),
+                    audio: normalizeModels(data.audio)
                 });
             } catch (err) {
                 console.error('Failed to search models from API:', err);
@@ -181,7 +172,26 @@ const AidaWidget = (props) => {
         }, 400);
     }, []);
 
-    const addRecentModel = useCallback((modelValue, modelType) => {
+    const [reasoningMetaCache, setReasoningMetaCache] = useState(() => {
+        try {
+            return JSON.parse(localStorage.getItem('aida-model-reasoning')) || {};
+        } catch {
+            return {};
+        }
+    });
+
+    const addRecentModel = useCallback((modelValue, modelType, model) => {
+        if (modelType === 'text' && model) {
+            setReasoningMetaCache((prev) => {
+                const next = { ...prev, [modelValue]: model.reasoning || null };
+                try {
+                    localStorage.setItem('aida-model-reasoning', JSON.stringify(next));
+                } catch (e) {
+                    console.warn('Could not save model reasoning info to localStorage', e);
+                }
+                return next;
+            });
+        }
         setRecentModelValues((prev) => {
             const next = [
                 { value: modelValue, type: modelType },
@@ -215,6 +225,9 @@ const AidaWidget = (props) => {
         return stored ? Number(stored) : 10;
     });
 
+    // null until the user picks an effort; each model then uses its own default
+    const [reasoningEffort, setReasoningEffort] = useState(() => localStorage.getItem('aida-reasoning-effort') || null);
+
     const [textSize, setTextSize] = useState(() => {
         try {
             return parseInt(localStorage.getItem('aida-text-size') || '100', 10);
@@ -228,6 +241,22 @@ const AidaWidget = (props) => {
     useEffect(() => { localStorage.setItem('aida-selected-model', selectedModel); }, [selectedModel]);
     useEffect(() => { localStorage.setItem('aida-selected-audio-model', selectedAudioModel); }, [selectedAudioModel]);
     useEffect(() => { localStorage.setItem('aida-context-limit', contextLimit); }, [contextLimit]);
+    useEffect(() => {
+        if (reasoningEffort) localStorage.setItem('aida-reasoning-effort', reasoningEffort);
+        else localStorage.removeItem('aida-reasoning-effort');
+    }, [reasoningEffort]);
+
+    const selectedModelReasoning = useMemo(() => {
+        if (!features.modelSelection) return null;
+        if (selectedModel?.startsWith('ollama:') || selectedModel?.startsWith('chrome:')) return null;
+        const found = availableModels.find((m) => m.value === selectedModel);
+        return found ? (found.reasoning || null) : (reasoningMetaCache[selectedModel] || null);
+    }, [features.modelSelection, selectedModel, availableModels, reasoningMetaCache]);
+
+    const reasoningEfforts = useMemo(() => getSupportedEfforts(selectedModelReasoning), [selectedModelReasoning]);
+    const defaultReasoningEffort = useMemo(() => getDefaultEffort(selectedModelReasoning), [selectedModelReasoning]);
+    // The saved preference is kept as-is; this is what the current model will actually use
+    const activeReasoningEffort = useMemo(() => resolveEffort(selectedModelReasoning, reasoningEffort), [selectedModelReasoning, reasoningEffort]);
 
     useEffect(() => {
         document.documentElement.style.setProperty('--aida-text-size-factor', `${textSize / 100}`);
@@ -406,6 +435,7 @@ const AidaWidget = (props) => {
             sender: 'user',
             text: text.trim(),
             model: finalModelName,
+            reasoningConfig: activeReasoningEffort ? buildReasoningConfig(activeReasoningEffort) : undefined,
             webSearchEnabled: isWebSearchEnabled,
             attachments,
             images: imageAttachments
@@ -444,6 +474,7 @@ const AidaWidget = (props) => {
         clearAttachments,
         contextLimit,
         resolveModelName,
+        activeReasoningEffort,
     ]);
 
     const handleAutoSend = useCallback(() => {
@@ -667,7 +698,7 @@ const AidaWidget = (props) => {
         }
         if (userIndex === -1) return;
         const finalModelName = resolveModelName(selectedModel);
-        const userMessageToRetry = { ...messages[userIndex], model: finalModelName, webSearchEnabled: isWebSearchEnabled };
+        const userMessageToRetry = { ...messages[userIndex], model: finalModelName, reasoningConfig: activeReasoningEffort ? buildReasoningConfig(activeReasoningEffort) : undefined, webSearchEnabled: isWebSearchEnabled };
         const previousHistory = messages.slice(0, userIndex);
         const historyForPayload = [...previousHistory, userMessageToRetry];
         const newBotMessageId = `bot-${Date.now()}`;
@@ -675,14 +706,14 @@ const AidaWidget = (props) => {
         setMessages(nextMessages);
         if (historyEnabled && currentSessionId) updateCurrentSession(nextMessages);
         await streamResponse({ userMessage: userMessageToRetry, botMessageId: newBotMessageId, historyForPayload, sessionId: currentSessionId, contextLimit });
-    }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession, selectedModel, isWebSearchEnabled, contextLimit, resolveModelName, historyEnabled]);
+    }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession, selectedModel, isWebSearchEnabled, contextLimit, resolveModelName, historyEnabled, activeReasoningEffort]);
 
     const handleRegenerate = useCallback(async (userMessageId) => {
         if (isLoading) return;
         const userIndex = messages.findIndex((m) => m.id === userMessageId);
         if (userIndex === -1) return;
         const finalModelName = resolveModelName(selectedModel);
-        const userMessageToRegenerate = { ...messages[userIndex], model: finalModelName, webSearchEnabled: isWebSearchEnabled };
+        const userMessageToRegenerate = { ...messages[userIndex], model: finalModelName, reasoningConfig: activeReasoningEffort ? buildReasoningConfig(activeReasoningEffort) : undefined, webSearchEnabled: isWebSearchEnabled };
         const previousHistory = messages.slice(0, userIndex);
         const historyForPayload = [...previousHistory, userMessageToRegenerate];
         const newBotMessageId = `bot-${Date.now()}`;
@@ -690,7 +721,7 @@ const AidaWidget = (props) => {
         setMessages(nextMessages);
         if (historyEnabled && currentSessionId) updateCurrentSession(nextMessages);
         await streamResponse({ userMessage: userMessageToRegenerate, botMessageId: newBotMessageId, historyForPayload, sessionId: currentSessionId, contextLimit });
-    }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession, selectedModel, isWebSearchEnabled, contextLimit, resolveModelName, historyEnabled]);
+    }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession, selectedModel, isWebSearchEnabled, contextLimit, resolveModelName, historyEnabled, activeReasoningEffort]);
 
     const currentSessionTitle = currentSession?.title || "New Chat";
 
@@ -834,6 +865,11 @@ const AidaWidget = (props) => {
                         selectedModel={selectedModel}
                         setSelectedModel={setSelectedModel}
                         availableModels={availableModels}
+                        reasoningEfforts={reasoningEfforts}
+                        reasoningEffort={activeReasoningEffort}
+                        defaultReasoningEffort={defaultReasoningEffort}
+                        isReasoningDefault={reasoningEffort === null}
+                        setReasoningEffort={setReasoningEffort}
                         selectedAudioModel={selectedAudioModel}
                         setSelectedAudioModel={setSelectedAudioModel}
                         availableAudioModels={availableAudioModels}

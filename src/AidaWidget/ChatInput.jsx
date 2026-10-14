@@ -11,6 +11,7 @@ import {
 } from 'react-icons/hi2';
 import AttachmentButton from './AttachmentButton';
 import ContextSelector from './ContextSelector';
+import ReasoningSelector from './ReasoningSelector';
 
 const extractUrls = (text) => {
     if (!text) return [];
@@ -156,6 +157,11 @@ const ChatInput = ({
     selectedModel,
     setSelectedModel,
     availableModels = [],
+    reasoningEfforts = [],
+    reasoningEffort,
+    defaultReasoningEffort = null,
+    isReasoningDefault = true,
+    setReasoningEffort,
     selectedAudioModel,
     setSelectedAudioModel,
     availableAudioModels = [],
@@ -363,7 +369,7 @@ const ChatInput = ({
             setSelectedAudioModel(item.value);
         }
         if (onModelSelected) {
-            onModelSelected(item.value, item._type);
+            onModelSelected(item.value, item._type, item);
         }
         closeModelMenu();
     }, [setSelectedModel, setSelectedAudioModel, closeModelMenu, onModelSelected]);
@@ -958,6 +964,7 @@ const ChatInput = ({
                             )}
                         </div>
                     )}
+                    <ReasoningSelector efforts={reasoningEfforts} value={reasoningEffort} defaultEffort={defaultReasoningEffort} isDefault={isReasoningDefault} onChange={setReasoningEffort} />
                     <ContextSelector value={contextLimit} onChange={setContextLimit} theme="dark" />
                 </div>
                 <div className="flex items-center chat-action-buttons relative flex-shrink-0">
