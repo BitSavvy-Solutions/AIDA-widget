@@ -11,7 +11,8 @@ const capitalize = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 const getLabel = (effort) => (effort ? LABELS[effort] || capitalize(effort) : 'Model default');
 const getShortLabel = (effort) => (effort ? SHORT_LABELS[effort] || capitalize(effort) : 'Auto');
 
-// isDefault: the user has no saved pick, so each model uses its own default. onChange(null) returns to that.
+// When efforts is empty, the selector still renders a non-interactive pill that
+// just shows "Auto" and cannot be clicked to open a dropdown.
 const ReasoningSelector = ({ efforts = [], value, defaultEffort = null, isDefault = true, onChange }) => {
     const [isOpen, setIsOpen] = useState(false);
     const containerRef = useRef(null);
@@ -30,22 +31,46 @@ const ReasoningSelector = ({ efforts = [], value, defaultEffort = null, isDefaul
         };
     }, [isOpen]);
 
-    if (efforts.length === 0) return null;
+    const hasChoices = efforts.length > 0;
+
+    const toggleOpen = () => {
+        if (hasChoices) setIsOpen((p) => !p);
+    };
+
+    // The button that is always visible, whether or not there are choices.
+    const button = (
+        <button
+            type="button"
+            onClick={toggleOpen}
+            className={
+                `flex items-center gap-1 rounded-full px-2 py-1 text-sm transition-colors border border-purple-500/30 bg-purple-500/10 text-purple-500 hover:bg-gray-700`
+                + (hasChoices ? ' cursor-pointer' : ' cursor-default opacity-60')
+            }
+            aria-haspopup={hasChoices ? 'listbox' : undefined}
+            aria-expanded={hasChoices ? isOpen : undefined}
+            aria-label={`Reasoning effort. Current: ${getLabel(value)}`}
+            title={`Reasoning effort: ${getLabel(value)}`}
+            disabled={!hasChoices}
+        >
+            <span className="text-gray-200 text-xs">{getShortLabel(value)}</span>
+            {hasChoices && (
+                <HiChevronDown className={`h-3 w-3 flex-shrink-0 opacity-70 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+            )}
+        </button>
+    );
+
+    // If there are no choices, just render the button, no dropdown.
+    if (!hasChoices) {
+        return (
+            <div className="relative flex-shrink-0" ref={containerRef}>
+                {button}
+            </div>
+        );
+    }
 
     return (
         <div className="relative flex-shrink-0" ref={containerRef}>
-            <button
-                type="button"
-                onClick={() => setIsOpen((p) => !p)}
-                className="flex items-center gap-1 rounded-full px-2 py-1 text-sm transition-colors border border-purple-500/30 bg-purple-500/10 text-purple-500 hover:bg-gray-700"
-                aria-haspopup="listbox"
-                aria-expanded={isOpen}
-                aria-label={`Reasoning effort. Current: ${getLabel(value)}`}
-                title={`Reasoning effort: ${getLabel(value)}`}
-            >
-                <span className="text-gray-200 text-xs">{getShortLabel(value)}</span>
-                <HiChevronDown className={`h-3 w-3 flex-shrink-0 opacity-70 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
-            </button>
+            {button}
             {isOpen && (
                 <div
                     className="absolute bottom-full left-0 mb-2 z-[60] min-w-[8rem] rounded-lg shadow-2xl border bg-gray-800 border-gray-700 p-1"

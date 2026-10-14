@@ -3,8 +3,10 @@
 // Known efforts, lowest to highest; used to order whatever a model reports
 export const REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
 
-// Offered when a model supports reasoning but does not list its efforts
-const UNLISTED_EFFORTS = ['low', 'medium', 'high'];
+// Offered when a model supports reasoning but does NOT list its efforts.
+// We intentionally leave this empty so that no extra choices appear,
+// making the selector behave as "Auto only".
+const UNLISTED_EFFORTS = [];
 
 /**
  * Effort options to offer for a model's reasoning metadata (from /models).
