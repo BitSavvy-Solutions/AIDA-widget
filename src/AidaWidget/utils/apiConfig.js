@@ -10,6 +10,7 @@ const isProdEnvironment =
 const AGENT_PROD_HOST = 'https://aida-agentbackend-prod.graydune-dda4d1ba.canadaeast.azurecontainerapps.io/api';
 const AGENT_BETA_HOST = 'https://aida-agentbackend-dev.graydune-dda4d1ba.canadaeast.azurecontainerapps.io/api';
 
+
 const agentHost = isProdEnvironment ? AGENT_PROD_HOST : AGENT_BETA_HOST;
 
 export const CHAT_URL = `${agentHost}/iverse_agent`;

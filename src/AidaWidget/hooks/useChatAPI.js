@@ -539,6 +539,10 @@ export const useChatAPI = ({
                 model: userMessage.model,
             };
 
+            if (userMessage.reasoningConfig) {
+                payload.reasoning = userMessage.reasoningConfig;
+            }
+
             if (!apiToken) {
                 payload.user_id = user.id;
             }
