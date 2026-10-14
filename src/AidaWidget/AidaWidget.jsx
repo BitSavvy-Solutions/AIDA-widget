@@ -172,26 +172,8 @@ const AidaWidget = (props) => {
         }, 400);
     }, []);
 
-    const [reasoningMetaCache, setReasoningMetaCache] = useState(() => {
-        try {
-            return JSON.parse(localStorage.getItem('aida-model-reasoning')) || {};
-        } catch {
-            return {};
-        }
-    });
-
+    // ----- user's recent model selection (no reasoning metadata cache) -----
     const addRecentModel = useCallback((modelValue, modelType, model) => {
-        if (modelType === 'text' && model) {
-            setReasoningMetaCache((prev) => {
-                const next = { ...prev, [modelValue]: model.reasoning || null };
-                try {
-                    localStorage.setItem('aida-model-reasoning', JSON.stringify(next));
-                } catch (e) {
-                    console.warn('Could not save model reasoning info to localStorage', e);
-                }
-                return next;
-            });
-        }
         setRecentModelValues((prev) => {
             const next = [
                 { value: modelValue, type: modelType },
@@ -225,8 +207,8 @@ const AidaWidget = (props) => {
         return stored ? Number(stored) : 10;
     });
 
-    // null until the user picks an effort; each model then uses its own default
-    const [reasoningEffort, setReasoningEffort] = useState(() => localStorage.getItem('aida-reasoning-effort') || null);
+    // Reasoning effort starts fresh every session (no localStorage persistence)
+    const [reasoningEffort, setReasoningEffort] = useState(null);
 
     const [textSize, setTextSize] = useState(() => {
         try {
@@ -241,21 +223,17 @@ const AidaWidget = (props) => {
     useEffect(() => { localStorage.setItem('aida-selected-model', selectedModel); }, [selectedModel]);
     useEffect(() => { localStorage.setItem('aida-selected-audio-model', selectedAudioModel); }, [selectedAudioModel]);
     useEffect(() => { localStorage.setItem('aida-context-limit', contextLimit); }, [contextLimit]);
-    useEffect(() => {
-        if (reasoningEffort) localStorage.setItem('aida-reasoning-effort', reasoningEffort);
-        else localStorage.removeItem('aida-reasoning-effort');
-    }, [reasoningEffort]);
+    // No longer persist reasoning effort
 
     const selectedModelReasoning = useMemo(() => {
         if (!features.modelSelection) return null;
         if (selectedModel?.startsWith('ollama:') || selectedModel?.startsWith('chrome:')) return null;
         const found = availableModels.find((m) => m.value === selectedModel);
-        return found ? (found.reasoning || null) : (reasoningMetaCache[selectedModel] || null);
-    }, [features.modelSelection, selectedModel, availableModels, reasoningMetaCache]);
+        return found ? (found.reasoning || null) : null;
+    }, [features.modelSelection, selectedModel, availableModels]);
 
     const reasoningEfforts = useMemo(() => getSupportedEfforts(selectedModelReasoning), [selectedModelReasoning]);
     const defaultReasoningEffort = useMemo(() => getDefaultEffort(selectedModelReasoning), [selectedModelReasoning]);
-    // The saved preference is kept as-is; this is what the current model will actually use
     const activeReasoningEffort = useMemo(() => resolveEffort(selectedModelReasoning, reasoningEffort), [selectedModelReasoning, reasoningEffort]);
 
     useEffect(() => {
@@ -490,12 +468,10 @@ const AidaWidget = (props) => {
 
     const handleOpenHistory = useCallback(() => {
         if (isMobileViewport) {
-            // On mobile, close the widget completely before navigating
             if (isOpen) {
                 toggleChatVisibility();
             }
         } else {
-            // On desktop, just exit fullscreen if needed
             if (isFullscreen) {
                 setIsFullscreen(false);
             }
@@ -506,10 +482,10 @@ const AidaWidget = (props) => {
         try {
             const target = new URL(historyUrl, window.location.href);
             if (target.href === window.location.href) {
-                return; // Already on the history page; no navigation needed
+                return;
             }
         } catch {
-            // If URL parsing fails, fall through and attempt navigation
+            // fall through
         }
     
         window.location.assign(historyUrl);
@@ -809,7 +785,8 @@ const AidaWidget = (props) => {
                         toggleChat={toggleChat}
                         theme={baseTheme}
                         onOpenAppearance={() => setIsAppearanceModalOpen(true)}
-                        onToggleHistory={historyUrl ? handleOpenHistory : undefined}                        onShare={messages.length > 0 ? () => {
+                        onToggleHistory={historyUrl ? handleOpenHistory : undefined}
+                        onShare={messages.length > 0 ? () => {
                             setSessionToShare({ messages, title: currentSessionTitle });
                             openShareModal();
                         } : undefined}
