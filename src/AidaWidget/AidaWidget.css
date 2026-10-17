@@ -850,8 +850,6 @@ textarea.auto-expand {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-/* Add to the bottom of src/AidaWidget/AidaWidget.css */
-
 /* Audio Capsule Styles */
 .audio-capsule-container {
   display: inline-flex;
@@ -907,6 +905,14 @@ textarea.auto-expand {
 .capsule-error {
   color: #f87171;
   margin-left: 4px;
+}
+
+/* Quoted Text Pill Styles */
+.quoted-text-pill-container {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 2px;
+  vertical-align: middle;
 }
 
 /* Contenteditable Placeholder */

@@ -1,4 +1,5 @@
 // src/AidaWidget/AidaWidget.jsx
+// src/AidaWidget/AidaWidget.jsx
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import SevenSegmentDisplay from './SevenSegmentDisplay';
 import ChatHeader from './ChatHeader';
@@ -172,7 +173,6 @@ const AidaWidget = (props) => {
         }, 400);
     }, []);
 
-    // ----- user's recent model selection (no reasoning metadata cache) -----
     const addRecentModel = useCallback((modelValue, modelType, model) => {
         setRecentModelValues((prev) => {
             const next = [
@@ -207,7 +207,6 @@ const AidaWidget = (props) => {
         return stored ? Number(stored) : 10;
     });
 
-    // Reasoning effort starts fresh every session (no localStorage persistence)
     const [reasoningEffort, setReasoningEffort] = useState(null);
 
     const [textSize, setTextSize] = useState(() => {
@@ -223,7 +222,6 @@ const AidaWidget = (props) => {
     useEffect(() => { localStorage.setItem('aida-selected-model', selectedModel); }, [selectedModel]);
     useEffect(() => { localStorage.setItem('aida-selected-audio-model', selectedAudioModel); }, [selectedAudioModel]);
     useEffect(() => { localStorage.setItem('aida-context-limit', contextLimit); }, [contextLimit]);
-    // No longer persist reasoning effort
 
     const selectedModelReasoning = useMemo(() => {
         if (!features.modelSelection) return null;
@@ -250,6 +248,8 @@ const AidaWidget = (props) => {
     const [viewingMessageAttachments, setViewingMessageAttachments] = useState(null);
     const [embedUrl, setEmbedUrl] = useState(null);
     const [sessionToShare, setSessionToShare] = useState(null);
+
+    const [pendingQuotedText, setPendingQuotedText] = useState('');
 
     const inputRef = useRef(null);
     const [isMobileViewport, setIsMobileViewport] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
@@ -718,6 +718,22 @@ const AidaWidget = (props) => {
     useEffect(() => { if (isOpen && !isLoading) inputRef.current?.focus(); }, [isOpen, isLoading]);
     useEffect(() => { const handleResize = () => setIsMobileViewport(window.innerWidth <= 768); window.addEventListener('resize', handleResize); return () => window.removeEventListener('resize', handleResize); }, []);
 
+    const handleTextSelected = useCallback((text) => {
+        if (text) {
+            setPendingQuotedText(text);
+        } else {
+            setPendingQuotedText('');
+        }
+    }, []);
+
+    const handleCommitQuotedText = useCallback(() => {
+        setPendingQuotedText('');
+    }, []);
+
+    const handleDismissQuotedText = useCallback(() => {
+        setPendingQuotedText('');
+    }, []);
+
     const containerClasses = `flex flex-col relative aida-widget-shell ${isClosing ? 'animate-collapse-chat' : 'animate-expand-chat'} ${isResizing ? 'aida-widget-shell--active' : ''} border-l ${isFullscreen ? 'w-full h-full aida-widget-shell--fullscreen' : 'h-full aida-widget-shell--docked'}`;
 
     return (
@@ -822,6 +838,7 @@ const AidaWidget = (props) => {
                         onScrapeUrl={addUrlAttachment}
                         onEmbedUrl={handleOpenEmbed}
                         onDeleteMessage={handleDeleteMessage}
+                        onTextSelected={handleTextSelected}
                     />
                     <ChatInput
                         handleSendMessage={stableHandleSendMessage}
@@ -879,6 +896,9 @@ const AidaWidget = (props) => {
                         onOllamaRefresh={() => ollama.fetchModels()}
                         onOpenOllamaSettings={() => { setLocalModelsTab('ollama'); setIsLocalModelsModalOpen(true); }}
                         onOpenChromeAISettings={() => { setLocalModelsTab('chrome'); setIsLocalModelsModalOpen(true); }}
+                        pendingQuotedText={pendingQuotedText}
+                        onCommitQuotedText={handleCommitQuotedText}
+                        onDismissQuotedText={handleDismissQuotedText}
                     />
                     <AppearanceModal
                         isOpen={isAppearanceModalOpen}
