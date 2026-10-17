@@ -378,6 +378,7 @@ const ChatDisplay = ({
     onScrapeUrl,
     onEmbedUrl,
     onDeleteMessage,
+    onTextSelected,
 }) => {
     const [copiedId, setCopiedId] = useState(null);
     const containerRef = useRef(null);
@@ -393,11 +394,6 @@ const ChatDisplay = ({
     const [messagesAboveCount, setMessagesAboveCount] = useState(0);
 
     // --- ChatGPT-style pinning -------------------------------------------------
-    // When a new user message is sent, auto-scroll it to the top of the
-    // viewport once. After that the user scrolls freely -- nothing forces the
-    // scroll position. A spacer at the end of the list creates the scrollable
-    // room needed to reach the pinned position, and shrinks as the response
-    // grows so no crawlable blank space remains past the end.
     const [pinnedMessageId, setPinnedMessageId] = useState(null);
     const pinnedMessageIdRef = useRef(null);
     const spacerRef = useRef(null);
@@ -428,9 +424,6 @@ const ChatDisplay = ({
         spacer.style.height = `${Math.max(0, el.clientHeight - (realBottom - pinTop))}px`;
     }, []);
 
-    // Pin newly sent user messages to the top of the viewport. The send path
-    // appends the user message and bot placeholder together with isLoading=true,
-    // which distinguishes a send from loading a session's history.
     useEffect(() => {
         const prevCount = prevMessageCountRef.current;
         prevMessageCountRef.current = messages.length;
@@ -454,7 +447,6 @@ const ChatDisplay = ({
         });
     }, [messages, isLoading, adjustSpacer]);
 
-    // Keep the spacer sized correctly as content settles and on resize
     useEffect(() => {
         if (pinnedMessageId) adjustSpacer(pinnedMessageId);
     }, [messages, pinnedMessageId, adjustSpacer]);
@@ -468,9 +460,7 @@ const ChatDisplay = ({
         observer.observe(el);
         return () => observer.disconnect();
     }, [adjustSpacer]);
-    // ---------------------------------------------------------------------------
 
-    // --- compute how many USER messages are above the viewport ------------------
     const computeVisibleBounds = useCallback(() => {
         const container = containerRef.current;
         if (!container || messages.length === 0) {
@@ -533,7 +523,6 @@ const ChatDisplay = ({
             behavior: 'smooth',
         });
     }, [messages, messagesAboveCount]);
-    // ---------------------------------------------------------------------------
 
     useEffect(() => {
         const el = containerRef.current;
@@ -552,7 +541,6 @@ const ChatDisplay = ({
         checkAtBottom();
     }, [messages, checkAtBottom]);
 
-    // NEW: flash the scroll button when new messages arrive while scrolled up
     useEffect(() => {
         if (messages !== prevMessagesRef.current) {
             if (!isAtBottom) {
@@ -562,7 +550,6 @@ const ChatDisplay = ({
         }
     }, [messages, isAtBottom]);
 
-    // NEW: clear the new-content indicator once the user reaches the bottom
     useEffect(() => {
         if (isAtBottom) {
             setHasNewContent(false);
@@ -579,17 +566,14 @@ const ChatDisplay = ({
         setHasNewContent(false);
     }, [getRealContentBottom]);
 
-    // --- Two-click delete confirmation ----------------------------------------
     const [pendingDeleteId, setPendingDeleteId] = useState(null);
 
-    // Auto-reset pending state after 3 seconds of inactivity
     useEffect(() => {
         if (!pendingDeleteId) return;
         const t = setTimeout(() => setPendingDeleteId(null), 3000);
         return () => clearTimeout(t);
     }, [pendingDeleteId]);
 
-    // Reset pending delete when the user clicks anywhere outside the message list
     useEffect(() => {
         if (!pendingDeleteId) return;
         const handlePointerDown = (e) => {
@@ -600,7 +584,6 @@ const ChatDisplay = ({
         document.addEventListener('pointerdown', handlePointerDown);
         return () => document.removeEventListener('pointerdown', handlePointerDown);
     }, [pendingDeleteId]);
-    // -------------------------------------------------------------------------
 
     const [speakingMessageId, setSpeakingMessageId] = useState(null);
     const [speechStatus, setSpeechStatus] = useState('idle');
@@ -733,6 +716,65 @@ const ChatDisplay = ({
     const isDark = theme === 'dark';
     const activeStartIndex = Math.max(0, messages.length - contextLimit);
 
+    // --- Text selection handling ------------------------------------------------
+    const selectionTimeoutRef = useRef(null);
+    const lastSelectionRef = useRef('');
+
+    useEffect(() => {
+        if (!onTextSelected) return;
+
+        const isSelectionInMessages = () => {
+            const selection = window.getSelection();
+            if (!selection || !selection.rangeCount) return false;
+            const range = selection.getRangeAt(0);
+            const container = containerRef.current;
+            return container && container.contains(range.commonAncestorContainer);
+        };
+
+        const handleSelectionChange = () => {
+            const selection = window.getSelection();
+            const inMessages = isSelectionInMessages();
+            const text = selection?.toString().trim() || '';
+
+            if (selectionTimeoutRef.current) {
+                clearTimeout(selectionTimeoutRef.current);
+            }
+
+            if (!text) {
+                selectionTimeoutRef.current = setTimeout(() => {
+                    const currentSel = window.getSelection();
+                    const currentRange = currentSel?.rangeCount ? currentSel.getRangeAt(0) : null;
+                    const container = containerRef.current;
+                    const stillInMessages = currentRange && container && container.contains(currentRange.commonAncestorContainer);
+                    const currentText = currentSel?.toString().trim() || '';
+                    if (!currentText && stillInMessages && lastSelectionRef.current) {
+                        lastSelectionRef.current = '';
+                        onTextSelected('');
+                    }
+                }, 150);
+                return;
+            }
+
+            selectionTimeoutRef.current = setTimeout(() => {
+                const currentSel = window.getSelection();
+                const currentRange = currentSel?.rangeCount ? currentSel.getRangeAt(0) : null;
+                const container = containerRef.current;
+                const stillInMessages = currentRange && container && container.contains(currentRange.commonAncestorContainer);
+                const currentText = currentSel?.toString().trim() || '';
+                if (currentText && stillInMessages && currentText !== lastSelectionRef.current) {
+                    lastSelectionRef.current = currentText;
+                    onTextSelected(currentText);
+                }
+            }, 200);
+        };
+
+        document.addEventListener('selectionchange', handleSelectionChange);
+        return () => {
+            document.removeEventListener('selectionchange', handleSelectionChange);
+            if (selectionTimeoutRef.current) clearTimeout(selectionTimeoutRef.current);
+        };
+    }, [onTextSelected]);
+
     return (
         <div className="relative flex-1 min-h-0 flex flex-col" style={{ backgroundColor: 'var(--aida-body-bg)', color: 'var(--aida-body-text)' }}>
             <div ref={containerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -774,7 +816,6 @@ const ChatDisplay = ({
 
                     if (hideBotMessage) return null;
 
-                    // --- Delete button state for this message --------------------
                     const isPendingDelete = pendingDeleteId === message.id;
 
                     return (
@@ -797,7 +838,6 @@ const ChatDisplay = ({
                                     />
                                 )}
 
-                                {/* Error display for stream errors */}
                                 {message.error && (
                                     <div className={`mb-2 p-3 rounded-lg border text-xs ${isDark
                                         ? 'bg-red-900/20 border-red-700/50 text-red-300'
@@ -924,10 +964,8 @@ const ChatDisplay = ({
                                 {!isBotLoading && !isEditing && (
                                     <div
                                         className="mt-3 flex items-center gap-2 select-none"
-                                        // Force the action buttons to inherit the AI text color (or body text for user messages)
                                         style={{ color: message.sender === 'bot' ? 'var(--aida-bot-msg-text)' : 'inherit' }}
                                     >
-                                        {/* Copy */}
                                         <button
                                             type="button"
                                             onClick={() => handleCopy(messageText, message.id)}
@@ -940,7 +978,6 @@ const ChatDisplay = ({
                                             </svg>
                                         </button>
 
-                                        {/* Speech */}
                                         {speechApiSupported && trimmedText !== '' && (
                                             <button
                                                 type="button"
@@ -965,7 +1002,6 @@ const ChatDisplay = ({
                                             </button>
                                         )}
 
-                                        {/* Retry / Regenerate (user messages) */}
                                         {message.sender === 'user' && onRegenerateResponse && (
                                             <button
                                                 type="button"
@@ -981,7 +1017,6 @@ const ChatDisplay = ({
                                             </button>
                                         )}
 
-                                        {/* Retry (bot messages) */}
                                         {message.sender === 'bot' && onRetryBotMessage && canRetry && (
                                             <button
                                                 type="button"
@@ -997,7 +1032,6 @@ const ChatDisplay = ({
                                             </button>
                                         )}
 
-                                        {/* Edit */}
                                         {onStartEdit && (
                                             <button
                                                 type="button"
@@ -1010,17 +1044,14 @@ const ChatDisplay = ({
                                             </button>
                                         )}
 
-                                        {/* --- Delete: two-click confirmation ---------------- */}
                                         {onDeleteMessage && (
                                             <button
                                                 type="button"
                                                 onClick={() => {
                                                     if (isPendingDelete) {
-                                                        // Second click -> actually delete
                                                         onDeleteMessage(message.id);
                                                         setPendingDeleteId(null);
                                                     } else {
-                                                        // First click -> arm the button
                                                         setPendingDeleteId(message.id);
                                                     }
                                                 }}
@@ -1035,9 +1066,7 @@ const ChatDisplay = ({
                                                 <HiTrash className="w-4 h-4" />
                                             </button>
                                         )}
-                                        {/* -------------------------------------------------- */}
 
-                                        {/* Response metadata info (bot messages only) */}
                                         {message.sender === 'bot' && message.meta && (
                                             <MessageInfoPopover meta={message.meta} theme={theme} />
                                         )}
@@ -1054,7 +1083,6 @@ const ChatDisplay = ({
                 {pinnedMessageId && <div ref={spacerRef} aria-hidden="true" style={{ height: 0 }} />}
             </div>
 
-            {/* --- scroll to previous USER message button ------------------------- */}
             {messagesAboveCount > 0 && (
                 <button
                     type="button"
@@ -1093,7 +1121,6 @@ const ChatDisplay = ({
                     <HiArrowDown className="w-4 h-4" />
                 </button>
             )}
-            {/* ------------------------------------------------------------------ */}
 
             {!isAtBottom && (
                 <button
