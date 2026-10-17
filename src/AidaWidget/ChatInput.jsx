@@ -626,12 +626,10 @@ const ChatInput = ({
         span.id = 'quoted-text-pill';
         span.className = 'quoted-text-pill-container';
         range.insertNode(span);
-        const space = document.createTextNode('\u00A0');
-        span.after(space);
 
         const newRange = document.createRange();
-        newRange.setStartAfter(space);
-        newRange.setEndAfter(space);
+        newRange.setStartAfter(span);
+        newRange.setEndAfter(span);
         sel.removeAllRanges();
         sel.addRange(newRange);
 
@@ -865,8 +863,8 @@ const ChatInput = ({
         }
 
         const contextSize = formatContextSize(
-    opt.contextLength ?? opt.context_length
-);
+            opt.contextLength ?? opt.context_length
+        );
 
         const promptPrice = formatPrice(opt.pricing?.prompt);
         const completionPrice = formatPrice(opt.pricing?.completion);
@@ -884,43 +882,43 @@ const ChatInput = ({
                         {opt.modality && <ModularBadges modality={opt.modality} />}
                     </div>
                     {(contextSize || promptPrice || completionPrice) && (
-    <div className={`flex items-center gap-2 flex-wrap text-xs font-mono px-2 py-1 rounded mt-1 ${isDark ? 'bg-gray-900/60 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
-        {contextSize && (
-            <span className="flex items-center gap-1">
-                <span className="opacity-60">Context</span>
-                <span className="text-purple-400 font-semibold">
-                    {contextSize}
-                </span>
-            </span>
-        )}
+                        <div className={`flex items-center gap-2 flex-wrap text-xs font-mono px-2 py-1 rounded mt-1 ${isDark ? 'bg-gray-900/60 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
+                            {contextSize && (
+                                <span className="flex items-center gap-1">
+                                    <span className="opacity-60">Context</span>
+                                    <span className="text-purple-400 font-semibold">
+                                        {contextSize}
+                                    </span>
+                                </span>
+                            )}
 
-        {contextSize && (promptPrice || completionPrice) && (
-            <span className="opacity-40">·</span>
-        )}
+                            {contextSize && (promptPrice || completionPrice) && (
+                                <span className="opacity-40">·</span>
+                            )}
 
-        {promptPrice && (
-            <span className="flex items-center gap-1">
-                <span className="opacity-60">In</span>
-                <span className="text-emerald-400 font-semibold">
-                    {promptPrice}
-                </span>
-            </span>
-        )}
+                            {promptPrice && (
+                                <span className="flex items-center gap-1">
+                                    <span className="opacity-60">In</span>
+                                    <span className="text-emerald-400 font-semibold">
+                                        {promptPrice}
+                                    </span>
+                                </span>
+                            )}
 
-        {promptPrice && completionPrice && (
-            <span className="opacity-40">·</span>
-        )}
+                            {promptPrice && completionPrice && (
+                                <span className="opacity-40">·</span>
+                            )}
 
-        {completionPrice && (
-            <span className="flex items-center gap-1">
-                <span className="opacity-60">Out</span>
-                <span className="text-blue-400 font-semibold">
-                    {completionPrice}
-                </span>
-            </span>
-        )}
-    </div>
-)}
+                            {completionPrice && (
+                                <span className="flex items-center gap-1">
+                                    <span className="opacity-60">Out</span>
+                                    <span className="text-blue-400 font-semibold">
+                                        {completionPrice}
+                                    </span>
+                                </span>
+                            )}
+                        </div>
+                    )}
                 </div>
             </button>
         );

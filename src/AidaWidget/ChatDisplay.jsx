@@ -386,6 +386,11 @@ const ChatDisplay = ({
     const messageRefs = useRef(new Map());
     const editInputRef = useRef(null);
 
+    const editingMessageIdRef = useRef(editingMessageId);
+    useEffect(() => {
+        editingMessageIdRef.current = editingMessageId;
+    }, [editingMessageId]);
+
     const [isAtBottom, setIsAtBottom] = useState(true);
     const [hasNewContent, setHasNewContent] = useState(false);
     const prevMessagesRef = useRef(messages);
@@ -732,6 +737,9 @@ const ChatDisplay = ({
         };
 
         const handleSelectionChange = () => {
+
+            if (editingMessageIdRef.current) return;
+            
             const selection = window.getSelection();
             const inMessages = isSelectionInMessages();
             const text = selection?.toString().trim() || '';
