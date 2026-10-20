@@ -49,7 +49,7 @@ const ContextSelector = ({ value, onChange, theme = 'dark' }) => {
         }
 
         // Cap at reasonable number for manual scrolling before jumping to ALL
-        if (next > 100 && next < 1000) next = 100; 
+        if (next > 100 && next < 1000) next = 100;
 
         onChange(next);
     };
@@ -88,37 +88,38 @@ const ContextSelector = ({ value, onChange, theme = 'dark' }) => {
 
     // --- STYLES ---
     const isDark = theme === 'dark';
-    
+
     // ✅ UPDATED: Much brighter text and distinct background/border
-    const baseClass = isDark 
-        ? 'text-gray-200 bg-white/5 border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20 shadow-sm' 
+    const baseClass = isDark
+        ? 'text-gray-200 bg-white/5 border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20 shadow-sm'
         : 'text-gray-700 bg-white border-gray-200 hover:bg-gray-50 hover:text-gray-900 shadow-sm';
-    
+
     // ✅ UPDATED: Active state overrides the base style clearly
-    const activeClass = isAll 
+    const activeClass = isAll
         ? (isDark ? '!text-blue-300 !bg-blue-500/20 !border-blue-500/40' : '!text-blue-600 !bg-blue-50 !border-blue-200')
         : '';
 
     return (
         <div className="relative" ref={menuRef}>
             {/* The Pill Trigger */}
+            {/* The Pill Trigger */}
             <div
                 className={`
-                    flex items-center gap-1.5 px-2 py-1 rounded-full border transition-all cursor-ns-resize select-none
-                    ${baseClass}
-                    ${activeClass}
-                    ${isDragging ? 'cursor-grabbing scale-105 ring-2 ring-blue-500/30' : ''}
-                `}
+                                w-fit flex items-center gap-1.5 px-2 py-1 rounded-full border transition-all cursor-ns-resize select-none
+                                ${baseClass}
+                                ${activeClass}
+                                ${isDragging ? 'cursor-grabbing scale-105 ring-2 ring-blue-500/30' : ''}
+                            `}
                 onWheel={handleWheel}
-                
+
                 // Touch Events for Mobile
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
-                
+
                 // Click to open menu (if not dragging)
                 onClick={() => !isDragging && setIsOpen(!isOpen)}
-                
+
                 title="Scroll or drag up/down to change context limit"
             >
                 <HiOutlineQueueList className="w-4 h-4 opacity-80" />
@@ -136,11 +137,10 @@ const ContextSelector = ({ value, onChange, theme = 'dark' }) => {
                             <button
                                 key={preset}
                                 onClick={() => { onChange(preset); setIsOpen(false); }}
-                                className={`px-3 py-2 text-xs font-medium flex items-center justify-between w-full transition-colors ${
-                                    isSelected 
-                                        ? (isDark ? 'bg-blue-900/30 text-blue-300' : 'bg-blue-50 text-blue-600') 
+                                className={`px-3 py-2 text-xs font-medium flex items-center justify-between w-full transition-colors ${isSelected
+                                        ? (isDark ? 'bg-blue-900/30 text-blue-300' : 'bg-blue-50 text-blue-600')
                                         : (isDark ? 'text-gray-300 hover:bg-gray-700 hover:text-white' : 'text-gray-700 hover:bg-gray-50')
-                                }`}
+                                    }`}
                             >
                                 <span>{preset === 1000 ? "ALL History" : `${preset} msgs`}</span>
                                 {isSelected && <HiCheck className="w-3 h-3" />}

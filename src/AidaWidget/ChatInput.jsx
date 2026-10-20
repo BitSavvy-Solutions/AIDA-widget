@@ -1,17 +1,21 @@
 // src/AidaWidget/ChatInput.jsx
-/* src/AidaWidget/ChatInput.jsx */
-import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
     HiPaperAirplane, HiOutlineMicrophone, HiStop, HiArrowPath, HiXMark,
     HiChevronDown, HiOutlineGlobeAlt, HiLightBulb, HiPhoto, HiChatBubbleLeftRight,
     HiArrowTopRightOnSquare, HiPaperClip, HiEye, HiMagnifyingGlass,
     HiOutlineDocument, HiOutlineRectangleStack, HiPlay, HiPause, HiArrowDownTray,
-    HiOutlineCpuChip, HiOutlineCog6Tooth, HiCheck,
+    HiOutlineCpuChip, HiOutlineCog6Tooth, HiCheck, HiChevronUp,
 } from 'react-icons/hi2';
 import AttachmentButton from './AttachmentButton';
 import ContextSelector from './ContextSelector';
 import ReasoningSelector from './ReasoningSelector';
+import ToolbarModal from './ToolbarModal';
+
+const TOOLBAR_GAP = 8;
+const MODEL_MAX_CHARS_MEDIUM = 20;
+const MODEL_MAX_CHARS_MIN = 10;
 
 const extractUrls = (text) => {
     if (!text) return [];
@@ -50,7 +54,6 @@ const formatContextSize = (contextLength) => {
         maximumFractionDigits: 1,
     }).format(value);
 };
-
 
 const formatTime = (seconds) => {
     const m = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -107,12 +110,10 @@ const QuotedTextPill = ({ text, onCommit, onDismiss, theme = 'dark' }) => {
 
     return (
         <span
-            className={`
-                inline-flex items-center gap-1.5 align-middle mx-1 px-2 py-1 rounded-full border text-xs select-none
-                ${isDark
+            className={`inline-flex items-center gap-1.5 align-middle mx-1 px-2 py-1 rounded-full border text-xs select-none ${isDark
                     ? 'bg-blue-500/15 border-blue-500/40 text-blue-200'
-                    : 'bg-blue-50 border-blue-200 text-blue-700'}
-            `}
+                    : 'bg-blue-50 border-blue-200 text-blue-700'
+                }`}
             contentEditable={false}
             onMouseDown={(e) => e.stopPropagation()}
         >
@@ -125,10 +126,8 @@ const QuotedTextPill = ({ text, onCommit, onDismiss, theme = 'dark' }) => {
                     e.stopPropagation();
                     onCommit();
                 }}
-                className={`
-                    p-0.5 rounded-full transition-colors
-                    ${isDark ? 'hover:bg-blue-400/30 text-blue-200' : 'hover:bg-blue-200 text-blue-700'}
-                `}
+                className={`p-0.5 rounded-full transition-colors ${isDark ? 'hover:bg-blue-400/30 text-blue-200' : 'hover:bg-blue-200 text-blue-700'
+                    }`}
                 title="Add quote to message"
                 aria-label="Add quote to message"
             >
@@ -140,10 +139,8 @@ const QuotedTextPill = ({ text, onCommit, onDismiss, theme = 'dark' }) => {
                     e.stopPropagation();
                     onDismiss();
                 }}
-                className={`
-                    p-0.5 rounded-full transition-colors
-                    ${isDark ? 'hover:bg-white/10 text-blue-300/70' : 'hover:bg-blue-200 text-blue-600/70'}
-                `}
+                className={`p-0.5 rounded-full transition-colors ${isDark ? 'hover:bg-white/10 text-blue-300/70' : 'hover:bg-blue-200 text-blue-600/70'
+                    }`}
                 title="Dismiss quote"
                 aria-label="Dismiss quote"
             >
@@ -268,6 +265,21 @@ const ChatInput = ({
     const modelSearchRef = useRef(null);
     const modelItemRefs = useRef([]);
 
+    const [isOverflowOpen, setIsOverflowOpen] = useState(false);
+    const [overflowKeys, setOverflowKeys] = useState([]);
+    const [modelMaxChars, setModelMaxChars] = useState(null);
+    const [toolbarResizeTick, setToolbarResizeTick] = useState(0);
+
+    const leftToolbarRef = useRef(null);
+    const overflowButtonRef = useRef(null);
+    const itemRefs = useRef({});
+    const itemWidths = useRef({});
+    const modelWidths = useRef({ full: null, medium: null, min: null });
+
+    const setItemRef = useCallback((key) => (el) => {
+        if (el) itemRefs.current[key] = el;
+    }, []);
+
     const isDark = true;
     const isPillMode = autoRecordCountdown !== null || isRecording;
     const isOllamaSelected = selectedModel?.startsWith('ollama:');
@@ -338,12 +350,15 @@ const ChatInput = ({
         if (modelSearchQuery.trim() || isSearchingModels) return [];
         return recentModelValues
             .map(recent => {
-                const source = recent.type === 'audio' ? [...chromeAudioModels, ...availableAudioModels] : [...ollamaModels, ...chromeModels, ...availableModels];
+                const source = recent.type === 'audio'
+                    ? [...chromeAudioModels, ...availableAudioModels]
+                    : [...ollamaModels, ...chromeModels, ...availableModels];
                 const found = source.find(m => m.value === recent.value);
                 return found ? { ...found, _type: recent.type } : null;
             })
             .filter(Boolean);
     }, [recentModelValues, availableModels, availableAudioModels, ollamaModels, chromeModels, chromeAudioModels, modelSearchQuery, isSearchingModels]);
+
     const filteredTextModels = useMemo(() => {
         const sourceModels = searchedModels ? searchedModels.text : availableModels;
         const seen = new Set();
@@ -420,6 +435,8 @@ const ChatInput = ({
         }, 10);
     }, [inputRef]);
 
+    const closeOverflowMenu = useCallback(() => setIsOverflowOpen(false), []);
+
     const selectModel = useCallback((item) => {
         if (item._type === 'text') {
             setSelectedModel(item.value);
@@ -457,15 +474,6 @@ const ChatInput = ({
 
     useEffect(() => {
         if (!isModelMenuOpen) return;
-        const onPointerDown = (e) => {
-            if (!modelMenuRef.current?.contains(e.target)) closeModelMenu();
-        };
-        document.addEventListener('pointerdown', onPointerDown);
-        return () => document.removeEventListener('pointerdown', onPointerDown);
-    }, [isModelMenuOpen, closeModelMenu]);
-
-    useEffect(() => {
-        if (!isModelMenuOpen) return;
         const t = setTimeout(() => modelSearchRef.current?.focus(), 40);
         return () => clearTimeout(t);
     }, [isModelMenuOpen]);
@@ -478,6 +486,14 @@ const ChatInput = ({
         const el = modelItemRefs.current[focusedModelIndex];
         if (el) el.scrollIntoView({ block: 'nearest' });
     }, [focusedModelIndex]);
+
+    useLayoutEffect(() => {
+        const el = leftToolbarRef.current;
+        if (!el) return;
+        const observer = new ResizeObserver(() => setToolbarResizeTick((v) => v + 1));
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, []);
 
     const handleModelSearchKeyDown = useCallback(
         (e) => {
@@ -492,7 +508,11 @@ const ChatInput = ({
                     break;
                 case 'Enter': {
                     e.preventDefault();
-                    const target = focusedModelIndex >= 0 ? selectableItems[focusedModelIndex] : selectableItems.length === 1 ? selectableItems[0] : null;
+                    const target = focusedModelIndex >= 0
+                        ? selectableItems[focusedModelIndex]
+                        : selectableItems.length === 1
+                            ? selectableItems[0]
+                            : null;
                     if (target) selectModel(target);
                     break;
                 }
@@ -588,7 +608,6 @@ const ChatInput = ({
         }
     }, [recordings, adjustInputHeight]);
 
-    // --- Quoted text insertion at saved cursor position -----------------------
     const lastInputRangeRef = useRef(null);
 
     const saveInputSelection = useCallback(() => {
@@ -604,7 +623,7 @@ const ChatInput = ({
         if (!div || !pendingQuotedText) return;
 
         const existing = document.getElementById('quoted-text-pill');
-        if (existing) return; // keep existing position; portal updates the text
+        if (existing) return;
 
         const sel = window.getSelection();
         const savedRange = lastInputRangeRef.current;
@@ -780,14 +799,30 @@ const ChatInput = ({
         }
         if (autoSendCountdown !== null) {
             return (
-                <button onClick={cancelAutoSendTimer} onMouseEnter={() => { setIsHoveringSend(true); setIsSendTimerPaused(true); }} onMouseLeave={() => { setIsHoveringSend(false); setIsSendTimerPaused(false); }} className={`ml-2 flex items-center justify-center timer-button !w-9 !h-9 ${visibilityClass}`} style={{ animationPlayState: isHoveringSend ? 'paused' : 'running' }} aria-label="Cancel auto-send">
+                <button
+                    onClick={cancelAutoSendTimer}
+                    onMouseEnter={() => { setIsHoveringSend(true); setIsSendTimerPaused(true); }}
+                    onMouseLeave={() => { setIsHoveringSend(false); setIsSendTimerPaused(false); }}
+                    className={`ml-2 flex items-center justify-center timer-button !w-9 !h-9 ${visibilityClass}`}
+                    style={{ animationPlayState: isHoveringSend ? 'paused' : 'running' }}
+                    aria-label="Cancel auto-send"
+                >
                     {isHoveringSend ? <HiXMark className="h-5 w-5 text-white" /> : <span className={`${isDark ? 'text-white' : 'text-gray-900'} font-bold text-base`}>{autoSendCountdown}</span>}
                 </button>
             );
         }
         const isDisabled = isRecording || isTranscribing;
         return (
-            <button type="button" onClick={onSend} disabled={isDisabled} className={`ml-2 p-2 rounded-full transition-opacity disabled:opacity-50 ${isDark ? isDisabled ? 'bg-gray-600' : 'bg-gray-700 hover:bg-gray-600' : isDisabled ? 'bg-gray-300' : 'bg-gray-900 hover:bg-gray-700'} ${visibilityClass}`} aria-label="Send Message">
+            <button
+                type="button"
+                onClick={onSend}
+                disabled={isDisabled}
+                className={`ml-2 p-2 rounded-full transition-opacity disabled:opacity-50 ${isDark
+                        ? isDisabled ? 'bg-gray-600' : 'bg-gray-700 hover:bg-gray-600'
+                        : isDisabled ? 'bg-gray-300' : 'bg-gray-900 hover:bg-gray-700'
+                    } ${visibilityClass}`}
+                aria-label="Send Message"
+            >
                 <HiPaperAirplane className={`w-5 h-5 ${isDisabled ? isDark ? 'text-gray-300' : 'text-gray-500' : 'text-white'}`} />
             </button>
         );
@@ -799,14 +834,25 @@ const ChatInput = ({
 
         if (autoRecordCountdown !== null) {
             pillContent = (
-                <button onClick={cancelAutoRecordTimer} onMouseEnter={() => { setIsHoveringRecord(true); setIsRecordTimerPaused(true); }} onMouseLeave={() => { setIsHoveringRecord(false); setIsRecordTimerPaused(false); }} className={`${pillBaseClass} justify-center record-timer-button !w-9 !h-9`} style={{ animationPlayState: isHoveringRecord ? 'paused' : 'running' }} aria-label="Cancel auto-record">
+                <button
+                    onClick={cancelAutoRecordTimer}
+                    onMouseEnter={() => { setIsHoveringRecord(true); setIsRecordTimerPaused(true); }}
+                    onMouseLeave={() => { setIsHoveringRecord(false); setIsRecordTimerPaused(false); }}
+                    className={`${pillBaseClass} justify-center record-timer-button !w-9 !h-9`}
+                    style={{ animationPlayState: isHoveringRecord ? 'paused' : 'running' }}
+                    aria-label="Cancel auto-record"
+                >
                     {isHoveringRecord ? <HiXMark className="h-5 w-5 text-white" /> : <span className="text-white font-bold text-base">{autoRecordCountdown}</span>}
                 </button>
             );
         } else if (isRecording) {
             const pillBgColor = `bg-red-600 hover:bg-red-700 ${isNearingTimeLimit ? 'animate-pulse' : ''}`;
             pillContent = (
-                <button onClick={handleRecordButtonClick} className={`${pillBaseClass} gap-2 !rounded-full !px-3 !py-2 !w-auto !h-auto text-white shadow-md transition-all duration-200 ${pillBgColor}`} aria-label="Stop Recording">
+                <button
+                    onClick={handleRecordButtonClick}
+                    className={`${pillBaseClass} gap-2 !rounded-full !px-3 !py-2 !w-auto !h-auto text-white shadow-md transition-all duration-200 ${pillBgColor}`}
+                    aria-label="Stop Recording"
+                >
                     <HiStop className="h-5 w-5 flex-shrink-0" />
                     <span className="font-mono text-sm font-medium tracking-wider">{formatTime(elapsedTime)}</span>
                 </button>
@@ -819,7 +865,13 @@ const ChatInput = ({
         return (
             <>
                 {pillContent}
-                <button onClick={handleRecordButtonClick} disabled={autoSendCountdown !== null} className={`${marginClass} p-2 rounded-full text-white transition-all duration-200 disabled:opacity-50 ${isDark ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-900 hover:bg-gray-700'} ${micVisibilityClass}`} aria-label="Start Recording">
+                <button
+                    onClick={handleRecordButtonClick}
+                    disabled={autoSendCountdown !== null}
+                    className={`${marginClass} p-2 rounded-full text-white transition-all duration-200 disabled:opacity-50 ${isDark ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-900 hover:bg-gray-700'
+                        } ${micVisibilityClass}`}
+                    aria-label="Start Recording"
+                >
                     <HiOutlineMicrophone className="w-5 h-5" />
                 </button>
             </>
@@ -832,8 +884,8 @@ const ChatInput = ({
             type="button"
             onClick={onOpenChromeAISettings}
             className={`w-full text-left px-2.5 py-2 text-sm rounded-lg flex items-start gap-2.5 transition-colors border border-dashed ${isDark
-                ? 'border-gray-700 text-gray-400 hover:border-teal-500/50 hover:text-teal-300'
-                : 'border-gray-300 text-gray-500 hover:border-teal-500/60 hover:text-teal-600'
+                    ? 'border-gray-700 text-gray-400 hover:border-teal-500/50 hover:text-teal-300'
+                    : 'border-gray-300 text-gray-500 hover:border-teal-500/60 hover:text-teal-600'
                 }`}
         >
             <div className={`p-1.5 rounded-md flex-shrink-0 mt-0.5 ${isDark ? 'bg-teal-500/10 text-teal-400' : 'bg-teal-50 text-teal-600'}`}>
@@ -869,20 +921,34 @@ const ChatInput = ({
         const promptPrice = formatPrice(opt.pricing?.prompt);
         const completionPrice = formatPrice(opt.pricing?.completion);
         return (
-            <button key={opt.value} type="button" ref={(el) => { modelItemRefs.current[idx] = el; }} role="option" aria-selected={isSelected} onClick={() => selectModel({ ...opt, _type: type })} className={rowClass}>
+            <button
+                key={opt.value}
+                type="button"
+                ref={(el) => { modelItemRefs.current[idx] = el; }}
+                role="option"
+                aria-selected={isSelected}
+                onClick={() => selectModel({ ...opt, _type: type })}
+                className={rowClass}
+            >
                 <div className={`p-1.5 rounded-md flex-shrink-0 mt-0.5 ${visuals.bgClass} ${visuals.colorClass}`}>
                     <Icon className="w-4 h-4" />
                 </div>
                 <div className="flex flex-col min-w-0 flex-1 gap-0.5">
                     <div className="flex items-center justify-between gap-2">
-                        <span className={`font-semibold text-sm truncate ${isSelected ? (isDark ? 'text-white' : 'text-gray-900') : (isDark ? 'text-gray-200' : 'text-gray-800')}`}>{opt.label}</span>
+                        <span className={`font-semibold text-sm truncate ${isSelected
+                                ? isDark ? 'text-white' : 'text-gray-900'
+                                : isDark ? 'text-gray-200' : 'text-gray-800'
+                            }`}>
+                            {opt.label}
+                        </span>
                         {isSelected && <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-coral flex-shrink-0" aria-hidden="true" />}
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
                         {opt.modality && <ModularBadges modality={opt.modality} />}
                     </div>
                     {(contextSize || promptPrice || completionPrice) && (
-                        <div className={`flex items-center gap-2 flex-wrap text-xs font-mono px-2 py-1 rounded mt-1 ${isDark ? 'bg-gray-900/60 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
+                        <div className={`flex items-center gap-2 flex-wrap text-xs font-mono px-2 py-1 rounded mt-1 ${isDark ? 'bg-gray-900/60 text-gray-300' : 'bg-gray-100 text-gray-600'
+                            }`}>
                             {contextSize && (
                                 <span className="flex items-center gap-1">
                                     <span className="opacity-60">Context</span>
@@ -924,9 +990,452 @@ const ChatInput = ({
         );
     };
 
+    const renderWebSearchButton = () => (
+        <button
+            type="button"
+            onClick={() => setIsWebSearchEnabled((p) => !p)}
+            disabled={isLocalModelSelected}
+            className={`p-2 rounded-full disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0 ${isWebSearchEnabled && !isLocalModelSelected
+                    ? isDark ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-100 text-blue-600'
+                    : isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'
+                }`}
+            aria-pressed={isWebSearchEnabled && !isLocalModelSelected}
+            aria-label="Toggle web search"
+            title={isLocalModelSelected ? 'Web search is not available for local models' : 'Toggle web search'}
+        >
+            <HiOutlineGlobeAlt className="h-6 w-6" />
+        </button>
+    );
+
+    const renderModelControl = () => {
+        const modelLabelMaxChars = overflowKeys.includes('model') ? undefined : modelMaxChars;
+
+        return (
+            <>
+                <button
+                    type="button"
+                    onClick={() => (isModelMenuOpen ? closeModelMenu() : openModelMenu())}
+                    className={`flex items-center gap-2 rounded-full px-3 py-1 text-sm disabled:opacity-50 transition-colors max-w-full border ${isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                        } ${currentVisuals.colorClass} ${currentVisuals.borderClass} ${currentVisuals.bgClass}`}
+                    aria-haspopup="listbox"
+                    aria-expanded={isModelMenuOpen}
+                    aria-label={`Select AI model. Current: ${selectedModelLabel}. Press Tab to open.`}
+                    title={`${selectedModelLabel} (Tab)`}
+                >
+                    <CurrentIcon className="h-4 w-4 flex-shrink-0" />
+                    <span
+                        className={`truncate ${isDark ? 'text-gray-200' : 'text-gray-700'}`}
+                        style={{ maxWidth: modelLabelMaxChars ? `${modelLabelMaxChars}ch` : undefined }}
+                    >
+                        {selectedModelLabel}
+                    </span>
+                    <HiChevronDown className={`h-3 w-3 flex-shrink-0 opacity-70 transition-transform duration-200 ${isModelMenuOpen ? 'rotate-180' : ''
+                        } ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
+                </button>
+
+                <ToolbarModal
+                    isOpen={isModelMenuOpen}
+                    onClose={closeModelMenu}
+                    ariaLabel="Choose AI model"
+                    triggerRef={modelMenuRef}
+                    isDark={isDark}
+                    role="listbox"
+                    header={
+                        <div className={`flex items-center gap-2 px-3 py-2 border-b ${isDark ? 'border-gray-700/80 bg-gray-900/40' : 'border-gray-100 bg-gray-50'
+                            }`}>
+                            <HiMagnifyingGlass className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                            <input
+                                ref={modelSearchRef}
+                                type="text"
+                                value={modelSearchQuery}
+                                onChange={(e) => setModelSearchQuery(e.target.value)}
+                                onKeyDown={handleModelSearchKeyDown}
+                                placeholder="Search models..."
+                                autoComplete="off"
+                                className={`flex-1 bg-transparent text-xs outline-none placeholder-gray-500 ${isDark ? 'text-gray-200' : 'text-gray-800'
+                                    }`}
+                                aria-label="Search AI models"
+                            />
+                            {modelSearchQuery && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setModelSearchQuery('');
+                                        modelSearchRef.current?.focus();
+                                    }}
+                                    className={`flex-shrink-0 p-0.5 rounded transition-colors ${isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
+                                        }`}
+                                    aria-label="Clear search"
+                                >
+                                    <HiXMark className="w-3 h-3" />
+                                </button>
+                            )}
+                        </div>
+                    }
+                    bodyClassName="overflow-y-auto custom-scrollbar p-2 max-h-[55vh] sm:max-h-96 space-y-1"
+                    footer={
+                        <div className={`px-3 py-2 border-t flex items-center justify-between gap-2 shrink-0 text-[10px] ${isDark ? 'border-gray-700/80 bg-gray-900/30 text-gray-600' : 'border-gray-100 bg-gray-50 text-gray-500'
+                            }`}>
+                            <span className="font-mono font-bold">↑↓</span>
+                            <span>Navigate</span>
+                            <span className="font-mono font-bold">⏎</span>
+                            <span>Select</span>
+                            <span className="font-mono font-bold">Esc</span>
+                            <span>Close</span>
+                        </div>
+                    }
+                >
+                    {isSearchingModels ? (
+                        <div className="flex items-center justify-center py-5">
+                            <HiArrowPath className="w-5 h-5 animate-spin text-gray-400" />
+                            <span className="ml-2 text-xs text-gray-500">Searching OpenRouter...</span>
+                        </div>
+                    ) : selectableItems.length === 0 ? (
+                        <p className={`px-3 py-5 text-xs text-center ${isDark ? 'text-gray-500' : 'text-gray-400'
+                            }`}>
+                            No models match your search
+                        </p>
+                    ) : (
+                        <>
+                            {recentModelItems.length > 0 && (
+                                <div className="mb-2">
+                                    <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'
+                                        }`}>
+                                        Recent Models
+                                    </div>
+                                    {recentModelItems.map((opt, idx) => renderModelOption(opt, idx, opt._type))}
+                                </div>
+                            )}
+
+                            <div className="mb-2">
+                                <div className={`px-3 py-2 flex items-center justify-between gap-2 ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'
+                                    }`}>
+                                    <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
+                                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${ollamaStatusDot}`} />
+                                        Ollama
+                                    </span>
+                                    <span className="flex items-center gap-0.5">
+                                        {ollamaStatus === 'connected' && (
+                                            <button
+                                                type="button"
+                                                onClick={onOllamaRefresh}
+                                                className={`p-1 rounded transition-colors ${isDark
+                                                        ? 'hover:bg-white/10 text-gray-400 hover:text-gray-200'
+                                                        : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'
+                                                    }`}
+                                                title="Refresh local models"
+                                                aria-label="Refresh local models"
+                                            >
+                                                <HiArrowPath className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={onOpenOllamaSettings}
+                                            className={`p-1 rounded transition-colors ${isDark
+                                                    ? 'hover:bg-white/10 text-gray-400 hover:text-gray-200'
+                                                    : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'
+                                                }`}
+                                            title="Ollama connection settings"
+                                            aria-label="Ollama connection settings"
+                                        >
+                                            <HiOutlineCog6Tooth className="w-3.5 h-3.5" />
+                                        </button>
+                                    </span>
+                                </div>
+
+                                {ollamaStatus === 'connecting' && (
+                                    <div className="flex items-center gap-2 px-3 py-3 text-xs text-gray-500">
+                                        <HiArrowPath className="w-4 h-4 animate-spin" />
+                                        Connecting to Ollama...
+                                    </div>
+                                )}
+
+                                {ollamaStatus === 'connected' && filteredOllamaModels.length === 0 && !modelSearchQuery && (
+                                    <p className={`px-3 py-2.5 text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'
+                                        }`}>
+                                        Connected, but no models installed. Pull one with{' '}
+                                        <code className="font-mono">ollama pull llama3.2</code>.
+                                    </p>
+                                )}
+
+                                {ollamaStatus === 'connected' && filteredOllamaModels.map((opt, idx) =>
+                                    renderModelOption(opt, recentModelItems.length + idx, 'text')
+                                )}
+
+                                {ollamaStatus === 'error' && (
+                                    <div className={`mx-2 my-1.5 px-2.5 py-2 rounded-lg text-xs flex items-center justify-between gap-2 ${isDark ? 'bg-red-500/10 text-red-300' : 'bg-red-50 text-red-600'
+                                        }`}>
+                                        <span>Connection failed</span>
+                                        <button
+                                            type="button"
+                                            onClick={onOpenOllamaSettings}
+                                            className="font-semibold underline underline-offset-2 hover:opacity-80"
+                                        >
+                                            Retry
+                                        </button>
+                                    </div>
+                                )}
+
+                                {ollamaStatus === 'disconnected' && (
+                                    <button
+                                        type="button"
+                                        onClick={onOpenOllamaSettings}
+                                        className={`w-full flex items-center gap-2.5 px-2.5 py-2 text-sm rounded-lg border border-dashed transition-colors ${isDark
+                                                ? 'border-gray-700 text-gray-400 hover:border-teal-500/50 hover:text-teal-300'
+                                                : 'border-gray-300 text-gray-500 hover:border-teal-500/60 hover:text-teal-600'
+                                            }`}
+                                    >
+                                        <HiOutlineCpuChip className="w-4 h-4 flex-shrink-0" />
+                                        <span className="text-xs font-medium">Connect to Ollama</span>
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="mb-2">
+                                <div className={`px-3 py-2 flex items-center justify-between gap-2 ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'
+                                    }`}>
+                                    <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
+                                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${chromeStatusDot}`} />
+                                        Chromium AI
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={onOpenChromeAISettings}
+                                        className={`p-1 rounded transition-colors ${isDark
+                                                ? 'hover:bg-white/10 text-gray-400 hover:text-gray-200'
+                                                : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'
+                                            }`}
+                                        title="Manage Chromium built-in models"
+                                        aria-label="Manage Chromium built-in models"
+                                    >
+                                        <HiOutlineCog6Tooth className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
+                                {selectableChromeModels.map((opt, idx) =>
+                                    renderModelOption(opt, recentModelItems.length + filteredOllamaModels.length + idx, 'text')
+                                )}
+                                {disabledChromeModels.map(renderDisabledChromeOption)}
+                            </div>
+
+                            {filteredTextModels.length > 0 && (
+                                <div className="mb-2">
+                                    <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'
+                                        }`}>
+                                        Text Models
+                                    </div>
+                                    {filteredTextModels.map((opt, idx) =>
+                                        renderModelOption(
+                                            opt,
+                                            recentModelItems.length + filteredOllamaModels.length + selectableChromeModels.length + idx,
+                                            'text'
+                                        )
+                                    )}
+                                </div>
+                            )}
+                            {filteredAudioModels.length > 0 && (
+                                <div>
+                                    <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'
+                                        }`}>
+                                        Audio Models
+                                    </div>
+                                    {filteredAudioModels.map((opt, idx) =>
+                                        renderModelOption(
+                                            opt,
+                                            recentModelItems.length + filteredOllamaModels.length + selectableChromeModels.length + filteredTextModels.length + idx,
+                                            'audio'
+                                        )
+                                    )}
+                                </div>
+                            )}
+                        </>
+                    )}
+                </ToolbarModal>
+            </>
+        );
+    };
+
+    const renderReasoningControl = () => (
+        <ReasoningSelector
+            efforts={reasoningEfforts}
+            value={reasoningEffort}
+            defaultEffort={defaultReasoningEffort}
+            isDefault={isReasoningDefault}
+            onChange={setReasoningEffort}
+        />
+    );
+
+    const renderContextControl = () => (
+        <ContextSelector
+            value={contextLimit}
+            onChange={setContextLimit}
+            theme="dark"
+        />
+    );
+
+    const toolbarItems = [
+        ...(features.webSearch ? [{ key: 'websearch', label: 'Web Search', render: renderWebSearchButton }] : []),
+        ...(features.modelSelection ? [{ key: 'model', label: 'Model', render: renderModelControl }] : []),
+        { key: 'reasoning', label: 'Reasoning Effort', render: renderReasoningControl },
+        { key: 'context', label: 'Context Limit', render: renderContextControl },
+    ];
+
+    const visibleItems = toolbarItems.filter((item) => !overflowKeys.includes(item.key));
+    const overflowMenuItems = toolbarItems
+        .filter((item) => overflowKeys.includes(item.key))
+        .sort((a, b) => {
+            if (a.key === 'model') return -1;
+            if (b.key === 'model') return 1;
+            return 0;
+        });
+
+    useLayoutEffect(() => {
+        const container = leftToolbarRef.current;
+        if (!container || container.clientWidth <= 0) return;
+
+        const nonModelItems = toolbarItems.filter((item) => item.key !== 'model');
+        const totalNonModel = nonModelItems.length;
+
+        for (const item of nonModelItems) {
+            if (!overflowKeys.includes(item.key)) {
+                const el = itemRefs.current[item.key];
+                if (el) itemWidths.current[item.key] = el.offsetWidth;
+            }
+        }
+
+        const modelVisible = toolbarItems.some((item) => item.key === 'model' && !overflowKeys.includes(item.key));
+        const currentModelPhase = modelVisible
+            ? modelMaxChars === null
+                ? 'full'
+                : modelMaxChars === MODEL_MAX_CHARS_MEDIUM
+                    ? 'medium'
+                    : 'min'
+            : 'overflow';
+
+        if (modelVisible) {
+            const modelEl = itemRefs.current.model;
+            if (modelEl) {
+                modelWidths.current[currentModelPhase] = modelEl.offsetWidth;
+            }
+        }
+
+        const fallbackChWidth = 7;
+
+        const estimateModelWidth = (phase) => {
+            if (phase === 'overflow') return 0;
+            const stored = modelWidths.current[phase];
+            if (stored) return stored;
+            const length = phase === 'full' ? 80 : phase === 'medium' ? MODEL_MAX_CHARS_MEDIUM : MODEL_MAX_CHARS_MIN;
+            return Math.round(length * fallbackChWidth + 32);
+        };
+
+        const modelWidthFor = (phase) => {
+            if (phase === 'overflow') return 0;
+            if (phase === currentModelPhase && modelVisible) {
+                return itemRefs.current.model?.offsetWidth || modelWidths.current[phase] || estimateModelWidth(phase);
+            }
+            return modelWidths.current[phase] || estimateModelWidth(phase);
+        };
+
+        const overflowButtonWidth = overflowButtonRef.current?.offsetWidth || 28;
+
+        const computeTotal = (phase, visibleNonModelKeys) => {
+            const visibleKeys = [];
+            if (phase !== 'overflow') visibleKeys.push('model');
+            visibleKeys.push(...visibleNonModelKeys);
+
+            let total = 0;
+            if (visibleKeys.length > 0) {
+                for (const key of visibleKeys) {
+                    if (key === 'model') {
+                        total += modelWidthFor(phase);
+                    } else {
+                        total += itemWidths.current[key] || 0;
+                    }
+                }
+                total += (visibleKeys.length - 1) * TOOLBAR_GAP;
+            }
+
+            const hasOverflowButton = phase === 'overflow' || visibleNonModelKeys.length < totalNonModel;
+            if (hasOverflowButton) {
+                if (visibleKeys.length > 0) total += TOOLBAR_GAP;
+                total += overflowButtonWidth;
+            }
+
+            return total;
+        };
+
+        const allNonModelKeys = nonModelItems.map((item) => item.key);
+
+        const candidateStates = [
+            { phase: 'full', visibleNonModelKeys: allNonModelKeys },
+        ];
+
+        for (let visibleCount = totalNonModel; visibleCount >= 0; visibleCount -= 1) {
+            candidateStates.push({
+                phase: 'medium',
+                visibleNonModelKeys: allNonModelKeys.slice(0, visibleCount),
+            });
+        }
+
+        candidateStates.push(
+            { phase: 'min', visibleNonModelKeys: [] },
+            { phase: 'overflow', visibleNonModelKeys: [] },
+        );
+
+        let best = candidateStates.find((candidate) =>
+            computeTotal(candidate.phase, candidate.visibleNonModelKeys) <= container.clientWidth,
+        );
+
+        if (!best) {
+            best = { phase: 'overflow', visibleNonModelKeys: [] };
+        }
+
+        const nextOverflowKeys = [];
+        for (const item of toolbarItems) {
+            const isModel = item.key === 'model';
+            if (isModel) {
+                if (best.phase === 'overflow') nextOverflowKeys.push(item.key);
+            } else if (!best.visibleNonModelKeys.includes(item.key)) {
+                nextOverflowKeys.push(item.key);
+            }
+        }
+
+        const nextModelMaxChars = best.phase === 'full'
+            ? null
+            : best.phase === 'medium'
+                ? MODEL_MAX_CHARS_MEDIUM
+                : best.phase === 'min'
+                    ? MODEL_MAX_CHARS_MIN
+                    : null;
+
+        const overflowChanged =
+            nextOverflowKeys.length !== overflowKeys.length ||
+            nextOverflowKeys.some((key, index) => overflowKeys[index] !== key);
+
+        if (overflowChanged || nextModelMaxChars !== modelMaxChars) {
+            setOverflowKeys(nextOverflowKeys);
+            setModelMaxChars(nextModelMaxChars);
+        }
+    }, [toolbarItems, overflowKeys, modelMaxChars, toolbarResizeTick]);
+
     return (
-        <div className="relative p-2 rounded-none transition-colors border-t" style={{ backgroundColor: 'var(--aida-input-container)', borderColor: 'var(--aida-input-border)', color: 'var(--aida-input-text)' }}>
-            <div className="flex items-end rounded-lg px-3 py-1 mb-2 transition-colors border" style={{ backgroundColor: 'var(--aida-user-msg-bg)', color: 'var(--aida-user-msg-text)', borderColor: 'var(--aida-input-border)' }}>
+        <div
+            className="relative p-2 rounded-none transition-colors border-t"
+            style={{
+                backgroundColor: 'var(--aida-input-container)',
+                borderColor: 'var(--aida-input-border)',
+                color: 'var(--aida-input-text)',
+            }}
+        >
+            <div
+                className="flex items-end rounded-lg px-3 py-1 mb-2 transition-colors border"
+                style={{
+                    backgroundColor: 'var(--aida-user-msg-bg)',
+                    color: 'var(--aida-user-msg-text)',
+                    borderColor: 'var(--aida-input-border)',
+                }}
+            >
                 <div
                     ref={inputRef}
                     contentEditable="true"
@@ -978,154 +1487,80 @@ const ChatInput = ({
             })()}
 
             <div className="flex items-center justify-between">
-                <div className="relative flex items-center min-w-0 flex-1 mr-2 gap-2">
-                    {features.webSearch && (
-                        <button type="button" onClick={() => setIsWebSearchEnabled((p) => !p)} disabled={isLocalModelSelected} className={`p-2 rounded-full disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0 ${isWebSearchEnabled && !isLocalModelSelected ? isDark ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-100 text-blue-600' : isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`} aria-pressed={isWebSearchEnabled && !isLocalModelSelected} aria-label="Toggle web search" title={isLocalModelSelected ? 'Web search is not available for local models' : 'Toggle web search'}>
-                            <HiOutlineGlobeAlt className="h-6 w-6" />
-                        </button>
-                    )}
-                    {features.modelSelection && (
-                        <div className="relative min-w-0" ref={modelMenuRef}>
-                            <button type="button" onClick={() => (isModelMenuOpen ? closeModelMenu() : openModelMenu())} className={`flex items-center gap-2 rounded-full px-3 py-1 text-sm disabled:opacity-50 transition-colors max-w-full border ${isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} ${currentVisuals.colorClass} ${currentVisuals.borderClass} ${currentVisuals.bgClass}`} aria-haspopup="listbox" aria-expanded={isModelMenuOpen} aria-label={`Select AI model. Current: ${selectedModelLabel}. Press Tab to open.`} title={`${selectedModelLabel} (Tab)`}>
-                                <CurrentIcon className="h-4 w-4 flex-shrink-0" />
-                                <span className={`truncate ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{selectedModelLabel}</span>
-                                <HiChevronDown className={`h-3 w-3 flex-shrink-0 opacity-70 transition-transform duration-200 ${isModelMenuOpen ? 'rotate-180' : ''} ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
+                <div ref={leftToolbarRef} className="relative flex items-center min-w-0 flex-1 mr-2 gap-2">
+                    {visibleItems.map((item) => {
+                        const isModel = item.key === 'model';
+                        return (
+                            <div
+                                key={item.key}
+                                ref={isModel
+                                    ? (el) => {
+                                        itemRefs.current.model = el;
+                                        modelMenuRef.current = el;
+                                    }
+                                    : setItemRef(item.key)}
+                                className="relative flex-shrink-0"
+                            >
+                                {item.render()}
+                            </div>
+                        );
+                    })}
+
+                    {overflowKeys.length > 0 && (
+                        <div ref={overflowButtonRef} className="relative flex-shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setIsOverflowOpen((open) => !open)}
+                                className={`p-2 rounded-full border transition-colors ${isDark
+                                        ? 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
+                                        : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-100'
+                                    }`}
+                                aria-label="More controls"
+                                title="More controls"
+                                aria-expanded={isOverflowOpen}
+                            >
+                                <HiChevronUp className={`h-4 w-4 transition-transform ${isOverflowOpen ? 'rotate-180' : ''
+                                    }`} />
                             </button>
-                            {isModelMenuOpen && (
-                                <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4">
-                                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeModelMenu} />
-                                    <div className={`relative z-10 w-full max-w-md rounded-t-xl sm:rounded-xl shadow-2xl overflow-hidden border flex flex-col max-h-[85vh] ${isDark ? 'bg-gray-800 border-gray-700 text-gray-100' : 'bg-white border-gray-200 text-gray-900'}`} role="listbox" aria-label="Choose AI model">
-                                        <div className={`flex items-center gap-2 px-3 py-2 border-b ${isDark ? 'border-gray-700/80 bg-gray-900/40' : 'border-gray-100 bg-gray-50'}`}>
-                                            <HiMagnifyingGlass className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-                                            <input ref={modelSearchRef} type="text" value={modelSearchQuery} onChange={(e) => setModelSearchQuery(e.target.value)} onKeyDown={handleModelSearchKeyDown} placeholder="Search models..." autoComplete="off" className={`flex-1 bg-transparent text-xs outline-none placeholder-gray-500 ${isDark ? 'text-gray-200' : 'text-gray-800'}`} aria-label="Search AI models" />
-                                            {modelSearchQuery && (
-                                                <button type="button" onClick={() => { setModelSearchQuery(''); modelSearchRef.current?.focus(); }} className={`flex-shrink-0 p-0.5 rounded transition-colors ${isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`} aria-label="Clear search">
-                                                    <HiXMark className="w-3 h-3" />
-                                                </button>
-                                            )}
-                                        </div>
-                                        <div className="overflow-y-auto custom-scrollbar p-2 max-h-[55vh] sm:max-h-96 space-y-1">
-                                            {isSearchingModels ? (
-                                                <div className="flex items-center justify-center py-5">
-                                                    <HiArrowPath className="w-5 h-5 animate-spin text-gray-400" />
-                                                    <span className="ml-2 text-xs text-gray-500">Searching OpenRouter...</span>
-                                                </div>
-                                            ) : selectableItems.length === 0 ? (
-                                                <p className={`px-3 py-5 text-xs text-center ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>No models match your search</p>
-                                            ) : (
-                                                <>
-                                                    {recentModelItems.length > 0 && (
-                                                        <div className="mb-2">
-                                                            <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>Recent Models</div>
-                                                            {recentModelItems.map((opt, idx) => renderModelOption(opt, idx, opt._type))}
-                                                        </div>
-                                                    )}
 
-                                                    <div className="mb-2">
-                                                        <div className={`px-3 py-2 flex items-center justify-between gap-2 ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
-                                                            <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
-                                                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${ollamaStatusDot}`} />
-                                                                Ollama
-                                                            </span>
-                                                            <span className="flex items-center gap-0.5">
-                                                                {ollamaStatus === 'connected' && (
-                                                                    <button type="button" onClick={onOllamaRefresh} className={`p-1 rounded transition-colors ${isDark ? 'hover:bg-white/10 text-gray-400 hover:text-gray-200' : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'}`} title="Refresh local models" aria-label="Refresh local models">
-                                                                        <HiArrowPath className="w-3.5 h-3.5" />
-                                                                    </button>
-                                                                )}
-                                                                <button type="button" onClick={onOpenOllamaSettings} className={`p-1 rounded transition-colors ${isDark ? 'hover:bg-white/10 text-gray-400 hover:text-gray-200' : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'}`} title="Ollama connection settings" aria-label="Ollama connection settings">
-                                                                    <HiOutlineCog6Tooth className="w-3.5 h-3.5" />
-                                                                </button>
-                                                            </span>
-                                                        </div>
-
-                                                        {ollamaStatus === 'connecting' && (
-                                                            <div className="flex items-center gap-2 px-3 py-3 text-xs text-gray-500">
-                                                                <HiArrowPath className="w-4 h-4 animate-spin" />
-                                                                Connecting to Ollama...
-                                                            </div>
-                                                        )}
-
-                                                        {ollamaStatus === 'connected' && filteredOllamaModels.length === 0 && !modelSearchQuery && (
-                                                            <p className={`px-3 py-2.5 text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                                                                Connected, but no models installed. Pull one with <code className="font-mono">ollama pull llama3.2</code>.
-                                                            </p>
-                                                        )}
-
-                                                        {ollamaStatus === 'connected' && filteredOllamaModels.map((opt, idx) =>
-                                                            renderModelOption(opt, recentModelItems.length + idx, 'text')
-                                                        )}
-
-                                                        {ollamaStatus === 'error' && (
-                                                            <div className={`mx-2 my-1.5 px-2.5 py-2 rounded-lg text-xs flex items-center justify-between gap-2 ${isDark ? 'bg-red-500/10 text-red-300' : 'bg-red-50 text-red-600'}`}>
-                                                                <span>Connection failed</span>
-                                                                <button type="button" onClick={onOpenOllamaSettings} className="font-semibold underline underline-offset-2 hover:opacity-80">
-                                                                    Retry
-                                                                </button>
-                                                            </div>
-                                                        )}
-
-                                                        {ollamaStatus === 'disconnected' && (
-                                                            <button type="button" onClick={onOpenOllamaSettings} className={`w-full flex items-center gap-2.5 px-2.5 py-2 text-sm rounded-lg border border-dashed transition-colors ${isDark ? 'border-gray-700 text-gray-400 hover:border-teal-500/50 hover:text-teal-300' : 'border-gray-300 text-gray-500 hover:border-teal-500/60 hover:text-teal-600'}`}>
-                                                                <HiOutlineCpuChip className="w-4 h-4 flex-shrink-0" />
-                                                                <span className="text-xs font-medium">Connect to Ollama</span>
-                                                            </button>
-                                                        )}
-                                                    </div>
-
-                                                    <div className="mb-2">
-                                                        <div className={`px-3 py-2 flex items-center justify-between gap-2 ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>
-                                                            <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
-                                                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${chromeStatusDot}`} />
-                                                                Chromium AI
-                                                            </span>
-                                                            <button
-                                                                type="button"
-                                                                onClick={onOpenChromeAISettings}
-                                                                className={`p-1 rounded transition-colors ${isDark ? 'hover:bg-white/10 text-gray-400 hover:text-gray-200' : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'}`}
-                                                                title="Manage Chromium built-in models"
-                                                                aria-label="Manage Chromium built-in models"
-                                                            >
-                                                                <HiOutlineCog6Tooth className="w-3.5 h-3.5" />
-                                                            </button>
-                                                        </div>
-                                                        {selectableChromeModels.map((opt, idx) =>
-                                                            renderModelOption(opt, recentModelItems.length + filteredOllamaModels.length + idx, 'text')
-                                                        )}
-                                                        {disabledChromeModels.map(renderDisabledChromeOption)}
-                                                    </div>
-
-                                                    {filteredTextModels.length > 0 && (
-                                                        <div className="mb-2">
-                                                            <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>Text Models</div>
-                                                            {filteredTextModels.map((opt, idx) => renderModelOption(opt, recentModelItems.length + filteredOllamaModels.length + selectableChromeModels.length + idx, 'text'))}
-                                                        </div>
-                                                    )}
-                                                    {filteredAudioModels.length > 0 && (
-                                                        <div>
-                                                            <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'}`}>Audio Models</div>
-                                                            {filteredAudioModels.map((opt, idx) => renderModelOption(opt, recentModelItems.length + filteredOllamaModels.length + selectableChromeModels.length + filteredTextModels.length + idx, 'audio'))}
-                                                        </div>
-                                                    )}
-                                                </>
-                                            )}
-                                        </div>
-                                        <div className={`px-3 py-2 border-t flex items-center justify-between gap-2 shrink-0 text-[10px] ${isDark ? 'border-gray-700/80 bg-gray-900/30 text-gray-600' : 'border-gray-100 bg-gray-50 text-gray-500'}`}>
-                                            <span className="font-mono font-bold">↑↓</span>
-                                            <span>Navigate</span>
-                                            <span className="font-mono font-bold">⏎</span>
-                                            <span>Select</span>
-                                            <span className="font-mono font-bold">Esc</span>
-                                            <span>Close</span>
+                            <ToolbarModal
+                                isOpen={isOverflowOpen}
+                                onClose={closeOverflowMenu}
+                                ariaLabel="More controls"
+                                triggerRef={overflowButtonRef}
+                                isDark={isDark}
+                                clipContent={false}
+                                header={
+                                    <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'
+                                        }`}>
+                                        More controls
+                                    </div>
+                                }
+                                bodyClassName="p-2 space-y-1"
+                            >
+                                {overflowMenuItems.map((item) => (
+                                    <div
+                                        key={item.key}
+                                        ref={item.key === 'model'
+                                            ? (el) => {
+                                                modelMenuRef.current = el;
+                                            }
+                                            : undefined}
+                                        className="flex w-full items-center justify-between gap-3"
+                                    >
+                                        <span className={`shrink-0 text-xs font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                            {item.label}
+                                        </span>
+                                        <div className="flex min-w-0 justify-end">
+                                            {item.render()}
                                         </div>
                                     </div>
-                                </div>
-                            )}
+                                ))}
+                            </ToolbarModal>
                         </div>
                     )}
-                    <ReasoningSelector efforts={reasoningEfforts} value={reasoningEffort} defaultEffort={defaultReasoningEffort} isDefault={isReasoningDefault} onChange={setReasoningEffort} />
-                    <ContextSelector value={contextLimit} onChange={setContextLimit} theme="dark" />
                 </div>
+
                 <div className="flex items-center chat-action-buttons relative flex-shrink-0">
                     {features.imageUpload && (
                         <AttachmentButton count={attachmentCount} onClick={onOpenAttachments} theme="dark" />
