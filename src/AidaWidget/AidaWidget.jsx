@@ -476,9 +476,9 @@ const AidaWidget = (props) => {
                 setIsFullscreen(false);
             }
         }
-    
+
         if (!historyUrl) return;
-    
+
         try {
             const target = new URL(historyUrl, window.location.href);
             if (target.href === window.location.href) {
@@ -487,7 +487,7 @@ const AidaWidget = (props) => {
         } catch {
             // fall through
         }
-    
+
         window.location.assign(historyUrl);
     }, [
         historyUrl,
@@ -839,6 +839,7 @@ const AidaWidget = (props) => {
                         onEmbedUrl={handleOpenEmbed}
                         onDeleteMessage={handleDeleteMessage}
                         onTextSelected={handleTextSelected}
+                        sessionCreatedAt={currentSession?.createdAt || currentSession?.created || null}
                     />
                     <ChatInput
                         handleSendMessage={stableHandleSendMessage}

@@ -211,7 +211,23 @@ const formatCost = (cost) => {
     return `$${cost.toFixed(4)}`;
 };
 
-const MessageInfoPopover = ({ meta, theme }) => {
+// Tries to parse a timestamp coming from either a message or the parent session.
+// The stored session in production is a JSON doc with `created`, and the local
+// dev adapter uses `createdAt`, so we accept a few naming variants.
+const resolveTimestamp = (raw) => {
+    if (!raw) return null;
+    if (typeof raw === 'number') {
+        const d = new Date(raw);
+        return Number.isNaN(d.getTime()) ? null : d;
+    }
+    if (typeof raw === 'string') {
+        const d = new Date(raw);
+        return Number.isNaN(d.getTime()) ? null : d;
+    }
+    return null;
+};
+
+const MessageInfoPopover = ({ meta, theme, createdAt }) => {
     const [isOpen, setIsOpen] = useState(false);
     const containerRef = useRef(null);
     const isDark = theme === 'dark';
@@ -230,18 +246,20 @@ const MessageInfoPopover = ({ meta, theme }) => {
         };
     }, [isOpen]);
 
-    if (!meta) return null;
+    const sentAt = resolveTimestamp(createdAt);
 
-    const rawModel = meta.model || '';
+    if (!meta && !sentAt) return null;
+
+    const rawModel = meta?.model || '';
     const modelDisplay = rawModel.replace(':online', '').replace(/^ollama:/, '').split('/').pop() || null;
-    const isWebSearch = meta.webSearchEnabled || rawModel.includes(':online');
+    const isWebSearch = meta?.webSearchEnabled || rawModel.includes(':online');
 
-    const tu = meta.tokenUsage;
+    const tu = meta?.tokenUsage;
     const hasTokens = tu && ((tu.total_tokens ?? 0) > 0 || (tu.input_tokens ?? 0) > 0);
     const reasoningTokens = tu?.output_token_details?.reasoning ?? 0;
-    const costDisplay = formatCost(meta.cost);
+    const costDisplay = formatCost(meta?.cost);
 
-    const hasAnything = modelDisplay || hasTokens || costDisplay || isWebSearch;
+    const hasAnything = modelDisplay || hasTokens || costDisplay || isWebSearch || sentAt;
     if (!hasAnything) return null;
 
     return (
@@ -272,6 +290,18 @@ const MessageInfoPopover = ({ meta, theme }) => {
                     <p className={`text-[10px] uppercase tracking-wider font-semibold mb-2.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                         Response Info
                     </p>
+
+                    {sentAt && (
+                        <div className="mb-2 font-mono text-xs">
+                            {/* Example output: "October 20, 2026, 9:21" */}
+                            {sentAt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                            ,{' '}
+                            {sentAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: false })}
+                        </div>
+                    )}
+                    {(modelDisplay || hasTokens || costDisplay || isWebSearch) && (
+                        <div className={`my-2.5 border-t ${isDark ? 'border-gray-700' : 'border-gray-100'}`} />
+                    )}
 
                     {modelDisplay && (
                         <div className="flex items-center justify-between gap-3 mb-1.5">
@@ -379,6 +409,7 @@ const ChatDisplay = ({
     onEmbedUrl,
     onDeleteMessage,
     onTextSelected,
+    sessionCreatedAt = null,
 }) => {
     const [copiedId, setCopiedId] = useState(null);
     const containerRef = useRef(null);
@@ -739,7 +770,7 @@ const ChatDisplay = ({
         const handleSelectionChange = () => {
 
             if (editingMessageIdRef.current) return;
-            
+
             const selection = window.getSelection();
             const inMessages = isSelectionInMessages();
             const text = selection?.toString().trim() || '';
@@ -825,6 +856,10 @@ const ChatDisplay = ({
                     if (hideBotMessage) return null;
 
                     const isPendingDelete = pendingDeleteId === message.id;
+
+                    // Prefer a message-level timestamp if the adapter provided one,
+                    // otherwise fall back to the session's creation time.
+                    const messageTimestamp = message.createdAt || message.created || sessionCreatedAt;
 
                     return (
                         <div
@@ -1075,8 +1110,12 @@ const ChatDisplay = ({
                                             </button>
                                         )}
 
-                                        {message.sender === 'bot' && message.meta && (
-                                            <MessageInfoPopover meta={message.meta} theme={theme} />
+                                        {message.sender === 'bot' && (message.meta || messageTimestamp) && (
+                                            <MessageInfoPopover
+                                                meta={message.meta}
+                                                theme={theme}
+                                                createdAt={messageTimestamp}
+                                            />
                                         )}
 
                                         {copiedId === message.id && (
