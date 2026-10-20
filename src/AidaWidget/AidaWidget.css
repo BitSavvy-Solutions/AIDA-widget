@@ -922,3 +922,7 @@ textarea.auto-expand {
   pointer-events: none;
   opacity: 0.7;
 }
+
+.model-label--min {
+  min-width: 10ch;
+}
