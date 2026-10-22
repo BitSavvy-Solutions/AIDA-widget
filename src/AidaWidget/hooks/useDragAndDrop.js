@@ -7,7 +7,13 @@ const TEXT_MIME_TYPES = /^text\//;
 const TEXT_EXTS = new Set([
     '.md', '.json', '.yml', '.yaml', '.ini', '.log', '.env', '.py', '.js', '.jsx',
     '.ts', '.tsx', '.html', '.css', '.scss', '.sh', '.bat', '.ps1', '.xml', '.csv',
-    '.java', '.c', '.cpp', '.h', '.cs', '.go', '.rb', '.php', '.sql', '.txt'
+    '.java', '.c', '.cpp', '.h', '.cs', '.go', '.rb', '.php', '.sql', '.txt',
+    // iOS Development Files
+    '.swift', '.m', '.mm', '.pch',
+    '.xib', '.storyboard',
+    '.pbxproj', '.plist', '.entitlements', '.xcconfig',
+    '.strings', '.stringsdict',
+    '.podspec', '.podfile', '.lock', '.xcscheme'
 ]);
 
 const isImageFile = (file) => file?.type.startsWith('image/') || (typeof file?.name === 'string' && IMAGE_FILE_PATTERN.test(file.name));

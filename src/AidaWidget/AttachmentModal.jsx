@@ -158,7 +158,7 @@ const AttachmentModal = ({
                                 {/* Hidden file inputs */}
                                 <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files || []); if (files.length) onAddImages(files); e.target.value = ''; }} />
                                 <input ref={pdfInputRef} type="file" accept="application/pdf" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files || []); if (files.length) onAddPdfs(files); e.target.value = ''; }} />
-                                <input ref={textInputRef} type="file" accept="text/*,.md,.json,.yml,.yaml,.ini,.log,.env,.py,.js,.jsx,.ts,.tsx,.html,.css,.scss,.sh,.bat,.ps1,.xml,.csv,.java,.c,.cpp,.h,.cs,.go,.rb,.php,.sql" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) onAddText(file); e.target.value = ''; }} />
+                                <input ref={textInputRef} type="file" accept="text/*,.md,.json,.yml,.yaml,.ini,.log,.env,.py,.js,.jsx,.ts,.tsx,.html,.css,.scss,.sh,.bat,.ps1,.xml,.csv,.java,.c,.cpp,.h,.cs,.go,.rb,.php,.sql,.txt,.swift,.m,.mm,.pch,.xib,.storyboard,.pbxproj,.plist,.entitlements,.xcconfig,.strings,.stringsdict,.podspec,.podfile,.lock,.xcscheme" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) onAddText(file); e.target.value = ''; }} />
 
                                 <input
                                     ref={folderInputRef}
