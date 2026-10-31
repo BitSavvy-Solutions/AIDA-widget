@@ -32,6 +32,7 @@ import { CHAT_URL, TRANSCRIPTION_URL, MODELS_URL } from './utils/apiConfig';
 import { getSupportedEfforts, getDefaultEffort, resolveEffort, buildReasoningConfig } from './utils/reasoning';
 
 const DEFAULT_MODELS = [
+    { value: 'deepseek/deepseek-v4.1-flash', label: 'Deepseek 4.1 Flash', category: 'reasoning' },    
     { value: 'deepseek/deepseek-v4-pro', label: 'Deepseek 4 Pro', category: 'reasoning' },
     { value: 'deepseek/deepseek-v3.2', label: 'Deepseek 3.2', category: 'reasoning' },
     { value: 'deepseek/deepseek-chat-v3-0324', label: 'Deepseek V3', category: 'reasoning' },
