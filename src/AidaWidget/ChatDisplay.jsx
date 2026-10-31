@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm';
 import {
     HiSpeakerWave, HiPlay, HiPause, HiPaperClip, HiChevronDown, HiChevronUp,
     HiClipboard, HiCheck, HiPencilSquare, HiInformationCircle, HiTrash,
-    HiExclamationTriangle, HiArrowDown, HiArrowUp
+    HiExclamationTriangle, HiArrowDown, HiArrowUp, HiChatBubbleLeftRight
 } from 'react-icons/hi2';
 import ReasoningDisplay from './ReasoningDisplay';
 import ShikiHighlighter, { isInlineCode } from 'react-shiki';
@@ -409,6 +409,9 @@ const ChatDisplay = ({
     onEmbedUrl,
     onDeleteMessage,
     sessionCreatedAt = null,
+    inputRef,
+    inputSelectionRef,
+
 }) => {
     const [copiedId, setCopiedId] = useState(null);
     const containerRef = useRef(null);
@@ -429,6 +432,13 @@ const ChatDisplay = ({
     const spacerRef = useRef(null);
     const prevMessageCountRef = useRef(messages.length);
     const lastPinnedUserIdRef = useRef(null);
+
+    // --- Text selection popover state ---
+    const [selectionMenuOpen, setSelectionMenuOpen] = useState(false);
+    const [selectionRect, setSelectionRect] = useState(null);
+    const selectedTextRef = useRef('');
+    const selectionAnchorRef = useRef(null);
+    const isSelectingRef = useRef(false);
 
     useEffect(() => { pinnedMessageIdRef.current = pinnedMessageId; }, [pinnedMessageId]);
 
@@ -742,6 +752,165 @@ const ChatDisplay = ({
         const t = setTimeout(() => setCopiedId(null), 1200);
         return () => clearTimeout(t);
     }, [copiedId]);
+
+    // --- Text selection popover: copy & quote helpers ---
+    const handleCopySelection = useCallback(async (text) => {
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+            }
+        } catch {
+            // ignore
+        }
+    }, []);
+
+    const insertQuote = useCallback((text) => {
+        if (!text || !inputRef?.current) return;
+
+        const el = inputRef.current;
+        el.focus();
+
+        let range = null;
+
+        // Use the saved input caret/selection if available
+        const savedRange = inputSelectionRef?.current;
+        if (savedRange) {
+            try {
+                if (el.contains(savedRange.commonAncestorContainer)) {
+                    range = savedRange.cloneRange();
+                }
+            } catch {
+                range = null;
+            }
+        }
+
+        // Fallback: insert at the end of the input
+        if (!range) {
+            range = document.createRange();
+            range.selectNodeContents(el);
+            range.collapse(false);
+        }
+
+        // Replace any selected text in the input with the quote
+        range.deleteContents();
+
+        const safeText = text.replace(/"/g, '\\"');
+        const quoted = `"${safeText}" `;
+
+        const textNode = document.createTextNode(quoted);
+        range.insertNode(textNode);
+
+        // Move caret after the inserted quote
+        range.setStartAfter(textNode);
+        range.setEndAfter(textNode);
+
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+
+        // Update the saved range so the next quote goes after this one
+        if (inputSelectionRef) {
+            inputSelectionRef.current = range.cloneRange();
+        }
+
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+    }, [inputRef, inputSelectionRef]);
+
+    // --- Text selection popover: detection ---
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        const checkSelection = () => {
+            const sel = window.getSelection();
+            if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+                setSelectionMenuOpen(false);
+                return;
+            }
+
+            const text = sel.toString().trim();
+            if (!text) {
+                setSelectionMenuOpen(false);
+                return;
+            }
+
+            const range = sel.getRangeAt(0);
+            if (!container.contains(range.commonAncestorContainer)) {
+                setSelectionMenuOpen(false);
+                return;
+            }
+
+            const rect = range.getBoundingClientRect();
+            if (rect.width === 0 && rect.height === 0) {
+                setSelectionMenuOpen(false);
+                return;
+            }
+
+            selectedTextRef.current = text;
+            setSelectionRect({
+                top: rect.bottom,
+                left: rect.left,
+                width: rect.width,
+                height: rect.height,
+            });
+            setSelectionMenuOpen(true);
+        };
+
+        let isPointerDown = false;
+
+        const onPointerDown = (e) => {
+            // Ignore clicks inside any popover/dialog
+            if (e.target.closest('[role="dialog"]')) return;
+            isPointerDown = true;
+            setSelectionMenuOpen(false);
+        };
+
+        const onPointerUp = (e) => {
+            if (e.target.closest('[role="dialog"]')) return;
+            isPointerDown = false;
+            // Defer so the browser finalizes the selection before we read it
+            setTimeout(checkSelection, 0);
+        };
+
+        const onSelectionChange = () => {
+            // Ignore selection changes emitted mid-drag; we handle those on pointerup.
+            // This branch is what lets keyboard selections (Shift+Arrow) still work.
+            if (isPointerDown) return;
+            checkSelection();
+        };
+
+        document.addEventListener('pointerdown', onPointerDown);
+        document.addEventListener('pointerup', onPointerUp);
+        document.addEventListener('selectionchange', onSelectionChange);
+
+        return () => {
+            document.removeEventListener('pointerdown', onPointerDown);
+            document.removeEventListener('pointerup', onPointerUp);
+            document.removeEventListener('selectionchange', onSelectionChange);
+        };
+    }, []);
+
+    // Close the selection popover on scroll or resize
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+        const closeMenu = () => setSelectionMenuOpen(false);
+        container.addEventListener('scroll', closeMenu, { passive: true });
+        window.addEventListener('resize', closeMenu);
+        return () => {
+            container.removeEventListener('scroll', closeMenu);
+            window.removeEventListener('resize', closeMenu);
+        };
+    }, []);
 
     const isDark = theme === 'dark';
     const activeStartIndex = Math.max(0, messages.length - contextLimit);
@@ -1100,6 +1269,52 @@ const ChatDisplay = ({
                     <HiArrowDown className="w-4 h-4" />
                 </button>
             )}
+
+            {/* Invisible anchor used to position the text-selection popover */}
+            {selectionMenuOpen && selectionRect && (
+                <span
+                    ref={selectionAnchorRef}
+                    aria-hidden="true"
+                    style={{
+                        position: 'fixed',
+                        top: selectionRect.top,
+                        left: selectionRect.left,
+                        width: 1,
+                        height: 1,
+                        pointerEvents: 'none',
+                        opacity: 0,
+                    }}
+                />
+            )}
+
+            <LinkPopover
+                open={selectionMenuOpen}
+                onOpenChange={(open) => {
+                    setSelectionMenuOpen(open);
+                    // Only clear the chat selection if the input is not focused.
+                    // This prevents the cursor from being removed after inserting a quote.
+                    if (!open && document.activeElement !== inputRef.current) {
+                        window.getSelection()?.removeAllRanges();
+                    }
+                }}
+                anchorRef={selectionAnchorRef}
+                theme={theme}
+                title="Selected text"
+                actions={[
+                    {
+                        id: 'quote',
+                        label: 'Quote text',
+                        icon: HiChatBubbleLeftRight,
+                        onClick: () => insertQuote(selectedTextRef.current),
+                    },
+                    {
+                        id: 'copy',
+                        label: 'Copy',
+                        icon: HiClipboard,
+                        onClick: () => handleCopySelection(selectedTextRef.current),
+                    },
+                ]}
+            />
         </div>
     );
 };

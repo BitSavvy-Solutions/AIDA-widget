@@ -145,6 +145,7 @@ const ChatInput = ({
     handleSendMessage,
     handleRecordButtonClick,
     inputRef,
+    inputSelectionRef,
     isLoading,
     isTranscribing,
     isRecording,
@@ -481,6 +482,16 @@ const ChatInput = ({
         }
     }, [inputRef]);
 
+    const saveInputSelection = useCallback(() => {
+        const div = inputRef.current;
+        if (!div || !inputSelectionRef) return;
+
+        const sel = window.getSelection();
+        if (sel.rangeCount > 0 && div.contains(sel.anchorNode)) {
+            inputSelectionRef.current = sel.getRangeAt(0).cloneRange();
+        }
+    }, [inputRef, inputSelectionRef]);
+
     const insertCapsule = (recordingId) => {
         const div = inputRef.current;
         if (!div) return;
@@ -676,8 +687,8 @@ const ChatInput = ({
                 onClick={onSend}
                 disabled={isDisabled}
                 className={`ml-2 p-2 rounded-full transition-opacity disabled:opacity-50 ${isDark
-                        ? isDisabled ? 'bg-gray-600' : 'bg-gray-700 hover:bg-gray-600'
-                        : isDisabled ? 'bg-gray-300' : 'bg-gray-900 hover:bg-gray-700'
+                    ? isDisabled ? 'bg-gray-600' : 'bg-gray-700 hover:bg-gray-600'
+                    : isDisabled ? 'bg-gray-300' : 'bg-gray-900 hover:bg-gray-700'
                     } ${visibilityClass}`}
                 aria-label="Send Message"
             >
@@ -742,8 +753,8 @@ const ChatInput = ({
             type="button"
             onClick={onOpenChromeAISettings}
             className={`w-full text-left px-2.5 py-2 text-sm rounded-lg flex items-start gap-2.5 transition-colors border border-dashed ${isDark
-                    ? 'border-gray-700 text-gray-400 hover:border-teal-500/50 hover:text-teal-300'
-                    : 'border-gray-300 text-gray-500 hover:border-teal-500/60 hover:text-teal-600'
+                ? 'border-gray-700 text-gray-400 hover:border-teal-500/50 hover:text-teal-300'
+                : 'border-gray-300 text-gray-500 hover:border-teal-500/60 hover:text-teal-600'
                 }`}
         >
             <div className={`p-1.5 rounded-md flex-shrink-0 mt-0.5 ${isDark ? 'bg-teal-500/10 text-teal-400' : 'bg-teal-50 text-teal-600'}`}>
@@ -794,8 +805,8 @@ const ChatInput = ({
                 <div className="flex flex-col min-w-0 flex-1 gap-0.5">
                     <div className="flex items-center justify-between gap-2">
                         <span className={`font-semibold text-sm truncate ${isSelected
-                                ? isDark ? 'text-white' : 'text-gray-900'
-                                : isDark ? 'text-gray-200' : 'text-gray-800'
+                            ? isDark ? 'text-white' : 'text-gray-900'
+                            : isDark ? 'text-gray-200' : 'text-gray-800'
                             }`}>
                             {opt.label}
                         </span>
@@ -854,8 +865,8 @@ const ChatInput = ({
             onClick={() => setIsWebSearchEnabled((p) => !p)}
             disabled={isLocalModelSelected}
             className={`p-2 rounded-full disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0 ${isWebSearchEnabled && !isLocalModelSelected
-                    ? isDark ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-100 text-blue-600'
-                    : isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'
+                ? isDark ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-100 text-blue-600'
+                : isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'
                 }`}
             aria-pressed={isWebSearchEnabled && !isLocalModelSelected}
             aria-label="Toggle web search"
@@ -978,8 +989,8 @@ const ChatInput = ({
                                                 type="button"
                                                 onClick={onOllamaRefresh}
                                                 className={`p-1 rounded transition-colors ${isDark
-                                                        ? 'hover:bg-white/10 text-gray-400 hover:text-gray-200'
-                                                        : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'
+                                                    ? 'hover:bg-white/10 text-gray-400 hover:text-gray-200'
+                                                    : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'
                                                     }`}
                                                 title="Refresh local models"
                                                 aria-label="Refresh local models"
@@ -991,8 +1002,8 @@ const ChatInput = ({
                                             type="button"
                                             onClick={onOpenOllamaSettings}
                                             className={`p-1 rounded transition-colors ${isDark
-                                                    ? 'hover:bg-white/10 text-gray-400 hover:text-gray-200'
-                                                    : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'
+                                                ? 'hover:bg-white/10 text-gray-400 hover:text-gray-200'
+                                                : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'
                                                 }`}
                                             title="Ollama connection settings"
                                             aria-label="Ollama connection settings"
@@ -1040,8 +1051,8 @@ const ChatInput = ({
                                         type="button"
                                         onClick={onOpenOllamaSettings}
                                         className={`w-full flex items-center gap-2.5 px-2.5 py-2 text-sm rounded-lg border border-dashed transition-colors ${isDark
-                                                ? 'border-gray-700 text-gray-400 hover:border-teal-500/50 hover:text-teal-300'
-                                                : 'border-gray-300 text-gray-500 hover:border-teal-500/60 hover:text-teal-600'
+                                            ? 'border-gray-700 text-gray-400 hover:border-teal-500/50 hover:text-teal-300'
+                                            : 'border-gray-300 text-gray-500 hover:border-teal-500/60 hover:text-teal-600'
                                             }`}
                                     >
                                         <HiOutlineCpuChip className="w-4 h-4 flex-shrink-0" />
@@ -1061,8 +1072,8 @@ const ChatInput = ({
                                         type="button"
                                         onClick={onOpenChromeAISettings}
                                         className={`p-1 rounded transition-colors ${isDark
-                                                ? 'hover:bg-white/10 text-gray-400 hover:text-gray-200'
-                                                : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'
+                                            ? 'hover:bg-white/10 text-gray-400 hover:text-gray-200'
+                                            : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'
                                             }`}
                                         title="Manage Chromium built-in models"
                                         aria-label="Manage Chromium built-in models"
@@ -1297,8 +1308,15 @@ const ChatInput = ({
                 <div
                     ref={inputRef}
                     contentEditable="true"
-                    onInput={adjustInputHeight}
+                    onInput={() => {
+                        adjustInputHeight();
+                        saveInputSelection();
+                    }}
                     onKeyDown={handleKeyDown}
+                    onKeyUp={saveInputSelection}
+                    onMouseUp={saveInputSelection}
+                    onClick={saveInputSelection}
+                    onBlur={saveInputSelection}
                     onPaste={handlePaste}
                     data-placeholder={translations.inputPlaceholder || 'Type your message...'}
                     dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'}
@@ -1352,8 +1370,8 @@ const ChatInput = ({
                                 type="button"
                                 onClick={() => setIsOverflowOpen((open) => !open)}
                                 className={`p-2 rounded-full border transition-colors ${isDark
-                                        ? 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
-                                        : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-100'
+                                    ? 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
+                                    : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-100'
                                     }`}
                                 aria-label="More controls"
                                 title="More controls"

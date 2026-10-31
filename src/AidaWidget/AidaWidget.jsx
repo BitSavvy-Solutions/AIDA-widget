@@ -250,6 +250,7 @@ const AidaWidget = (props) => {
     const [sessionToShare, setSessionToShare] = useState(null);
 
     const inputRef = useRef(null);
+    const inputSelectionRef = useRef(null);
     const [isMobileViewport, setIsMobileViewport] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
     const siteLanguage = language || 'en';
 
@@ -821,11 +822,14 @@ const AidaWidget = (props) => {
                         onEmbedUrl={handleOpenEmbed}
                         onDeleteMessage={handleDeleteMessage}
                         sessionCreatedAt={currentSession?.createdAt || currentSession?.created || null}
+                        inputRef={inputRef}
+                        inputSelectionRef={inputSelectionRef}
                     />
                     <ChatInput
                         handleSendMessage={stableHandleSendMessage}
                         handleRecordButtonClick={handleRecordButtonClick}
                         inputRef={inputRef}
+                        inputSelectionRef={inputSelectionRef}
                         isLoading={isLoading}
                         isTranscribing={isTranscribing}
                         isRecording={isRecording}
