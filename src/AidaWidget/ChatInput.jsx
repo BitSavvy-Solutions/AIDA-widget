@@ -6,7 +6,7 @@ import {
     HiChevronDown, HiOutlineGlobeAlt, HiLightBulb, HiPhoto, HiChatBubbleLeftRight,
     HiArrowTopRightOnSquare, HiPaperClip, HiEye, HiMagnifyingGlass,
     HiOutlineDocument, HiOutlineRectangleStack, HiPlay, HiPause, HiArrowDownTray,
-    HiOutlineCpuChip, HiOutlineCog6Tooth, HiCheck, HiChevronUp,
+    HiOutlineCpuChip, HiOutlineCog6Tooth, HiChevronUp,
 } from 'react-icons/hi2';
 import AttachmentButton from './AttachmentButton';
 import ContextSelector from './ContextSelector';
@@ -96,56 +96,6 @@ const AudioCapsule = ({ recording, onDownload, onRetranscribe, onRemove }) => {
                 <HiXMark className="w-3 h-3" />
             </button>
             {error && <span className="capsule-error">{error}</span>}
-        </span>
-    );
-};
-
-const QuotedTextPill = ({ text, onCommit, onDismiss, theme = 'dark' }) => {
-    const MAX_VISIBLE_CHARS = 70;
-    const displayText = text.length > MAX_VISIBLE_CHARS
-        ? `${text.slice(0, 35)} ... ${text.slice(-30)}`
-        : text;
-
-    const isDark = theme === 'dark';
-
-    return (
-        <span
-            className={`inline-flex items-center gap-1.5 align-middle mx-1 px-2 py-1 rounded-full border text-xs select-none ${isDark
-                    ? 'bg-blue-500/15 border-blue-500/40 text-blue-200'
-                    : 'bg-blue-50 border-blue-200 text-blue-700'
-                }`}
-            contentEditable={false}
-            onMouseDown={(e) => e.stopPropagation()}
-        >
-            <span className="truncate max-w-[220px]" title={text}>
-                &ldquo;{displayText}&rdquo;
-            </span>
-            <button
-                type="button"
-                onClick={(e) => {
-                    e.stopPropagation();
-                    onCommit();
-                }}
-                className={`p-0.5 rounded-full transition-colors ${isDark ? 'hover:bg-blue-400/30 text-blue-200' : 'hover:bg-blue-200 text-blue-700'
-                    }`}
-                title="Add quote to message"
-                aria-label="Add quote to message"
-            >
-                <HiCheck className="w-3.5 h-3.5" />
-            </button>
-            <button
-                type="button"
-                onClick={(e) => {
-                    e.stopPropagation();
-                    onDismiss();
-                }}
-                className={`p-0.5 rounded-full transition-colors ${isDark ? 'hover:bg-white/10 text-blue-300/70' : 'hover:bg-blue-200 text-blue-600/70'
-                    }`}
-                title="Dismiss quote"
-                aria-label="Dismiss quote"
-            >
-                <HiXMark className="w-3.5 h-3.5" />
-            </button>
         </span>
     );
 };
@@ -247,13 +197,9 @@ const ChatInput = ({
     onOllamaRefresh,
     onOpenOllamaSettings,
     onOpenChromeAISettings,
-    pendingQuotedText,
-    onCommitQuotedText,
-    onDismissQuotedText,
 }) => {
     const [isHoveringSend, setIsHoveringSend] = useState(false);
     const [isHoveringRecord, setIsHoveringRecord] = useState(false);
-    const [isHoveringCancel, setIsHoveringCancel] = useState(false);
 
     const [capsuleRenderTick, setCapsuleRenderTick] = useState(0);
 
@@ -608,91 +554,6 @@ const ChatInput = ({
         }
     }, [recordings, adjustInputHeight]);
 
-    const lastInputRangeRef = useRef(null);
-
-    const saveInputSelection = useCallback(() => {
-        const div = inputRef.current;
-        const sel = window.getSelection();
-        if (div && sel.rangeCount > 0 && div.contains(sel.anchorNode)) {
-            lastInputRangeRef.current = sel.getRangeAt(0).cloneRange();
-        }
-    }, [inputRef]);
-
-    const insertQuotedTextPlaceholder = useCallback(() => {
-        const div = inputRef.current;
-        if (!div || !pendingQuotedText) return;
-
-        const existing = document.getElementById('quoted-text-pill');
-        if (existing) return;
-
-        const sel = window.getSelection();
-        const savedRange = lastInputRangeRef.current;
-        let range;
-
-        if (savedRange && div.contains(savedRange.commonAncestorContainer)) {
-            range = savedRange.cloneRange();
-        } else if (sel.rangeCount > 0 && div.contains(sel.anchorNode)) {
-            range = sel.getRangeAt(0).cloneRange();
-        } else {
-            range = document.createRange();
-            range.selectNodeContents(div);
-            range.collapse(false);
-        }
-
-        range.deleteContents();
-        const span = document.createElement('span');
-        span.contentEditable = 'false';
-        span.id = 'quoted-text-pill';
-        span.className = 'quoted-text-pill-container';
-        range.insertNode(span);
-
-        const newRange = document.createRange();
-        newRange.setStartAfter(span);
-        newRange.setEndAfter(span);
-        sel.removeAllRanges();
-        sel.addRange(newRange);
-
-        lastInputRangeRef.current = newRange.cloneRange();
-        adjustInputHeight();
-    }, [inputRef, pendingQuotedText, adjustInputHeight]);
-
-    useEffect(() => {
-        if (pendingQuotedText) {
-            insertQuotedTextPlaceholder();
-        } else {
-            const existing = document.getElementById('quoted-text-pill');
-            if (existing) existing.remove();
-            lastInputRangeRef.current = null;
-        }
-    }, [pendingQuotedText, insertQuotedTextPlaceholder]);
-
-    const commitQuotedText = useCallback(() => {
-        const placeholder = document.getElementById('quoted-text-pill');
-        if (!placeholder || !pendingQuotedText) return;
-
-        const textNode = document.createTextNode(`"${pendingQuotedText}" `);
-        placeholder.parentNode.replaceChild(textNode, placeholder);
-
-        const sel = window.getSelection();
-        const range = document.createRange();
-        range.setStartAfter(textNode);
-        range.setEndAfter(textNode);
-        sel.removeAllRanges();
-        sel.addRange(range);
-
-        lastInputRangeRef.current = range.cloneRange();
-        onCommitQuotedText();
-        adjustInputHeight();
-    }, [pendingQuotedText, onCommitQuotedText, adjustInputHeight]);
-
-    const dismissQuotedText = useCallback(() => {
-        const placeholder = document.getElementById('quoted-text-pill');
-        if (placeholder) placeholder.remove();
-        lastInputRangeRef.current = null;
-        onDismissQuotedText();
-        adjustInputHeight();
-    }, [onDismissQuotedText, adjustInputHeight]);
-
     const getMessageText = () => {
         const div = inputRef.current;
         if (!div) return '';
@@ -701,8 +562,8 @@ const ChatInput = ({
             if (node.nodeType === Node.TEXT_NODE) {
                 text += node.textContent;
             } else if (node.nodeType === Node.ELEMENT_NODE) {
-                if (node.id.startsWith('capsule-') || node.id === 'quoted-text-pill') {
-                    // skip capsules and pending quote pill
+                if (node.id.startsWith('capsule-')) {
+                    // skip capsules
                 } else {
                     text += node.innerText;
                 }
@@ -712,9 +573,6 @@ const ChatInput = ({
     };
 
     const onSend = () => {
-        if (pendingQuotedText) {
-            commitQuotedText();
-        }
         const text = getMessageText();
         handleSendMessage(text);
         if (inputRef.current) {
@@ -1441,10 +1299,6 @@ const ChatInput = ({
                     contentEditable="true"
                     onInput={adjustInputHeight}
                     onKeyDown={handleKeyDown}
-                    onKeyUp={saveInputSelection}
-                    onMouseUp={saveInputSelection}
-                    onClick={saveInputSelection}
-                    onBlur={saveInputSelection}
                     onPaste={handlePaste}
                     data-placeholder={translations.inputPlaceholder || 'Type your message...'}
                     dir={siteLanguage === 'ar' ? 'rtl' : 'ltr'}
@@ -1471,20 +1325,6 @@ const ChatInput = ({
                     el
                 );
             })}
-
-            {pendingQuotedText && (() => {
-                const el = document.getElementById('quoted-text-pill');
-                if (!el) return null;
-                return createPortal(
-                    <QuotedTextPill
-                        text={pendingQuotedText}
-                        theme={theme}
-                        onCommit={commitQuotedText}
-                        onDismiss={dismissQuotedText}
-                    />,
-                    el
-                );
-            })()}
 
             <div className="flex items-center justify-between">
                 <div ref={leftToolbarRef} className="relative flex items-center min-w-0 flex-1 mr-2 gap-2">

@@ -408,7 +408,6 @@ const ChatDisplay = ({
     onScrapeUrl,
     onEmbedUrl,
     onDeleteMessage,
-    onTextSelected,
     sessionCreatedAt = null,
 }) => {
     const [copiedId, setCopiedId] = useState(null);
@@ -416,11 +415,6 @@ const ChatDisplay = ({
     const messageBodyRefs = useRef(new Map());
     const messageRefs = useRef(new Map());
     const editInputRef = useRef(null);
-
-    const editingMessageIdRef = useRef(editingMessageId);
-    useEffect(() => {
-        editingMessageIdRef.current = editingMessageId;
-    }, [editingMessageId]);
 
     const [isAtBottom, setIsAtBottom] = useState(true);
     const [hasNewContent, setHasNewContent] = useState(false);
@@ -751,68 +745,6 @@ const ChatDisplay = ({
 
     const isDark = theme === 'dark';
     const activeStartIndex = Math.max(0, messages.length - contextLimit);
-
-    // --- Text selection handling ------------------------------------------------
-    const selectionTimeoutRef = useRef(null);
-    const lastSelectionRef = useRef('');
-
-    useEffect(() => {
-        if (!onTextSelected) return;
-
-        const isSelectionInMessages = () => {
-            const selection = window.getSelection();
-            if (!selection || !selection.rangeCount) return false;
-            const range = selection.getRangeAt(0);
-            const container = containerRef.current;
-            return container && container.contains(range.commonAncestorContainer);
-        };
-
-        const handleSelectionChange = () => {
-
-            if (editingMessageIdRef.current) return;
-
-            const selection = window.getSelection();
-            const inMessages = isSelectionInMessages();
-            const text = selection?.toString().trim() || '';
-
-            if (selectionTimeoutRef.current) {
-                clearTimeout(selectionTimeoutRef.current);
-            }
-
-            if (!text) {
-                selectionTimeoutRef.current = setTimeout(() => {
-                    const currentSel = window.getSelection();
-                    const currentRange = currentSel?.rangeCount ? currentSel.getRangeAt(0) : null;
-                    const container = containerRef.current;
-                    const stillInMessages = currentRange && container && container.contains(currentRange.commonAncestorContainer);
-                    const currentText = currentSel?.toString().trim() || '';
-                    if (!currentText && stillInMessages && lastSelectionRef.current) {
-                        lastSelectionRef.current = '';
-                        onTextSelected('');
-                    }
-                }, 150);
-                return;
-            }
-
-            selectionTimeoutRef.current = setTimeout(() => {
-                const currentSel = window.getSelection();
-                const currentRange = currentSel?.rangeCount ? currentSel.getRangeAt(0) : null;
-                const container = containerRef.current;
-                const stillInMessages = currentRange && container && container.contains(currentRange.commonAncestorContainer);
-                const currentText = currentSel?.toString().trim() || '';
-                if (currentText && stillInMessages && currentText !== lastSelectionRef.current) {
-                    lastSelectionRef.current = currentText;
-                    onTextSelected(currentText);
-                }
-            }, 200);
-        };
-
-        document.addEventListener('selectionchange', handleSelectionChange);
-        return () => {
-            document.removeEventListener('selectionchange', handleSelectionChange);
-            if (selectionTimeoutRef.current) clearTimeout(selectionTimeoutRef.current);
-        };
-    }, [onTextSelected]);
 
     return (
         <div className="relative flex-1 min-h-0 flex flex-col" style={{ backgroundColor: 'var(--aida-body-bg)', color: 'var(--aida-body-text)' }}>
@@ -1147,25 +1079,6 @@ const ChatDisplay = ({
                         </span>
                         <HiArrowUp className="w-4 h-4" />
                     </div>
-                </button>
-            )}
-
-            {!isAtBottom && (
-                <button
-                    type="button"
-                    onClick={scrollToBottom}
-                    aria-label="Scroll to latest message"
-                    title={hasNewContent ? 'New message. Click to scroll.' : 'Scroll to latest message'}
-                    className={`absolute bottom-4 right-4 z-10 rounded-full p-2 shadow-lg border transition-all hover:scale-105 ${hasNewContent
-                        ? (isDark
-                            ? 'bg-gray-800 border-green-400 text-green-400 hover:bg-gray-700 hover:text-green-300'
-                            : 'bg-white border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700')
-                        : (isDark
-                            ? 'bg-gray-800 border-gray-700 text-gray-300 hover:text-white'
-                            : 'bg-white border-gray-200 text-gray-500 hover:text-gray-800')
-                        }`}
-                >
-                    <HiArrowDown className="w-4 h-4" />
                 </button>
             )}
 
