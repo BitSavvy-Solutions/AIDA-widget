@@ -126,21 +126,47 @@ const AidaWidget = (props) => {
         }
     });
 
-    useEffect(() => {
-        const loadModels = async () => {
-            try {
-                const res = await fetch(MODELS_URL);
-                if (!res.ok) throw new Error('Failed to fetch models');
-                const data = await res.json();
-
-                setFetchedModels(normalizeModels(data.text));
-                setFetchedAudioModels(normalizeModels(data.audio));
-            } catch (err) {
-                console.error('Failed to load models from API:', err);
-            }
-        };
-        loadModels();
-    }, []);
+        // Load models from API and resolve metadata for the currently selected model
+        useEffect(() => {
+            const loadModels = async () => {
+                try {
+                    const res = await fetch(MODELS_URL);
+                    if (!res.ok) throw new Error('Failed to fetch models');
+                    const data = await res.json();
+    
+                    const textModels = normalizeModels(data.text);
+                    const audioModels = normalizeModels(data.audio);
+                    setFetchedModels(textModels);
+                    setFetchedAudioModels(audioModels);
+    
+                    // If the currently selected model is not in the fetched list, search for it
+                    const selectedValue = selectedModel?.value;
+                    if (selectedValue && !selectedValue.startsWith('ollama:') && !selectedValue.startsWith('chrome:')) {
+                        const found = textModels.find(m => m.value === selectedValue) || audioModels.find(m => m.value === selectedValue);
+                        if (!found) {
+                            // Search for the model by name to get its metadata
+                            try {
+                                const searchRes = await fetch(`${MODELS_URL}?q=${encodeURIComponent(selectedValue)}`);
+                                if (searchRes.ok) {
+                                    const searchData = await searchRes.json();
+                                    const searchTextModels = normalizeModels(searchData.text || []);
+                                    const searchAudioModels = normalizeModels(searchData.audio || []);
+                                    const foundInSearch = searchTextModels.find(m => m.value === selectedValue) || searchAudioModels.find(m => m.value === selectedValue);
+                                    if (foundInSearch) {
+                                        setSelectedModel(foundInSearch);
+                                    }
+                                }
+                            } catch (searchErr) {
+                                console.warn('Failed to search for selected model metadata:', searchErr);
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error('Failed to load models from API:', err);
+                }
+            };
+            loadModels();
+        }, []); // Run once on mount
 
     const availableModels = (fetchedModels.length > 0) ? fetchedModels : ((models && models.length > 0) ? models : DEFAULT_MODELS);
     const availableAudioModels = (fetchedAudioModels.length > 0) ? fetchedAudioModels : ((audioModels && audioModels.length > 0) ? audioModels : DEFAULT_AUDIO_MODELS);
