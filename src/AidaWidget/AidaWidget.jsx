@@ -186,20 +186,36 @@ const AidaWidget = (props) => {
             }
             return next;
         });
+
+        // Store the full model object as the selected model
+        if (model && model.value) {
+            if (modelType === 'audio') {
+                setSelectedAudioModel(model);
+            } else {
+                setSelectedModel(model);
+            }
+        }
     }, []);
 
+    // Initialize selectedModel and selectedAudioModel as objects
     const [selectedModel, setSelectedModel] = useState(() => {
         const saved = localStorage.getItem('aida-selected-model');
-        if (saved?.startsWith('ollama:') || saved?.startsWith('chrome:')) return saved;
-        const exists = availableModels.some((m) => m.value === saved);
-        return exists ? saved : availableModels[0].value;
+        if (saved?.startsWith('ollama:') || saved?.startsWith('chrome:')) {
+            return { value: saved };
+        }
+        const fallbackModels = (models && models.length > 0) ? models : DEFAULT_MODELS;
+        const found = fallbackModels.find((m) => m.value === saved);
+        return found || fallbackModels[0];
     });
 
     const [selectedAudioModel, setSelectedAudioModel] = useState(() => {
         const saved = localStorage.getItem('aida-selected-audio-model');
-        if (saved?.startsWith('chrome:')) return saved;
-        const exists = availableAudioModels.some((m) => m.value === saved);
-        return exists ? saved : availableAudioModels[0].value;
+        if (saved?.startsWith('chrome:')) {
+            return { value: saved };
+        }
+        const fallbackAudio = (audioModels && audioModels.length > 0) ? audioModels : DEFAULT_AUDIO_MODELS;
+        const found = fallbackAudio.find((m) => m.value === saved);
+        return found || fallbackAudio[0];
     });
 
     const [contextLimit, setContextLimit] = useState(() => {
@@ -219,15 +235,64 @@ const AidaWidget = (props) => {
 
     const [isAppearanceModalOpen, setIsAppearanceModalOpen] = useState(false);
 
-    useEffect(() => { localStorage.setItem('aida-selected-model', selectedModel); }, [selectedModel]);
-    useEffect(() => { localStorage.setItem('aida-selected-audio-model', selectedAudioModel); }, [selectedAudioModel]);
+    useEffect(() => { localStorage.setItem('aida-selected-model', selectedModel?.value || ''); }, [selectedModel]);
+    useEffect(() => { localStorage.setItem('aida-selected-audio-model', selectedAudioModel?.value || ''); }, [selectedAudioModel]);
     useEffect(() => { localStorage.setItem('aida-context-limit', contextLimit); }, [contextLimit]);
+
+    const chromeAI = useChromeAI(true);
+    const ollama = useOllama();
+
+    // Helper: find full model object from available and local lists
+    const lookupModelObject = useCallback((value) => {
+        const allModels = [...availableModels, ...ollama.models, ...chromeAI.chatModels];
+        return allModels.find(m => m.value === value) || { value };
+    }, [availableModels, ollama.models, chromeAI.chatModels]);
+
+    const lookupAudioModelObject = useCallback((value) => {
+        const allAudio = [...availableAudioModels, ...chromeAI.audioModels];
+        return allAudio.find(m => m.value === value) || { value };
+    }, [availableAudioModels, chromeAI.audioModels]);
+
+    const handleSetSelectedModel = useCallback((model) => {
+        if (typeof model === 'string') {
+            const found = lookupModelObject(model);
+            setSelectedModel(found);
+        } else if (model && model.value) {
+            setSelectedModel(model);
+        }
+    }, [lookupModelObject]);
+
+    const handleSetSelectedAudioModel = useCallback((model) => {
+        if (typeof model === 'string') {
+            const found = lookupAudioModelObject(model);
+            setSelectedAudioModel(found);
+        } else if (model && model.value) {
+            setSelectedAudioModel(model);
+        }
+    }, [lookupAudioModelObject]);
+
+    // Adapter for useAttachments which expects a setter that can handle string or updater function
+    const handleSetSelectedModelForAttachments = useCallback((arg) => {
+        if (typeof arg === 'function') {
+            setSelectedModel(prev => {
+                const prevValue = typeof prev === 'string' ? prev : prev?.value;
+                const nextValue = arg(prevValue);
+                const nextObj = lookupModelObject(nextValue) || { value: nextValue };
+                return nextObj;
+            });
+        } else {
+            handleSetSelectedModel(arg);
+        }
+    }, [handleSetSelectedModel, lookupModelObject]);
 
     const selectedModelReasoning = useMemo(() => {
         if (!features.modelSelection) return null;
-        if (selectedModel?.startsWith('ollama:') || selectedModel?.startsWith('chrome:')) return null;
-        const found = availableModels.find((m) => m.value === selectedModel);
-        return found ? (found.reasoning || null) : null;
+        const value = selectedModel?.value || '';
+        if (value.startsWith('ollama:') || value.startsWith('chrome:')) return null;
+
+        // First try the selected model object itself, then fallback to availableModels
+        const found = availableModels.find(m => m.value === value);
+        return found?.reasoning || selectedModel?.reasoning || null;
     }, [features.modelSelection, selectedModel, availableModels]);
 
     const reasoningEfforts = useMemo(() => getSupportedEfforts(selectedModelReasoning), [selectedModelReasoning]);
@@ -272,8 +337,7 @@ const AidaWidget = (props) => {
 
     const { isOpen: isPromptModalOpen, open: openPromptModal, close: closePromptModal } = useModal();
     const { isOpen: isShareModalOpen, open: openShareModal, close: closeShareModal } = useModal();
-    const chromeAI = useChromeAI(true);
-    const ollama = useOllama();
+
     const [isLocalModelsModalOpen, setIsLocalModelsModalOpen] = useState(false);
     const [localModelsTab, setLocalModelsTab] = useState('ollama');
 
@@ -281,7 +345,7 @@ const AidaWidget = (props) => {
         attachments, setAttachments, addImageAttachments, addPdfAttachments, addTextAttachment, addFolderAttachments,
         addUrlAttachment, addContextAttachment,
         removeAttachment, clearAttachments, isAttachmentModalOpen, openModal: openAttachmentModal, closeModal: closeAttachmentModal
-    } = useAttachments(setSelectedModel);
+    } = useAttachments(handleSetSelectedModelForAttachments);
 
     const [isReadingPage, setIsReadingPage] = useState(false);
 
@@ -362,7 +426,7 @@ const AidaWidget = (props) => {
         isNearingTimeLimit
     } = useVoiceInput({
         transcriptionUrl: apiConfig.transcriptionUrl,
-        selectedAudioModel
+        selectedAudioModel: selectedAudioModel?.value
     });
 
     const isTranscribing = recordings.some((r) => r.isTranscribing);
@@ -390,11 +454,12 @@ const AidaWidget = (props) => {
     const { countdown: autoSendCountdown, start: startAutoSendTimer, cancel: cancelAutoSendTimer, setIsPaused: setIsSendTimerPaused } = useCountdown(() => autoSendCallbackRef.current(), 3);
     const { countdown: autoRecordCountdown, start: startAutoRecordTimer, cancel: cancelAutoRecordTimer, setIsPaused: setIsRecordTimerPaused } = useCountdown(startRecording, 3);
 
-    const resolveModelName = useCallback((model) => (
-        isWebSearchEnabled && !model?.startsWith('ollama:') && !model?.startsWith('chrome:')
-            ? `${model}:online`
-            : model
-    ), [isWebSearchEnabled]);
+    const resolveModelName = useCallback((model) => {
+        const base = typeof model === 'string' ? model : model?.value || '';
+        return isWebSearchEnabled && !base?.startsWith('ollama:') && !base?.startsWith('chrome:')
+            ? `${base}:online`
+            : base;
+    }, [isWebSearchEnabled]);
 
     const stableHandleSendMessage = useCallback(async (messageTextOverride = null) => {
         const text = messageTextOverride ?? '';
@@ -842,16 +907,16 @@ const AidaWidget = (props) => {
                         autoRecordCountdown={autoRecordCountdown}
                         cancelAutoRecordTimer={cancelAutoRecordTimer}
                         setIsRecordTimerPaused={setIsRecordTimerPaused}
-                        selectedModel={selectedModel}
-                        setSelectedModel={setSelectedModel}
+                        selectedModel={selectedModel?.value}
+                        setSelectedModel={handleSetSelectedModel}
                         availableModels={availableModels}
                         reasoningEfforts={reasoningEfforts}
                         reasoningEffort={activeReasoningEffort}
                         defaultReasoningEffort={defaultReasoningEffort}
                         isReasoningDefault={reasoningEffort === null}
                         setReasoningEffort={setReasoningEffort}
-                        selectedAudioModel={selectedAudioModel}
-                        setSelectedAudioModel={setSelectedAudioModel}
+                        selectedAudioModel={selectedAudioModel?.value}
+                        setSelectedAudioModel={handleSetSelectedAudioModel}
                         availableAudioModels={availableAudioModels}
                         translations={translations}
                         attachmentCount={attachments.length}
