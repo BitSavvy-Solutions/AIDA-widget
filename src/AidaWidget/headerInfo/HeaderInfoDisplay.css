@@ -1,10 +1,13 @@
+/* src/AidaWidget/headerInfo/HeaderInfoDisplay.css */
 /* ===== Header Info Display (transport-style panel) ===== */
+
+/* --- Shell: the physical "LCD panel" look, height-matched to the eyes --- */
 .header-info-display {
   position: relative;
   display: flex;
   align-items: stretch;
   min-width: 0;
-  width: 96px;              /* grows via max-width below as room allows */
+  width: 96px;
   max-width: 150px;
   height: 52px;             /* matches SevenSegmentDisplay total height */
   overflow: hidden;
@@ -19,26 +22,37 @@
   flex: 0 1 auto;           /* shrink before the icon buttons do */
 }
 
-.header-info-display--dragging { cursor: grabbing; }
+.header-info-display.is-dragging { cursor: grabbing; }
+
+.header-info-display.is-static { cursor: default; }
 
 .header-info-display:focus-visible {
   border-color: rgba(255, 95, 144, 0.6);
-  box-shadow: inset 0 0 10px rgba(0,0,0,0.8), 0 0 0 2px rgba(255, 95, 144, 0.3);
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.8), 0 0 0 2px rgba(255, 95, 144, 0.3);
 }
 
+/* --- Viewport: pure clipping container ---
+   The old version applied the transform here; the consolidated JSX applies
+   it to __track instead, so this is now just the overflow clipper. */
 .header-info-display__viewport {
   display: flex;
   width: 100%;
   height: 100%;
-  transition: transform 0.25s ease;
+  overflow: hidden;
+}
+
+/* --- Track: the moving strip of slides ---
+   transform + transition are applied INLINE by the component
+   (translateX(calc(-N% + dragPx)) and transition none/340ms), so no
+   transform rules live here — only the flex layout it needs. */
+.header-info-display__track {
+  display: flex;
+  width: 100%;
+  height: 100%;
   will-change: transform;
 }
 
-.header-info-display--dragging .header-info-display__viewport {
-  transition: none;
-}
-
-/* Each slide is exactly one viewport-width wide */
+/* --- Slide: one viewport-width, two-line (label top / value bottom) --- */
 .header-info-display__slide {
   flex: 0 0 100%;
   min-width: 0;             /* CRITICAL: lets content shrink/ellipsis work */
@@ -49,6 +63,7 @@
   overflow: hidden;
 }
 
+/* Top row: icon + tiny uppercase label */
 .header-info-display__top {
   display: flex;
   align-items: center;
@@ -76,6 +91,7 @@
   text-overflow: ellipsis;
 }
 
+/* Bottom line: the glowing value (cost, tokens, credits...) */
 .header-info-display__value {
   font-size: 15px;
   font-weight: 600;
@@ -88,6 +104,12 @@
   text-overflow: ellipsis;
 }
 
+/* Custom-content slides (ads later): let them fill the panel */
+.header-info-display__slide > * {
+  min-width: 0;
+}
+
+/* --- Dots: position indicators at the panel bottom --- */
 .header-info-display__dots {
   position: absolute;
   bottom: 2px;
@@ -111,6 +133,7 @@
   box-shadow: 0 0 4px var(--aida-primary, #FF5F90);
 }
 
+/* --- Responsive: smaller panel on phones --- */
 @media (max-width: 480px) {
   .header-info-display {
     width: 84px;

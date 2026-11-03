@@ -1,10 +1,13 @@
 /* src/AidaWidget/headerInfo/HeaderInfoDisplay.jsx */
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
     HiCurrencyDollar, HiOutlineQueueList, HiOutlineCpuChip, HiOutlineGlobeAlt,
 } from 'react-icons/hi2';
 
-const DRAG_THRESHOLD = 25;
+const AUTO_ADVANCE_MS = 6500;
+const DRAG_THRESHOLD = 36;      // px a drag must travel to commit a slide change
+const WHEEL_THRESHOLD = 28;     // accumulated wheel delta before we advance
+const AXIS_LOCK_PX = 6;         // min movement before we lock to an axis
 
 const DEFAULT_ICONS = {
     cost: HiCurrencyDollar,
@@ -14,109 +17,228 @@ const DEFAULT_ICONS = {
 };
 
 /**
- * A "public transport"-style info panel for the chat header.
- * Two-line slides (label on top, value below) cycling via swipe, drag or wheel.
+ * Public-transport style info panel for the chat header.
+ *
+ * Cycles through "slides" (chat cost, credits, tokens, ...). Any slide can
+ * provide its own `content` node instead of the default icon/label/value
+ * layout (this is the escape hatch for future ad slides).
+ *
+ * Interactions:
+ *  - Pointer drag (mouse) / touch swipe horizontally to navigate
+ *  - Wheel or trackpad scroll to advance
+ *  - Auto-advances every few seconds; pauses on hover / while dragging
+ *  - Arrow keys when focused
  */
 const HeaderInfoDisplay = ({ slides = [], theme = 'dark' }) => {
     const [index, setIndex] = useState(0);
-    const [dragOffset, setDragOffset] = useState(0);
+    const [dragX, setDragX] = useState(0);
     const [isDragging, setIsDragging] = useState(false);
+    const [isPaused, setIsPaused] = useState(false);
 
-    const viewportRef = useRef(null);
-    const dragStartXRef = useRef(null);
+    const rootRef = useRef(null);
+    const dragStateRef = useRef({
+        active: false,
+        pointerId: null,
+        startX: 0,
+        startY: 0,
+        axis: null,
+    });
+    const dragXRef = useRef(0);
+    const wheelAccumRef = useRef(0);
+    const wheelResetTimerRef = useRef(null);
 
-    const count = slides.length;
+    const slideCount = slides.length;
 
-    const clampIndex = useCallback(
-        (i) => (count === 0 ? 0 : Math.max(0, Math.min(count - 1, i))),
-        [count]
-    );
-
-    // --- Pointer drag (mouse + touch + pen) ---
-    const onPointerDown = (e) => {
-        if (count < 2) return;
-        if (e.pointerType === 'mouse' && e.button !== 0) return;
-        dragStartXRef.current = e.clientX;
-        setIsDragging(true);
-        e.currentTarget.setPointerCapture?.(e.pointerId);
-    };
-
-    const onPointerMove = (e) => {
-        if (!isDragging || dragStartXRef.current === null) return;
-        setDragOffset(e.clientX - dragStartXRef.current);
-    };
-
-    const endDrag = (e) => {
-        if (!isDragging) return;
-        const delta = (e.clientX ?? dragStartXRef.current ?? 0) - dragStartXRef.current;
-        dragStartXRef.current = null;
-        setIsDragging(false);
-        setDragOffset(0);
-
-        if (Math.abs(delta) > DRAG_THRESHOLD) {
-            setIndex((prev) => clampIndex(prev + (delta < 0 ? 1 : -1)));
-        }
-    };
-
-    // --- Wheel ---
+    // Keep the index in range if slides array changes shape.
     useEffect(() => {
-        const el = viewportRef.current;
-        if (!el || count < 2) return;
-        const onWheel = (e) => {
-            e.preventDefault();
-            setIndex((prev) => clampIndex(prev + (e.deltaY > 0 || e.deltaX > 0 ? 1 : -1)));
+        if (slideCount === 0) {
+            if (index !== 0) setIndex(0);
+        } else if (index > slideCount - 1) {
+            setIndex(slideCount - 1);
+        }
+    }, [slideCount, index]);
+
+    const goNext = useCallback(() => {
+        setIndex((prev) => (slideCount > 0 ? (prev + 1) % slideCount : 0));
+    }, [slideCount]);
+
+    const goPrev = useCallback(() => {
+        setIndex((prev) => (slideCount > 0 ? (prev - 1 + slideCount) % slideCount : 0));
+    }, [slideCount]);
+
+    // Auto-advance. Depends on `index` so the timer restarts after every
+    // transition (auto OR manual), effectively debouncing rapid interactions.
+    useEffect(() => {
+        if (slideCount <= 1 || isPaused || isDragging) return undefined;
+        const timer = setTimeout(goNext, AUTO_ADVANCE_MS);
+        return () => clearTimeout(timer);
+    }, [slideCount, isPaused, isDragging, index, goNext]);
+
+    // ---- Pointer (mouse + touch) drag navigation ----
+    const handlePointerDown = useCallback((event) => {
+        if (slideCount <= 1) return;
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+        const state = dragStateRef.current;
+        state.active = true;
+        state.pointerId = event.pointerId;
+        state.startX = event.clientX;
+        state.startY = event.clientY;
+        state.axis = null;
+        dragXRef.current = 0;
+        setIsDragging(true);
+        setIsPaused(true);
+        try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* noop */ }
+    }, [slideCount]);
+
+    const handlePointerMove = useCallback((event) => {
+        const state = dragStateRef.current;
+        if (!state.active || state.pointerId !== event.pointerId) return;
+
+        const dx = event.clientX - state.startX;
+        const dy = event.clientY - state.startY;
+
+        if (!state.axis) {
+            if (Math.abs(dx) < AXIS_LOCK_PX && Math.abs(dy) < AXIS_LOCK_PX) return;
+            state.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+            if (state.axis === 'y') {
+                // Vertical gesture: cancel drag, let the page/container scroll.
+                state.active = false;
+                state.pointerId = null;
+                setIsDragging(false);
+                setIsPaused(false);
+                return;
+            }
+        }
+
+        if (state.axis === 'x') {
+            dragXRef.current = dx;
+            setDragX(dx);
+        }
+    }, []);
+
+    const finishDrag = useCallback((event) => {
+        const state = dragStateRef.current;
+        const wasHorizontalDrag = state.active && state.axis === 'x';
+        const finalX = dragXRef.current;
+
+        state.active = false;
+        state.pointerId = null;
+        state.axis = null;
+        dragXRef.current = 0;
+
+        setIsDragging(false);
+        setIsPaused(false);
+        setDragX(0);
+
+        try { event?.currentTarget?.releasePointerCapture?.(event.pointerId); } catch { /* noop */ }
+
+        if (!wasHorizontalDrag) return;
+        if (finalX <= -DRAG_THRESHOLD) goNext();
+        else if (finalX >= DRAG_THRESHOLD) goPrev();
+    }, [goNext, goPrev]);
+
+    // ---- Mouse wheel / trackpad navigation ----
+    // Native listener with { passive: false } so preventDefault actually
+    // stops the wheel from scrolling whatever the widget sits on top of.
+    useEffect(() => {
+        const el = rootRef.current;
+        if (!el || slideCount <= 1) return undefined;
+
+        const onWheel = (event) => {
+            const dominantDelta = Math.abs(event.deltaX) > Math.abs(event.deltaY)
+                ? event.deltaX
+                : event.deltaY;
+
+            wheelAccumRef.current += dominantDelta;
+            if (event.cancelable) event.preventDefault();
+
+            if (Math.abs(wheelAccumRef.current) >= WHEEL_THRESHOLD) {
+                if (wheelAccumRef.current > 0) goNext();
+                else goPrev();
+                wheelAccumRef.current = 0;
+            }
+
+            if (wheelResetTimerRef.current) clearTimeout(wheelResetTimerRef.current);
+            wheelResetTimerRef.current = setTimeout(() => {
+                wheelAccumRef.current = 0;
+            }, 220);
         };
+
         el.addEventListener('wheel', onWheel, { passive: false });
         return () => el.removeEventListener('wheel', onWheel);
-    }, [count, clampIndex]);
+    }, [slideCount, goNext, goPrev]);
 
-    if (count === 0) return null;
+    // Cleanup the wheel debounce timer on unmount.
+    useEffect(() => () => {
+        if (wheelResetTimerRef.current) clearTimeout(wheelResetTimerRef.current);
+    }, []);
 
-    const active = slides[clampIndex(index)];
+    // ---- Keyboard (when focused) ----
+    const handleKeyDown = useCallback((event) => {
+        if (event.key === 'ArrowRight') { event.preventDefault(); goNext(); }
+        else if (event.key === 'ArrowLeft') { event.preventDefault(); goPrev(); }
+    }, [goNext, goPrev]);
+
+    const trackStyle = useMemo(() => ({
+        transform: `translateX(calc(-${index * 100}% + ${dragX}px))`,
+        transition: isDragging ? 'none' : 'transform 340ms cubic-bezier(0.22, 1, 0.36, 1)',
+    }), [index, dragX, isDragging]);
+
+    if (slideCount === 0) return null;
+
+    const isStatic = slideCount <= 1;
 
     return (
         <div
-            className={`header-info-display ${isDragging ? 'header-info-display--dragging' : ''}`}
+            ref={rootRef}
+            className={`header-info-display ${isDragging ? 'is-dragging' : ''} ${isStatic ? 'is-static' : ''}`}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={finishDrag}
+            onPointerCancel={finishDrag}
+            onKeyDown={handleKeyDown}
+            tabIndex={isStatic ? -1 : 0}
+            onMouseEnter={() => setIsPaused(true)}
+            onMouseLeave={() => { if (!dragStateRef.current.active) setIsPaused(false); }}
             role="group"
             aria-roledescription="Info carousel"
-            aria-label={`${active.label}: ${active.value}`}
-            tabIndex={0}
-            onKeyDown={(e) => {
-                if (e.key === 'ArrowRight') { e.preventDefault(); setIndex((p) => clampIndex(p + 1)); }
-                if (e.key === 'ArrowLeft') { e.preventDefault(); setIndex((p) => clampIndex(p - 1)); }
-            }}
+            aria-label={`Info: ${slides[index]?.label ?? ''} ${slides[index]?.value ?? ''}`}
         >
-            <div
-                ref={viewportRef}
-                className="header-info-display__viewport"
-                onPointerDown={onPointerDown}
-                onPointerMove={onPointerMove}
-                onPointerUp={endDrag}
-                onPointerCancel={endDrag}
-                style={{ transform: `translateX(calc(${-clampIndex(index) * 100}% + ${dragOffset}px))` }}
-            >
-                {slides.map((slide) => {
-                    const Icon = slide.icon || DEFAULT_ICONS[slide.kind];
-                    return (
-                        <div key={slide.id} className="header-info-display__slide">
-                            <div className="header-info-display__top">
-                                {Icon && <Icon className="header-info-display__icon" aria-hidden="true" />}
-                                <span className="header-info-display__label">{slide.label}</span>
+            <div className="header-info-display__viewport">
+                <div className="header-info-display__track" style={trackStyle}>
+                    {slides.map((slide) => {
+                        // Custom-content slides (ads later) render as-is.
+                        if (slide.content) {
+                            return (
+                                <div key={slide.id} className="header-info-display__slide">
+                                    {slide.content}
+                                </div>
+                            );
+                        }
+                        const Icon = slide.icon || DEFAULT_ICONS[slide.kind];
+                        return (
+                            <div key={slide.id} className="header-info-display__slide">
+                                <div className="header-info-display__top">
+                                    {Icon && <Icon className="header-info-display__icon" aria-hidden="true" />}
+                                    {slide.label && (
+                                        <span className="header-info-display__label">{slide.label}</span>
+                                    )}
+                                </div>
+                                <div className="header-info-display__value" title={slide.value}>
+                                    {slide.value}
+                                </div>
                             </div>
-                            <div className="header-info-display__value" title={slide.value}>
-                                {slide.value}
-                            </div>
-                        </div>
-                    );
-                })}
+                        );
+                    })}
+                </div>
             </div>
 
-            {count > 1 && (
+            {!isStatic && (
                 <div className="header-info-display__dots" aria-hidden="true">
-                    {slides.map((s, i) => (
+                    {slides.map((slide, i) => (
                         <span
-                            key={s.id}
-                            className={`header-info-display__dot ${i === clampIndex(index) ? 'is-active' : ''}`}
+                            key={slide.id}
+                            className={`header-info-display__dot ${i === index ? 'is-active' : ''}`}
                         />
                     ))}
                 </div>
