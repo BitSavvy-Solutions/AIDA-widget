@@ -1,5 +1,8 @@
 /* src/AidaWidget/AidaWidget.css */
 /* ===== Theme Variables ===== */
+
+@import './headerInfo/HeaderInfoDisplay.css';
+
 :root {
   /* Default theme values (coral) */
   --aida-primary: #FF5F90;

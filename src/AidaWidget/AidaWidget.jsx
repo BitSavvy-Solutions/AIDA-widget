@@ -11,6 +11,7 @@ import './AidaWidget.css';
 import ChatInput from './ChatInput';
 import AppearanceModal, { THEMES } from './AppearanceModal';
 import LocalModelsModal from './localModels/LocalModelsModal';
+import { useInfoSlides } from './headerInfo/useInfoSlides'; // ✨ NEW
 import {
     useWidgetState,
     useModal,
@@ -564,6 +565,9 @@ const AidaWidget = (props) => {
         if (loadMessagesForSession) loadMessagesForSession(currentSessionId);
     }, [currentSessionId, loadMessagesForSession]);
 
+    // ✨ NEW: slides for the header info display (cost, tokens, later ads)
+    const infoSlides = useInfoSlides({ messages });
+
     const handleViewAttachments = useCallback((message) => {
         setViewingMessageAttachments(message);
     }, []);
@@ -800,6 +804,7 @@ const AidaWidget = (props) => {
                         onAssignChatToProject={historyEnabled ? historyHandlers.onAssignChatToProject : undefined}
                         onRemoveChatFromProject={historyEnabled ? historyHandlers.onRemoveChatFromProject : undefined}
                         onUpdateProjectAppearance={historyEnabled ? historyHandlers.onUpdateProjectAppearance : undefined}
+                        infoSlides={infoSlides} // ✨ NEW
                     />
                     <ChatDisplay
                         messages={messages}

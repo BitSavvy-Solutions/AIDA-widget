@@ -6,9 +6,8 @@ import {
     HiOutlineTag, HiOutlineCog6Tooth, HiOutlineShare,
     HiOutlineAdjustmentsHorizontal
 } from 'react-icons/hi2';
-import { LuHandHeart } from 'react-icons/lu';
 import SevenSegmentDisplay from './SevenSegmentDisplay';
-import CreditsDisplay from './CreditsDisplay';
+import HeaderInfoDisplay from './headerInfo/HeaderInfoDisplay';
 import {
     ProjectIconPicker,
     PROJECT_ICON_OPTIONS,
@@ -19,13 +18,10 @@ import {
 
 const ChatHeader = ({
     displayText,
-    lastCost = 0,
-    userId,
     resetChat,
     toggleFullscreen,
     toggleChat,
     theme = 'dark',
-    paymentLinkConfig,
     onOpenAppearance,
     onToggleHistory,
     onDisplayClick,
@@ -42,6 +38,7 @@ const ChatHeader = ({
     onRemoveChatFromProject,
     onUpdateProjectAppearance,
     onShare,
+    infoSlides = [], // ✨ NEW: slides for the transport-style info display
 }) => {
     const headerColors = 'glass-header text-white border-b';
     const hoverColor = 'aida-menu-item';
@@ -50,7 +47,6 @@ const ChatHeader = ({
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const menuRef = useRef(null);
     const headerRef = useRef(null);
-    const [isNarrow, setIsNarrow] = useState(false);
 
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [titleDraft, setTitleDraft] = useState(sessionTitle);
@@ -87,15 +83,6 @@ const ChatHeader = ({
         document.addEventListener('mousedown', handleClick);
         return () => document.removeEventListener('mousedown', handleClick);
     }, [isTagMenuOpen]);
-
-    useEffect(() => {
-        if (!headerRef.current) return;
-        const observer = new ResizeObserver((entries) => {
-            for (const entry of entries) setIsNarrow(entry.contentRect.width < 480);
-        });
-        observer.observe(headerRef.current);
-        return () => observer.disconnect();
-    }, []);
 
     useEffect(() => {
         if (isEditingTitle && titleInputRef.current) {
@@ -144,7 +131,7 @@ const ChatHeader = ({
         observer.observe(tagsContainerRef.current);
         calculateVisibleTags();
         return () => observer.disconnect();
-    }, [assignedProjects, isNarrow]);
+    }, [assignedProjects]);
 
     const closeMenu = () => setIsMenuOpen(false);
 
@@ -294,7 +281,7 @@ const ChatHeader = ({
                             </button>
 
                             {isTagMenuOpen && (
-                                <div 
+                                <div
                                     className="absolute top-full left-0 mt-2 w-64 rounded-lg text-sm shadow-xl border z-50 flex flex-col overflow-hidden"
                                     style={{ backgroundColor: 'var(--aida-header-bg)', borderColor: 'var(--aida-header-border)', color: 'var(--aida-header-text)' }}
                                 >
@@ -359,20 +346,15 @@ const ChatHeader = ({
                     )}
                 </div>
 
-                {!isNarrow && (
-                    <div className="shrink-0 flex items-center gap-2 ml-auto">
-                        <CreditsDisplay userId={userId} lastCost={lastCost} theme={theme} />
-                        {paymentLinkConfig?.show && paymentLinkConfig?.url && (
-                            <a href={paymentLinkConfig.url} target="_blank" rel="noopener noreferrer" className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-2 py-1.5 rounded-md transition-colors bg-white/10 hover:bg-white/20 text-white shadow-sm" title={paymentLinkConfig.text || 'Support Us'}>
-                                <LuHandHeart className="w-4 h-4 text-brand-coral" />
-                                {paymentLinkConfig.text}
-                            </a>
-                        )}
-                    </div>
-                )}
             </div>
 
+            {infoSlides.length > 0 && (
+                <HeaderInfoDisplay slides={infoSlides} theme={theme} />
+            )}
+            
             <div className="flex items-center space-x-2 pr-1 shrink-0 ml-2 border-l border-white/10 pl-2">
+                {/* ✨ NEW: transport-style info display (cost, tokens, later ads) */}
+
                 {showFullscreenToggle && typeof toggleFullscreen === 'function' && (
                     <button onClick={toggleFullscreen} className={`p-1 rounded-full ${hoverColor} transition-colors`} style={{ color: accentColor }} title="Toggle fullscreen">
                         <HiOutlineArrowsPointingOut className="w-5 h-5" />
@@ -391,7 +373,7 @@ const ChatHeader = ({
                         <HiEllipsisVertical className="w-5 h-5" />
                     </button>
                     {isMenuOpen && (
-                        <div 
+                        <div
                             className="absolute right-0 mt-2 w-40 rounded-lg text-sm shadow-lg border py-1 z-50"
                             style={{ backgroundColor: 'var(--aida-header-bg)', borderColor: 'var(--aida-header-border)', color: 'var(--aida-header-text)' }}
                         >
