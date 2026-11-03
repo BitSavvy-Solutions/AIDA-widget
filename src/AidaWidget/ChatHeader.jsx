@@ -15,6 +15,7 @@ import {
     NotebookIcon,
     hexToRgba
 } from './ProjectAppearance';
+import './ChatHeader.css';
 
 const ChatHeader = ({
     displayText,
@@ -195,18 +196,20 @@ const ChatHeader = ({
     };
 
     return (
-        <div ref={headerRef} className={`${headerColors} pl-0.5 pr-1 py-0.5 flex justify-between items-center rounded-none relative`}>
+        <div ref={headerRef} className={`chat-header ${headerColors} pl-0.5 pr-1 py-0.5 flex justify-between items-center rounded-none relative`}>
             <div className="flex items-center gap-1 flex-1 min-w-0 mr-2">
                 {onDisplayClick ? (
                     <button
                         type="button"
                         onClick={onDisplayClick}
-                        className="p-0 bg-transparent border-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 rounded-md shrink-0"
+                        className="header-lcd p-0 bg-transparent border-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 rounded-md shrink-0"
                     >
                         <SevenSegmentDisplay text={displayText} />
                     </button>
                 ) : (
-                    <SevenSegmentDisplay text={displayText} />
+                    <div className="header-lcd shrink-0">
+                        <SevenSegmentDisplay text={displayText} />
+                    </div>
                 )}
 
                 <div className="flex-1 min-w-0 flex flex-col justify-center">
@@ -241,11 +244,11 @@ const ChatHeader = ({
                                 }}
                                 title={isSessionActive ? "Click to rename" : "Start a chat to rename"}
                             >
-                                <span className={`text-sm font-semibold truncate ${isDefaultTitle ? 'italic font-normal opacity-70' : ''}`}>
+                                <span className={`header-title text-sm font-semibold truncate ${isDefaultTitle ? 'italic font-normal opacity-70' : ''}`}>
                                     {isDefaultTitle ? 'Set Chat Title...' : sessionTitle}
                                 </span>
                                 {isSessionActive && (
-                                    <HiPencilSquare className={`w-3.5 h-3.5 shrink-0 transition-opacity ${isDefaultTitle ? 'opacity-50 group-hover:opacity-80' : 'opacity-0 group-hover:opacity-100'}`} />
+                                    <HiPencilSquare className="header-title-pencil w-3.5 h-3.5 shrink-0 transition-opacity ${isDefaultTitle ? 'opacity-50 group-hover:opacity-80' : 'opacity-0 group-hover:opacity-100'}" />
                                 )}
                             </button>
                         )}
@@ -349,12 +352,12 @@ const ChatHeader = ({
             </div>
 
             {infoSlides.length > 0 && (
-                <HeaderInfoDisplay slides={infoSlides} theme={theme} />
+                <div className="header-stats">
+                    <HeaderInfoDisplay slides={infoSlides} theme={theme} />
+                </div>
             )}
-            
-            <div className="flex items-center space-x-2 pr-1 shrink-0 ml-2 border-l border-white/10 pl-2">
-                {/* ✨ NEW: transport-style info display (cost, tokens, later ads) */}
 
+            <div className="header-actions flex items-center space-x-2 pr-1 shrink-0 ml-2 border-l border-white/10 pl-2">
                 {showFullscreenToggle && typeof toggleFullscreen === 'function' && (
                     <button onClick={toggleFullscreen} className={`p-1 rounded-full ${hoverColor} transition-colors`} style={{ color: accentColor }} title="Toggle fullscreen">
                         <HiOutlineArrowsPointingOut className="w-5 h-5" />

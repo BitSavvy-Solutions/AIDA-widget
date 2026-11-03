@@ -1,6 +1,6 @@
 // src/components/SevenSegmentDisplay.jsx
 import React from 'react';
-import './AidaWidget.css';
+import './SevenSegmentDisplay.css';
 
 /*
  Seven-segment display layout:
