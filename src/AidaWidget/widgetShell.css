@@ -1,0 +1,145 @@
+/* src/AidaWidget/widgetShell.css */
+/* ===== Widget layout & structure ===== */
+
+/* Widget positioning */
+.aida-widget-launcher {
+  position: fixed;
+  bottom: 0;
+  right: 1.5rem;
+  z-index: 50;
+}
+
+.aida-widget-viewport {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: stretch;
+  pointer-events: none;
+}
+
+.aida-widget-viewport > * {
+  pointer-events: auto;
+  max-height: 100vh;
+}
+
+.aida-widget-viewport--fullscreen,
+.aida-widget-viewport--docked {
+  padding: 0;
+}
+
+/* Widget shell and resize handling */
+.aida-widget-shell {
+  transition:
+    border-left-color 0.2s ease,
+    box-shadow 0.2s ease,
+    width 0.3s ease,
+    max-width 0.3s ease,
+    height 0.3s ease,
+    border-radius 0.3s ease,
+    transform 0.3s ease;
+  will-change: width, height, transform;
+}
+
+.aida-widget-shell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  border: 1px solid transparent;
+  opacity: 0;
+  transition: opacity 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  z-index: 1;
+}
+
+.aida-widget-shell--edge-hover::after,
+.aida-widget-shell--active::after {
+  opacity: 1;
+  border-color: rgba(255, 95, 144, 0.6);
+  box-shadow:
+    0 0 0 1px rgba(255, 95, 144, 0.4),
+    0 0 0 6px rgba(255, 95, 144, 0.18),
+    0 0 24px rgba(255, 160, 195, 0.45);
+}
+
+.aida-widget-shell--edge-hover[data-theme='dark']::after,
+.aida-widget-shell--active[data-theme='dark']::after {
+  box-shadow:
+    0 0 0 1px rgba(255, 95, 144, 0.55),
+    0 0 0 8px rgba(255, 95, 144, 0.22),
+    0 0 32px rgba(255, 160, 195, 0.55);
+}
+
+.aida-widget-shell--edge-hover[data-theme='light'],
+.aida-widget-shell--active[data-theme='light'] {
+  border-left-color: rgba(255, 95, 144, 0.6);
+}
+
+.aida-widget-shell--edge-hover[data-theme='dark'],
+.aida-widget-shell--active[data-theme='dark'] {
+  border-left-color: rgba(255, 123, 170, 0.75);
+}
+
+.aida-widget-shell--fullscreen {
+  border-left-color: transparent;
+}
+
+.aida-widget-shell--docked {
+  border-left-color: inherit;
+}
+
+.aida-resize-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translateX(-50%);
+  width: 16px;
+  height: 100%;
+  cursor: ew-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  z-index: 10;
+}
+
+.aida-resize-handle::before {
+  content: "";
+  width: 2px;
+  height: 48px;
+  border-radius: 9999px;
+  transition: background-color 0.2s ease, opacity 0.2s ease;
+  background-color: transparent;
+}
+
+[data-theme='dark'] .aida-resize-handle::before {
+  background-color: transparent;
+}
+
+.aida-resize-handle:hover::before,
+.aida-resize-handle.is-resizing::before {
+  background-color: transparent;
+}
+
+/* Body modifications */
+body.aida-widget-open {
+  padding-right: calc(var(--aida-original-padding-right, 0px) + var(--aida-widget-offset, 0px));
+  transition: padding-right 0.3s ease;
+  overflow-x: hidden;
+}
+
+body.aida-widget-resizing {
+  cursor: ew-resize;
+  user-select: none;
+}
+
+body.aida-widget-resizing * {
+  user-select: none !important;
+}
+
+@media (max-width: 768px) {
+  .aida-resize-handle {
+    display: none;
+  }
+}

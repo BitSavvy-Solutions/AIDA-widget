@@ -1,0 +1,101 @@
+/* src/AidaWidget/ChatHeader.css */
+/* ===== Chat header: responsive collapse cascade ===== */
+/*
+ * As the widget narrows, elements disappear in this order, each freeing
+ * its space for the survivors:
+ *   1. Title caps at 15 characters
+ *   2. LCD display hides
+ *   3. Stats panel hides
+ *   4. Title caps at 6 characters
+ *   5. Title hides, action buttons squeeze
+ *
+ * The header measures ITSELF (container-type), so this tracks the
+ * drag-resize width, fullscreen, and mobile widths automatically.
+ */
+.chat-header {
+  container-type: inline-size;
+}
+
+/* The stats wrapper carries the shrink behavior that HeaderInfoDisplay
+   used to own when it was a direct flex child of the header. */
+.chat-header .header-stats {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* Base: title takes whatever room is left, no cap */
+.chat-header .header-title {
+  max-width: 100%;
+}
+
+/* ── Stage 1: cap title at ~15 characters ───────────────────── */
+@container (max-width: 640px) {
+  .chat-header .header-title {
+    max-width: 15ch;
+  }
+}
+
+/* ── Stage 2: title at 15ch → hide the LCD display ──────────── */
+@container (max-width: 560px) {
+  .chat-header .header-lcd {
+    display: none;
+  }
+}
+
+/* ── Stage 3: LCD gone but still tight → hide the stats panel ─ */
+@container (max-width: 480px) {
+  .chat-header .header-stats {
+    display: none;
+  }
+}
+
+/* ── Stage 4: stats gone → let title shrink further, to 6ch ─── */
+@container (max-width: 420px) {
+  .chat-header .header-title {
+    max-width: 6ch;
+  }
+}
+
+/* ── Stage 5: squeeze everything — hide title, compact buttons ─ */
+@container (max-width: 380px) {
+  .chat-header .header-title {
+    display: none;
+  }
+
+  .chat-header .header-title-pencil {
+    display: none;
+  }
+
+  .chat-header .header-actions {
+    gap: 0.125rem;
+    padding-left: 0.375rem;
+    padding-right: 0.25rem;
+  }
+
+  .chat-header .header-actions button {
+    padding: 0.125rem; /* tighter than p-1 */
+  }
+
+  .chat-header .header-actions svg {
+    width: 1rem;
+    height: 1rem;
+  }
+}
+
+/* ── Glass header effect (component-owned, used only here) ──── */
+.chat-header.glass-header {
+  position: relative;
+  overflow: visible;
+  z-index: 2;
+}
+
+.chat-header.glass-header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.06));
+}
