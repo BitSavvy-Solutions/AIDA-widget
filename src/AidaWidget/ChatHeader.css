@@ -30,35 +30,35 @@
 }
 
 /* ── Stage 1: cap title at ~15 characters ───────────────────── */
-@container (max-width: 640px) {
+@container (max-width: 560px) {
   .chat-header .header-title {
     max-width: 15ch;
   }
 }
 
 /* ── Stage 2: title at 15ch → hide the LCD display ──────────── */
-@container (max-width: 560px) {
+@container (max-width: 480px) {
   .chat-header .header-lcd {
     display: none;
   }
 }
 
 /* ── Stage 3: LCD gone but still tight → hide the stats panel ─ */
-@container (max-width: 480px) {
+@container (max-width: 320px) {
   .chat-header .header-stats {
     display: none;
   }
 }
 
 /* ── Stage 4: stats gone → let title shrink further, to 6ch ─── */
-@container (max-width: 420px) {
+@container (max-width: 340px) {
   .chat-header .header-title {
     max-width: 6ch;
   }
 }
 
 /* ── Stage 5: squeeze everything — hide title, compact buttons ─ */
-@container (max-width: 380px) {
+@container (max-width: 300px) {
   .chat-header .header-title {
     display: none;
   }

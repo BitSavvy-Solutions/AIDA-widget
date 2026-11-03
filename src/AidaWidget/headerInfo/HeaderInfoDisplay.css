@@ -7,9 +7,10 @@
   display: flex;
   align-items: stretch;
   min-width: 0;
-  width: 96px;
-  max-width: 150px;
-  height: 52px;             /* matches SevenSegmentDisplay total height */
+  width: auto;              /* was 96px — now shrinks with content */
+  min-width: 84px;          /* new: floor so it never collapses to nothing */
+  max-width: 84px;         /* was 150px */
+  height: 48px;             /* was 52px */
   overflow: hidden;
   border-radius: 6px;
   border: 2px solid #333;
@@ -93,7 +94,7 @@
 
 /* Bottom line: the glowing value (cost, tokens, credits...) */
 .header-info-display__value {
-  font-size: 15px;
+  font-size: 14px;          /* was 15px — fits "$0.0000" without ellipsis */
   font-weight: 600;
   font-family: 'Fira Code', monospace;
   line-height: 1.1;

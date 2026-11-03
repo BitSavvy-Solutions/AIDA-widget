@@ -197,7 +197,7 @@ const ChatHeader = ({
 
     return (
         <div ref={headerRef} className={`chat-header ${headerColors} pl-0.5 pr-1 py-0.5 flex justify-between items-center rounded-none relative`}>
-            <div className="flex items-center gap-1 flex-1 min-w-0 mr-2">
+            <div className="flex items-center gap-1 flex-1 min-w-0 mr-1">
                 {onDisplayClick ? (
                     <button
                         type="button"
@@ -357,7 +357,7 @@ const ChatHeader = ({
                 </div>
             )}
 
-            <div className="header-actions flex items-center space-x-2 pr-1 shrink-0 ml-2 border-l border-white/10 pl-2">
+            <div className="header-actions flex items-center space-x-1 pr-1 shrink-0 ml-1 border-l border-white/10 pl-1">
                 {showFullscreenToggle && typeof toggleFullscreen === 'function' && (
                     <button onClick={toggleFullscreen} className={`p-1 rounded-full ${hoverColor} transition-colors`} style={{ color: accentColor }} title="Toggle fullscreen">
                         <HiOutlineArrowsPointingOut className="w-5 h-5" />
