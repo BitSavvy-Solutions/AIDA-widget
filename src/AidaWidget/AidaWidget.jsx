@@ -11,6 +11,8 @@ import './AidaWidget.css';
 import ChatInput from './ChatInput';
 import AppearanceModal, { THEMES } from './AppearanceModal';
 import LocalModelsModal from './localModels/LocalModelsModal';
+import AttachmentMismatchModal from './AttachmentMismatchModal';
+import { findUnsupportedAttachments, findUnsupportedAttachmentsInHistory, getUnsupportedAttachmentTypes } from './utils/modelCapabilities';
 import {
     useWidgetState,
     useModal,
@@ -274,6 +276,14 @@ const AidaWidget = (props) => {
         return allModels.find(m => m.value === value) || { value };
     }, [availableModels, ollama.models, chromeAI.chatModels]);
 
+    // selectedModel can be a bare { value } restored from localStorage. Resolve
+    // it against the live model lists so capability checks and the mismatch
+    // dialog always see full metadata (label, modality).
+    const resolvedSelectedModel = useMemo(
+        () => lookupModelObject(selectedModel?.value || ''),
+        [lookupModelObject, selectedModel]
+    );
+
     const lookupAudioModelObject = useCallback((value) => {
         const allAudio = [...availableAudioModels, ...chromeAI.audioModels];
         return allAudio.find(m => m.value === value) || { value };
@@ -296,20 +306,6 @@ const AidaWidget = (props) => {
             setSelectedAudioModel(model);
         }
     }, [lookupAudioModelObject]);
-
-    // Adapter for useAttachments which expects a setter that can handle string or updater function
-    const handleSetSelectedModelForAttachments = useCallback((arg) => {
-        if (typeof arg === 'function') {
-            setSelectedModel(prev => {
-                const prevValue = typeof prev === 'string' ? prev : prev?.value;
-                const nextValue = arg(prevValue);
-                const nextObj = lookupModelObject(nextValue) || { value: nextValue };
-                return nextObj;
-            });
-        } else {
-            handleSetSelectedModel(arg);
-        }
-    }, [handleSetSelectedModel, lookupModelObject]);
 
     const selectedModelReasoning = useMemo(() => {
         if (!features.modelSelection) return null;
@@ -339,6 +335,11 @@ const AidaWidget = (props) => {
     const [viewingMessageAttachments, setViewingMessageAttachments] = useState(null);
     const [embedUrl, setEmbedUrl] = useState(null);
     const [sessionToShare, setSessionToShare] = useState(null);
+
+    // Attachment/model capability mismatch flow
+    const [pendingMismatch, setPendingMismatch] = useState(null);
+    // Incremented to ask ChatInput to open the model picker programmatically
+    const [modelMenuTrigger, setModelMenuTrigger] = useState(0);
 
     const inputRef = useRef(null);
     const inputSelectionRef = useRef(null);
@@ -371,7 +372,7 @@ const AidaWidget = (props) => {
         attachments, setAttachments, addImageAttachments, addPdfAttachments, addTextAttachment, addFolderAttachments,
         addUrlAttachment, addContextAttachment,
         removeAttachment, clearAttachments, isAttachmentModalOpen, openModal: openAttachmentModal, closeModal: closeAttachmentModal
-    } = useAttachments(handleSetSelectedModelForAttachments);
+    } = useAttachments();
 
     const [isReadingPage, setIsReadingPage] = useState(false);
 
@@ -487,62 +488,101 @@ const AidaWidget = (props) => {
             : base;
     }, [isWebSearchEnabled]);
 
-    const stableHandleSendMessage = useCallback(async (messageTextOverride = null) => {
+    // Checks a pre-windowed slice of history plus the current tray against the
+    // selected model's capabilities. Returns null when everything is compatible.
+    const evaluateCapabilityMismatch = useCallback((windowedHistory, trayAttachments) => {
+        const stripTypes = getUnsupportedAttachmentTypes(resolvedSelectedModel);
+        if (stripTypes.size === 0) return null;
+
+        const trayItems = findUnsupportedAttachments(trayAttachments, resolvedSelectedModel);
+        const historyItems = findUnsupportedAttachmentsInHistory(windowedHistory, resolvedSelectedModel);
+
+        if (trayItems.length === 0 && historyItems.length === 0) return null;
+        return { stripTypes, trayItems, historyItems };
+    }, [resolvedSelectedModel]);
+
+    const stableHandleSendMessage = useCallback(async (messageTextOverride = null, options = {}) => {
+        const {
+            attachmentsOverride = null,
+            leftoverAttachments = null,
+            skipCapabilityCheck = false,
+            stripAttachmentTypes = null,
+        } = options;
+        const activeAttachments = attachmentsOverride ?? attachments;
         const text = messageTextOverride ?? '';
-        if ((!text.trim() && attachments.length === 0) || isLoading) return;
-        cancelAutoSendTimer();
-        cancelAutoRecordTimer();
-        const botMessageId = `bot-${Date.now()}`;
-        const finalModelName = resolveModelName(selectedModel);
-        const imageAttachments = attachments.filter((a) => a.type === 'image');
-        let nextMessages = [];
-        let activeSessionId = currentSessionId;
+        if ((!text.trim() && activeAttachments.length === 0) || isLoading) return;
 
-        const userMessage = {
-            id: `user-${Date.now()}`,
-            sender: 'user',
-            text: text.trim(),
-            model: finalModelName,
-            reasoningConfig: activeReasoningEffort ? buildReasoningConfig(activeReasoningEffort) : undefined,
-            webSearchEnabled: isWebSearchEnabled,
-            attachments,
-            images: imageAttachments
-        };
-        nextMessages = [...messages, userMessage, { id: botMessageId, sender: 'bot', text: '' }];
-        setMessages(nextMessages);
+        const runSend = async (sendAttachments, leftover, sendStripTypes) => {
+            cancelAutoSendTimer();
+            cancelAutoRecordTimer();
+            const botMessageId = `bot-${Date.now()}`;
+            const finalModelName = resolveModelName(selectedModel);
+            const imageAttachments = sendAttachments.filter((a) => a.type === 'image');
+            let activeSessionId = currentSessionId;
 
-        if (historyEnabled) {
-            if (!activeSessionId) {
-                activeSessionId = await createNewSession(nextMessages);
+            const userMessage = {
+                id: `user-${Date.now()}`,
+                sender: 'user',
+                text: text.trim(),
+                model: finalModelName,
+                reasoningConfig: activeReasoningEffort ? buildReasoningConfig(activeReasoningEffort) : undefined,
+                webSearchEnabled: isWebSearchEnabled,
+                attachments: sendAttachments,
+                images: imageAttachments
+            };
+            const nextMessages = [...messages, userMessage, { id: botMessageId, sender: 'bot', text: '' }];
+            setMessages(nextMessages);
+
+            if (historyEnabled) {
+                if (!activeSessionId) {
+                    activeSessionId = await createNewSession(nextMessages);
+                } else {
+                    updateCurrentSession(nextMessages);
+                }
+            }
+
+            // Unsupported tray attachments stay in the tray so they can be
+            // re-sent later with a model that supports them.
+            if (leftover && leftover.length > 0) {
+                setAttachments(leftover);
             } else {
-                updateCurrentSession(nextMessages);
+                clearAttachments();
+            }
+            setEditingMessageId(null);
+            if (isWebSearchEnabled) setIsWebSearchEnabled(false);
+
+            const historyForPayload = nextMessages.slice(0, -1);
+            await streamResponse({ userMessage, botMessageId, historyForPayload, sessionId: activeSessionId, contextLimit, stripAttachmentTypes: sendStripTypes });
+        };
+
+        if (!skipCapabilityCheck) {
+            // The request payload includes attachments from previous messages
+            // inside the context window, so the gate must cover history too.
+            // The new user message occupies one slot of the window, so previous
+            // messages get the remaining contextLimit - 1 slots.
+            const prevWindow = contextLimit > 1 ? messages.slice(-(contextLimit - 1)) : [];
+            const mismatch = evaluateCapabilityMismatch(prevWindow, activeAttachments);
+            if (mismatch) {
+                setPendingMismatch({
+                    ...mismatch,
+                    text,
+                    resume: () => {
+                        const unsupportedIds = new Set(mismatch.trayItems.map((i) => i.id));
+                        const supported = activeAttachments.filter((a) => !unsupportedIds.has(a.id));
+                        const leftover = activeAttachments.filter((a) => unsupportedIds.has(a.id));
+                        runSend(supported, leftover, mismatch.stripTypes);
+                    },
+                });
+                return;
             }
         }
 
-        clearAttachments();
-        setEditingMessageId(null);
-        if (isWebSearchEnabled) setIsWebSearchEnabled(false);
-
-        const historyForPayload = nextMessages.slice(0, -1);
-        await streamResponse({ userMessage, botMessageId, historyForPayload, sessionId: activeSessionId, contextLimit });
+        await runSend(activeAttachments, leftoverAttachments, stripAttachmentTypes);
     }, [
-        attachments,
-        isLoading,
-        selectedModel,
-        isWebSearchEnabled,
-        messages,
-        currentSessionId,
-        historyEnabled,
-        createNewSession,
-        updateCurrentSession,
-        streamResponse,
-        setMessages,
-        cancelAutoSendTimer,
-        cancelAutoRecordTimer,
-        clearAttachments,
-        contextLimit,
-        resolveModelName,
-        activeReasoningEffort,
+        attachments, isLoading, selectedModel, isWebSearchEnabled, messages, currentSessionId,
+        historyEnabled, createNewSession, updateCurrentSession, streamResponse, setMessages,
+        setAttachments, cancelAutoSendTimer, cancelAutoRecordTimer, clearAttachments,
+        contextLimit, resolveModelName, activeReasoningEffort, evaluateCapabilityMismatch,
     ]);
 
     const handleAutoSend = useCallback(() => {
@@ -591,6 +631,53 @@ const AidaWidget = (props) => {
     useEffect(() => {
         autoSendCallbackRef.current = handleAutoSend;
     }, [handleAutoSend]);
+
+    // --- Attachment / model capability mismatch flow -------------------------
+    // Puts drafted text back into the input so nothing is lost when the
+    // mismatch dialog is dismissed or the user goes looking for another model.
+    const restoreInputText = useCallback((text) => {
+        const el = inputRef.current;
+        if (!el || !text) return;
+        el.textContent = text;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+    }, []);
+
+    const mismatchUnsupportedIds = useMemo(
+        () => new Set((pendingMismatch?.trayItems || []).map((i) => i.id)),
+        [pendingMismatch]
+    );
+
+    // "Send without" is viable when something would still go out: text, a
+    // supported tray attachment, or history content (stripped of images).
+    const canSendWithoutMismatch = Boolean(
+        pendingMismatch && (
+            (pendingMismatch.historyItems || []).length > 0 ||
+            (pendingMismatch.text || '').trim().length > 0 ||
+            attachments.some((a) => !mismatchUnsupportedIds.has(a.id))
+        )
+    );
+
+    const handleMismatchSendWithout = useCallback(() => {
+        const pm = pendingMismatch;
+        if (!pm) return;
+        setPendingMismatch(null);
+        pm.resume?.();
+    }, [pendingMismatch]);
+
+    const handleMismatchChangeModel = useCallback(() => {
+        if (!pendingMismatch) return;
+        const { text } = pendingMismatch;
+        setPendingMismatch(null);
+        restoreInputText(text);
+        setModelMenuTrigger((n) => n + 1);
+    }, [pendingMismatch, restoreInputText]);
+
+    const handleMismatchDismiss = useCallback(() => {
+        if (!pendingMismatch) return;
+        const { text } = pendingMismatch;
+        setPendingMismatch(null);
+        restoreInputText(text);
+    }, [pendingMismatch, restoreInputText]);
 
     const displayText = useDisplayAnimation({ isOpen, isLoading });
 
@@ -769,10 +856,23 @@ const AidaWidget = (props) => {
         const historyForPayload = [...previousHistory, userMessageToRetry];
         const newBotMessageId = `bot-${Date.now()}`;
         const nextMessages = [...previousHistory, userMessageToRetry, { id: newBotMessageId, sender: 'bot', text: '' }];
-        setMessages(nextMessages);
-        if (historyEnabled && currentSessionId) updateCurrentSession(nextMessages);
-        await streamResponse({ userMessage: userMessageToRetry, botMessageId: newBotMessageId, historyForPayload, sessionId: currentSessionId, contextLimit });
-    }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession, selectedModel, isWebSearchEnabled, contextLimit, resolveModelName, historyEnabled, activeReasoningEffort]);
+
+        const performRetry = (stripTypes) => {
+            setMessages(nextMessages);
+            if (historyEnabled && currentSessionId) updateCurrentSession(nextMessages);
+            streamResponse({ userMessage: userMessageToRetry, botMessageId: newBotMessageId, historyForPayload, sessionId: currentSessionId, contextLimit, stripAttachmentTypes: stripTypes });
+        };
+
+        const retryWindow = typeof contextLimit === 'number' && contextLimit > 0
+            ? historyForPayload.slice(-contextLimit)
+            : historyForPayload;
+        const mismatch = evaluateCapabilityMismatch(retryWindow, []);
+        if (mismatch) {
+            setPendingMismatch({ ...mismatch, text: '', resume: () => performRetry(mismatch.stripTypes) });
+            return;
+        }
+        performRetry(null);
+    }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession, selectedModel, isWebSearchEnabled, contextLimit, resolveModelName, historyEnabled, activeReasoningEffort, evaluateCapabilityMismatch]);
 
     const handleRegenerate = useCallback(async (userMessageId) => {
         if (isLoading) return;
@@ -784,10 +884,23 @@ const AidaWidget = (props) => {
         const historyForPayload = [...previousHistory, userMessageToRegenerate];
         const newBotMessageId = `bot-${Date.now()}`;
         const nextMessages = [...previousHistory, userMessageToRegenerate, { id: newBotMessageId, sender: 'bot', text: '' }];
-        setMessages(nextMessages);
-        if (historyEnabled && currentSessionId) updateCurrentSession(nextMessages);
-        await streamResponse({ userMessage: userMessageToRegenerate, botMessageId: newBotMessageId, historyForPayload, sessionId: currentSessionId, contextLimit });
-    }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession, selectedModel, isWebSearchEnabled, contextLimit, resolveModelName, historyEnabled, activeReasoningEffort]);
+
+        const performRegenerate = (stripTypes) => {
+            setMessages(nextMessages);
+            if (historyEnabled && currentSessionId) updateCurrentSession(nextMessages);
+            streamResponse({ userMessage: userMessageToRegenerate, botMessageId: newBotMessageId, historyForPayload, sessionId: currentSessionId, contextLimit, stripAttachmentTypes: stripTypes });
+        };
+
+        const regenWindow = typeof contextLimit === 'number' && contextLimit > 0
+            ? historyForPayload.slice(-contextLimit)
+            : historyForPayload;
+        const mismatch = evaluateCapabilityMismatch(regenWindow, []);
+        if (mismatch) {
+            setPendingMismatch({ ...mismatch, text: '', resume: () => performRegenerate(mismatch.stripTypes) });
+            return;
+        }
+        performRegenerate(null);
+    }, [isLoading, messages, streamResponse, setMessages, currentSessionId, updateCurrentSession, selectedModel, isWebSearchEnabled, contextLimit, resolveModelName, historyEnabled, activeReasoningEffort, evaluateCapabilityMismatch]);
 
     const currentSessionTitle = currentSession?.title || "New Chat";
 
@@ -970,6 +1083,7 @@ const AidaWidget = (props) => {
                         chromeModels={chromeAI.chatModels}
                         chromeAudioModels={chromeAI.audioModels}
                         isLocalModelsModalOpen={isLocalModelsModalOpen}
+                        modelMenuTrigger={modelMenuTrigger}
                         onOllamaRefresh={() => ollama.fetchModels()}
                         onOpenOllamaSettings={() => { setLocalModelsTab('ollama'); setIsLocalModelsModalOpen(true); }}
                         onOpenChromeAISettings={() => { setLocalModelsTab('chrome'); setIsLocalModelsModalOpen(true); }}
@@ -1076,6 +1190,20 @@ const AidaWidget = (props) => {
                 onTabChange={setLocalModelsTab}
                 ollama={ollama}
                 chromeAI={chromeAI}
+                theme={baseTheme}
+            />
+
+            <AttachmentMismatchModal
+                isOpen={Boolean(pendingMismatch)}
+                onClose={handleMismatchDismiss}
+                unsupportedAttachments={[
+                    ...(pendingMismatch?.trayItems || []),
+                    ...(pendingMismatch?.historyItems || []),
+                ]}
+                modelLabel={resolvedSelectedModel?.label || selectedModel?.value || 'This model'}
+                canSendWithout={canSendWithoutMismatch}
+                onSendWithout={handleMismatchSendWithout}
+                onChangeModel={features.modelSelection ? handleMismatchChangeModel : undefined}
                 theme={baseTheme}
             />
 

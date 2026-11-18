@@ -116,7 +116,7 @@ export const useChatAPI = ({
         return content;
     }, []);
 
-    const buildMessageHistoryPayload = useCallback((history = []) => {
+    const buildMessageHistoryPayload = useCallback((history = [], stripTypes = null) => {
         const messageHistory = [];
         if (pageContext && Object.keys(pageContext).length > 0) {
             messageHistory.push({ type: 'ai', content: `<PageContext>\n${JSON.stringify(pageContext, null, 2)}\n</PageContext>` });
@@ -131,14 +131,18 @@ export const useChatAPI = ({
                 content: formatMessageContent(m)
             };
             if (m.sender === 'user') {
-                const imageUrls = (m.images || []).map(img => img.src).filter(Boolean);
+                const imageUrls = stripTypes?.has('image')
+                    ? []
+                    : (m.images || []).map(img => img.src).filter(Boolean);
                 if (imageUrls.length > 0) {
                     messagePayload.image_data_urls = imageUrls;
                 }
-                const pdfUrls = (m.attachments || [])
-                    .filter(att => att.type === 'pdf')
-                    .map(pdf => pdf.src)
-                    .filter(Boolean);
+                const pdfUrls = stripTypes?.has('pdf')
+                    ? []
+                    : (m.attachments || [])
+                        .filter(att => att.type === 'pdf')
+                        .map(pdf => pdf.src)
+                        .filter(Boolean);
                 if (pdfUrls.length > 0) {
                     messagePayload.pdf_attachments = pdfUrls;
                 }
@@ -149,7 +153,7 @@ export const useChatAPI = ({
         return messageHistory;
     }, [customPrompt, pageContext, formatMessageContent]);
 
-    const buildOllamaMessages = useCallback((history = []) => {
+    const buildOllamaMessages = useCallback((history = [], stripTypes = null) => {
         const result = [];
         const systemParts = [];
         if (pageContext && Object.keys(pageContext).length > 0) {
@@ -166,7 +170,9 @@ export const useChatAPI = ({
             const content = formatMessageContent(m);
             if (m.sender === 'user') {
                 const msg = { role: 'user', content };
-                const images = (m.images || []).map((img) => stripDataUrlPrefix(img.src)).filter(Boolean);
+                const images = stripTypes?.has('image')
+                    ? []
+                    : (m.images || []).map((img) => stripDataUrlPrefix(img.src)).filter(Boolean);
                 if (images.length > 0) msg.images = images;
                 result.push(msg);
             } else if ((content || '').trim()) {
@@ -176,9 +182,11 @@ export const useChatAPI = ({
         return result;
     }, [pageContext, customPrompt, formatMessageContent]);
 
-    const buildChromeContent = useCallback(async (m) => {
+    const buildChromeContent = useCallback(async (m, stripTypes = null) => {
         const text = formatMessageContent(m);
-        const images = m.sender === 'user' ? (m.images || []).filter((img) => img?.src) : [];
+        const images = m.sender === 'user' && !stripTypes?.has('image')
+            ? (m.images || []).filter((img) => img?.src)
+            : [];
         if (images.length === 0) return text;
 
         const parts = [];
@@ -193,7 +201,7 @@ export const useChatAPI = ({
         return parts.length > 0 ? parts : text;
     }, [formatMessageContent]);
 
-    const streamOllamaResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit = 10 }) => {
+    const streamOllamaResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit = 10, stripAttachmentTypes = null }) => {
         setIsLoading(true);
         setLastCost(0);
         setLiveReasoning({ text: '', botId: botMessageId, contentHasStarted: false });
@@ -222,7 +230,7 @@ export const useChatAPI = ({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     model: modelName,
-                    messages: buildOllamaMessages(limitedHistory),
+                    messages: buildOllamaMessages(limitedHistory, stripAttachmentTypes),
                     stream: true,
                 }),
                 signal: abortController.signal,
@@ -367,7 +375,7 @@ export const useChatAPI = ({
         }
     };
 
-    const streamChromeResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit = 10 }) => {
+    const streamChromeResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit = 10, stripAttachmentTypes = null }) => {
         setIsLoading(true);
         setLastCost(0);
         setLiveReasoning({ text: '', botId: botMessageId, contentHasStarted: false });
@@ -390,7 +398,8 @@ export const useChatAPI = ({
                 limitedHistory = historyForPayload.slice(-contextLimit);
             }
 
-            const hasImages = limitedHistory.some((m) => (m.images || []).length > 0);
+            const hasImages = !stripAttachmentTypes?.has('image') &&
+                limitedHistory.some((m) => (m.images || []).length > 0);
             const expectedInputs = [{ type: 'text', languages: ['en'] }];
             if (hasImages) expectedInputs.push({ type: 'image' });
 
@@ -417,7 +426,7 @@ export const useChatAPI = ({
                 initialPrompts.push({ role: 'system', content: systemParts.join('\n\n') });
             }
             for (const m of limitedHistory.slice(0, -1)) {
-                const content = await buildChromeContent(m);
+                const content = await buildChromeContent(m, stripAttachmentTypes);
                 const isEmpty = typeof content === 'string' ? !content.trim() : content.length === 0;
                 if (isEmpty) continue;
                 initialPrompts.push({ role: m.sender === 'user' ? 'user' : 'assistant', content });
@@ -430,7 +439,7 @@ export const useChatAPI = ({
                 signal: abortController.signal,
             });
 
-            const currentUserContent = await buildChromeContent(userMessage);
+            const currentUserContent = await buildChromeContent(userMessage, stripAttachmentTypes);
             const promptInput = Array.isArray(currentUserContent)
                 ? [{ role: 'user', content: currentUserContent }]
                 : currentUserContent;
@@ -492,13 +501,13 @@ export const useChatAPI = ({
         }
     };
 
-    const streamResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit = 10 }) => {
+    const streamResponse = async ({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit = 10, stripAttachmentTypes = null }) => {
         if (userMessage?.model?.startsWith('ollama:')) {
-            return streamOllamaResponse({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit });
+            return streamOllamaResponse({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit, stripAttachmentTypes });
         }
 
         if (userMessage?.model?.startsWith('chrome:')) {
-            return streamChromeResponse({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit });
+            return streamChromeResponse({ userMessage, botMessageId, historyForPayload, sessionId, contextLimit, stripAttachmentTypes });
         }
 
         setIsLoading(true);
@@ -532,7 +541,7 @@ export const useChatAPI = ({
 
         try {
             const payload = {
-                message_history: buildMessageHistoryPayload(limitedHistory),
+                message_history: buildMessageHistoryPayload(limitedHistory, stripAttachmentTypes),
                 email: user.email,
                 page_path: window.location.pathname,
                 language: detectedLanguageCode,

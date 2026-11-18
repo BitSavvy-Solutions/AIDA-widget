@@ -195,6 +195,7 @@ const ChatInput = ({
     chromeModels = [],
     chromeAudioModels = [],
     isLocalModelsModalOpen = false,
+    modelMenuTrigger = 0,
     onOllamaRefresh,
     onOpenOllamaSettings,
     onOpenChromeAISettings,
@@ -418,6 +419,20 @@ const ChatInput = ({
         document.addEventListener('keydown', onKeyDown);
         return () => document.removeEventListener('keydown', onKeyDown);
     }, [modelSelectionEnabled, isModelMenuOpen, openModelMenu, closeModelMenu, inputRef, isLocalModelsModalOpen]);
+
+    // Opens the model picker on demand from the parent, e.g. after the
+    // attachment capability dialog asks the user to switch models.
+    const handledMenuTriggerRef = useRef(0);
+    useEffect(() => {
+        if (!modelSelectionEnabled || modelMenuTrigger <= handledMenuTriggerRef.current) return;
+        handledMenuTriggerRef.current = modelMenuTrigger;
+        // On narrow toolbars the model control lives in the overflow menu, so
+        // open that first to give the picker a trigger to render from.
+        if (overflowKeys.includes('model')) {
+            setIsOverflowOpen(true);
+        }
+        openModelMenu();
+    }, [modelMenuTrigger, modelSelectionEnabled, overflowKeys, openModelMenu]);
 
     useEffect(() => {
         if (!isModelMenuOpen) return;

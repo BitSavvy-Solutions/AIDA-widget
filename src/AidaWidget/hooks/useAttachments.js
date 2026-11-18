@@ -29,10 +29,9 @@ const isKnownTextFile = (file) => {
 
 /**
  * Hook to manage all types of attachments (images, text files, URLs)
- * @param {Function} setSelectedModel - Function to update AI model selection
  * @returns {object} Attachment state and handlers
  */
-export const useAttachments = (setSelectedModel) => {
+export const useAttachments = () => {
     const [attachments, setAttachments] = useState([]);
     const [isAttachmentModalOpen, setIsAttachmentModalOpen] = useState(false);
 
@@ -110,22 +109,15 @@ export const useAttachments = (setSelectedModel) => {
             }
 
             if (results.length > 0) {
+                // No model auto-switching here anymore: the send flow checks
+                // attachments against the selected model's capabilities and
+                // asks the user how to resolve any mismatch.
                 setAttachments(prev => [...prev, ...results]);
-                const visionlessModels = new Set([
-                    'deepseek/deepseek-r1',
-                    'deepseek/deepseek-v3.2',
-                    'deepseek/deepseek-chat-v3-0324',
-                ]);
-                setSelectedModel(prevModel =>
-                    prevModel?.startsWith('ollama:')
-                        ? prevModel
-                        : visionlessModels.has(prevModel) ? 'google/gemini-3.1-flash-lite-preview' : prevModel
-                );
             }
         } catch (e) {
             console.error('Failed to process image(s)', e);
         }
-    }, [setSelectedModel]);
+    }, []);
 
     const addPdfAttachments = useCallback(async (files) => {
         if (!files || files.length === 0) return;
