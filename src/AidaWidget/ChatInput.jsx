@@ -600,10 +600,12 @@ const ChatInput = ({
 
     const onSend = () => {
         const text = getMessageText();
-        handleSendMessage(text);
-        if (inputRef.current) {
-            inputRef.current.innerHTML = '';
-            adjustInputHeight();
+        const initiated = handleSendMessage(text);
+        if (initiated) {
+            if (inputRef.current) {
+                inputRef.current.innerHTML = '';
+                adjustInputHeight();
+            }
         }
     };
 

@@ -488,6 +488,15 @@ const AidaWidget = (props) => {
             : base;
     }, [isWebSearchEnabled]);
 
+    // Clears the contenteditable input. Called only after a send has been
+    // accepted, so the input is never cleared for a blocked send.
+    const clearInput = useCallback(() => {
+        const el = inputRef.current;
+        if (!el) return;
+        el.innerHTML = '';
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+    }, []);
+
     // Checks a pre-windowed slice of history plus the current tray against the
     // selected model's capabilities. Returns null when everything is compatible.
     const evaluateCapabilityMismatch = useCallback((windowedHistory, trayAttachments) => {
@@ -501,7 +510,7 @@ const AidaWidget = (props) => {
         return { stripTypes, trayItems, historyItems };
     }, [resolvedSelectedModel]);
 
-    const stableHandleSendMessage = useCallback(async (messageTextOverride = null, options = {}) => {
+    const stableHandleSendMessage = useCallback((messageTextOverride = null, options = {}) => {
         const {
             attachmentsOverride = null,
             leftoverAttachments = null,
@@ -510,7 +519,7 @@ const AidaWidget = (props) => {
         } = options;
         const activeAttachments = attachmentsOverride ?? attachments;
         const text = messageTextOverride ?? '';
-        if ((!text.trim() && activeAttachments.length === 0) || isLoading) return;
+        if ((!text.trim() && activeAttachments.length === 0) || isLoading) return false;
 
         const runSend = async (sendAttachments, leftover, sendStripTypes) => {
             cancelAutoSendTimer();
@@ -573,11 +582,13 @@ const AidaWidget = (props) => {
                         runSend(supported, leftover, mismatch.stripTypes);
                     },
                 });
-                return;
+                return false;
             }
         }
 
-        await runSend(activeAttachments, leftoverAttachments, stripAttachmentTypes);
+        runSend(activeAttachments, leftoverAttachments, stripAttachmentTypes)
+            .catch((err) => console.error('Send failed to start', err));
+        return true;
     }, [
         attachments, isLoading, selectedModel, isWebSearchEnabled, messages, currentSessionId,
         historyEnabled, createNewSession, updateCurrentSession, streamResponse, setMessages,
@@ -588,13 +599,12 @@ const AidaWidget = (props) => {
     const handleAutoSend = useCallback(() => {
         const text = getMessageText();
         if (text.trim() || attachments.length > 0) {
-            stableHandleSendMessage(text);
-            if (inputRef.current) {
-                inputRef.current.innerHTML = '';
-                inputRef.current.dispatchEvent(new Event('input', { bubbles: true }));
+            const initiated = stableHandleSendMessage(text);
+            if (initiated) {
+                clearInput();
             }
         }
-    }, [getMessageText, stableHandleSendMessage, attachments.length]);
+    }, [getMessageText, stableHandleSendMessage, attachments.length, clearInput]);
 
     const handleOpenHistory = useCallback(() => {
         if (isMobileViewport) {
@@ -633,15 +643,6 @@ const AidaWidget = (props) => {
     }, [handleAutoSend]);
 
     // --- Attachment / model capability mismatch flow -------------------------
-    // Puts drafted text back into the input so nothing is lost when the
-    // mismatch dialog is dismissed or the user goes looking for another model.
-    const restoreInputText = useCallback((text) => {
-        const el = inputRef.current;
-        if (!el || !text) return;
-        el.textContent = text;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-    }, []);
-
     const mismatchUnsupportedIds = useMemo(
         () => new Set((pendingMismatch?.trayItems || []).map((i) => i.id)),
         [pendingMismatch]
@@ -662,22 +663,22 @@ const AidaWidget = (props) => {
         if (!pm) return;
         setPendingMismatch(null);
         pm.resume?.();
-    }, [pendingMismatch]);
+        // The send is now confirmed; clear the input that was held for the dialog.
+        clearInput();
+    }, [pendingMismatch, clearInput]);
 
     const handleMismatchChangeModel = useCallback(() => {
         if (!pendingMismatch) return;
-        const { text } = pendingMismatch;
         setPendingMismatch(null);
-        restoreInputText(text);
+        // Input was never cleared, so no restore is needed.
         setModelMenuTrigger((n) => n + 1);
-    }, [pendingMismatch, restoreInputText]);
+    }, [pendingMismatch]);
 
     const handleMismatchDismiss = useCallback(() => {
         if (!pendingMismatch) return;
-        const { text } = pendingMismatch;
         setPendingMismatch(null);
-        restoreInputText(text);
-    }, [pendingMismatch, restoreInputText]);
+        // Input was never cleared, so no restore is needed.
+    }, [pendingMismatch]);
 
     const displayText = useDisplayAnimation({ isOpen, isLoading });
 
