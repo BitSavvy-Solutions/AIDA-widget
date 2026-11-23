@@ -11,7 +11,7 @@ import './AidaWidget.css';
 import ChatInput from './ChatInput';
 import AppearanceModal, { THEMES } from './AppearanceModal';
 import LocalModelsModal from './localModels/LocalModelsModal';
-import { useInfoSlides } from './headerInfo/useInfoSlides'; 
+import { useInfoSlides } from './headerInfo/useInfoSlides';
 import { useCredits } from './headerInfo/useCredits';
 import AttachmentMismatchModal from './AttachmentMismatchModal';
 import { findUnsupportedAttachments, findUnsupportedAttachmentsInHistory, getUnsupportedAttachmentTypes } from './utils/modelCapabilities';
@@ -35,7 +35,7 @@ import { CHAT_URL, TRANSCRIPTION_URL, MODELS_URL } from './utils/apiConfig';
 import { getSupportedEfforts, getDefaultEffort, resolveEffort, buildReasoningConfig } from './utils/reasoning';
 
 const DEFAULT_MODELS = [
-    { value: 'deepseek/deepseek-v4.1-flash', label: 'Deepseek 4.1 Flash', category: 'reasoning' },    
+    { value: 'deepseek/deepseek-v4.1-flash', label: 'Deepseek 4.1 Flash', category: 'reasoning' },
     { value: 'deepseek/deepseek-v4-pro', label: 'Deepseek 4 Pro', category: 'reasoning' },
     { value: 'deepseek/deepseek-v3.2', label: 'Deepseek 3.2', category: 'reasoning' },
     { value: 'deepseek/deepseek-chat-v3-0324', label: 'Deepseek V3', category: 'reasoning' },
@@ -130,47 +130,47 @@ const AidaWidget = (props) => {
         }
     });
 
-        // Load models from API and resolve metadata for the currently selected model
-        useEffect(() => {
-            const loadModels = async () => {
-                try {
-                    const res = await fetch(MODELS_URL);
-                    if (!res.ok) throw new Error('Failed to fetch models');
-                    const data = await res.json();
-    
-                    const textModels = normalizeModels(data.text);
-                    const audioModels = normalizeModels(data.audio);
-                    setFetchedModels(textModels);
-                    setFetchedAudioModels(audioModels);
-    
-                    // If the currently selected model is not in the fetched list, search for it
-                    const selectedValue = selectedModel?.value;
-                    if (selectedValue && !selectedValue.startsWith('ollama:') && !selectedValue.startsWith('chrome:')) {
-                        const found = textModels.find(m => m.value === selectedValue) || audioModels.find(m => m.value === selectedValue);
-                        if (!found) {
-                            // Search for the model by name to get its metadata
-                            try {
-                                const searchRes = await fetch(`${MODELS_URL}?q=${encodeURIComponent(selectedValue)}`);
-                                if (searchRes.ok) {
-                                    const searchData = await searchRes.json();
-                                    const searchTextModels = normalizeModels(searchData.text || []);
-                                    const searchAudioModels = normalizeModels(searchData.audio || []);
-                                    const foundInSearch = searchTextModels.find(m => m.value === selectedValue) || searchAudioModels.find(m => m.value === selectedValue);
-                                    if (foundInSearch) {
-                                        setSelectedModel(foundInSearch);
-                                    }
+    // Load models from API and resolve metadata for the currently selected model
+    useEffect(() => {
+        const loadModels = async () => {
+            try {
+                const res = await fetch(MODELS_URL);
+                if (!res.ok) throw new Error('Failed to fetch models');
+                const data = await res.json();
+
+                const textModels = normalizeModels(data.text);
+                const audioModels = normalizeModels(data.audio);
+                setFetchedModels(textModels);
+                setFetchedAudioModels(audioModels);
+
+                // If the currently selected model is not in the fetched list, search for it
+                const selectedValue = selectedModel?.value;
+                if (selectedValue && !selectedValue.startsWith('ollama:') && !selectedValue.startsWith('chrome:')) {
+                    const found = textModels.find(m => m.value === selectedValue) || audioModels.find(m => m.value === selectedValue);
+                    if (!found) {
+                        // Search for the model by name to get its metadata
+                        try {
+                            const searchRes = await fetch(`${MODELS_URL}?q=${encodeURIComponent(selectedValue)}`);
+                            if (searchRes.ok) {
+                                const searchData = await searchRes.json();
+                                const searchTextModels = normalizeModels(searchData.text || []);
+                                const searchAudioModels = normalizeModels(searchData.audio || []);
+                                const foundInSearch = searchTextModels.find(m => m.value === selectedValue) || searchAudioModels.find(m => m.value === selectedValue);
+                                if (foundInSearch) {
+                                    setSelectedModel(foundInSearch);
                                 }
-                            } catch (searchErr) {
-                                console.warn('Failed to search for selected model metadata:', searchErr);
                             }
+                        } catch (searchErr) {
+                            console.warn('Failed to search for selected model metadata:', searchErr);
                         }
                     }
-                } catch (err) {
-                    console.error('Failed to load models from API:', err);
                 }
-            };
-            loadModels();
-        }, []); // Run once on mount
+            } catch (err) {
+                console.error('Failed to load models from API:', err);
+            }
+        };
+        loadModels();
+    }, []); // Run once on mount
 
     const availableModels = (fetchedModels.length > 0) ? fetchedModels : ((models && models.length > 0) ? models : DEFAULT_MODELS);
     const availableAudioModels = (fetchedAudioModels.length > 0) ? fetchedAudioModels : ((audioModels && audioModels.length > 0) ? audioModels : DEFAULT_AUDIO_MODELS);
@@ -272,19 +272,27 @@ const AidaWidget = (props) => {
     const chromeAI = useChromeAI(true);
     const ollama = useOllama();
 
-    // Helper: find full model object from available and local lists
+    // Helper: find full model object from available, searched, and local lists.
+    // Returns a safe text-only default when the value cannot be resolved, so
+    // the capability gate never treats an unknown model as multimodal.
     const lookupModelObject = useCallback((value) => {
-        const allModels = [...availableModels, ...ollama.models, ...chromeAI.chatModels];
-        return allModels.find(m => m.value === value) || { value };
-    }, [availableModels, ollama.models, chromeAI.chatModels]);
+        const allModels = [
+            ...availableModels,
+            ...(searchedModels?.text || []),
+            ...ollama.models,
+            ...chromeAI.chatModels,
+        ];
+        const found = allModels.find(m => m.value === value);
+        return found || { value: value || '', modality: 'text->text', category: 'chat' };
+    }, [availableModels, searchedModels, ollama.models, chromeAI.chatModels]);
 
-    // selectedModel can be a bare { value } restored from localStorage. Resolve
-    // it against the live model lists so capability checks and the mismatch
-    // dialog always see full metadata (label, modality).
-    const resolvedSelectedModel = useMemo(
-        () => lookupModelObject(selectedModel?.value || ''),
-        [lookupModelObject, selectedModel]
-    );
+    // selectedModel can be a bare { value } restored from localStorage. Prefer
+    // the already-resolved object when it carries metadata (e.g. a model picked
+    // from search results), and only fall back to a lookup by value otherwise.
+    const resolvedSelectedModel = useMemo(() => {
+        if (selectedModel?.modality) return selectedModel;
+        return lookupModelObject(selectedModel?.value || '');
+    }, [lookupModelObject, selectedModel]);
 
     const lookupAudioModelObject = useCallback((value) => {
         const allAudio = [...availableAudioModels, ...chromeAI.audioModels];

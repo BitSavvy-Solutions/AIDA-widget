@@ -45,7 +45,10 @@ const isLocalModelValue = (value) =>
  * - Hosted models are authoritative on images via their modality string
  *   (images are forwarded raw as image_data_urls). PDFs keep flowing
  *   through the backend's pdf_attachments pipeline regardless of modality.
- * - Models without modality metadata stay permissive; the backend decides.
+ * - Models without modality metadata are treated as text-only. This is the
+ *   safe default: if we cannot prove a model accepts images, we must not
+ *   silently forward them. The send guard will surface the mismatch dialog
+ *   and let the user switch models or send without the attachment.
  *
  * If those policies change, adjust this one function. The send guard and
  * the mismatch dialog follow automatically.
@@ -61,7 +64,9 @@ export const resolveInputCapabilities = (model) => {
     }
 
     if (!parsed) {
-        return new Set(['text', 'image', 'file']);
+        // No modality metadata: assume text-only so image attachments are
+        // gated by the mismatch dialog instead of being silently forwarded.
+        return new Set(['text', 'file']);
     }
 
     const caps = new Set(parsed.inputs);
