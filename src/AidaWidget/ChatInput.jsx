@@ -6,7 +6,7 @@ import {
     HiChevronDown, HiOutlineGlobeAlt, HiLightBulb, HiPhoto, HiChatBubbleLeftRight,
     HiArrowTopRightOnSquare, HiPaperClip, HiEye, HiMagnifyingGlass,
     HiOutlineDocument, HiOutlineRectangleStack, HiPlay, HiPause, HiArrowDownTray,
-    HiOutlineCpuChip, HiOutlineCog6Tooth, HiChevronUp,
+    HiOutlineCpuChip, HiOutlineCog6Tooth, HiChevronUp, HiCheck, HiOutlineFunnel,
 } from 'react-icons/hi2';
 import AttachmentButton from './AttachmentButton';
 import ContextSelector from './ContextSelector';
@@ -16,6 +16,14 @@ import ToolbarModal from './ToolbarModal';
 const TOOLBAR_GAP = 8;
 const MODEL_MAX_CHARS_MEDIUM = 20;
 const MODEL_MAX_CHARS_MIN = 10;
+
+const MODEL_TAG_DEFS = [
+    { key: 'local', label: 'Local' },
+    { key: 'cloud', label: 'Cloud' },
+    { key: 'free', label: 'Free' },
+    { key: 'reasoning', label: 'Reasoning' },
+    { key: 'vision', label: 'Vision' },
+];
 
 const extractUrls = (text) => {
     if (!text) return [];
@@ -209,6 +217,27 @@ const ChatInput = ({
     const [modelSearchQuery, setModelSearchQuery] = useState('');
     const [focusedModelIndex, setFocusedModelIndex] = useState(-1);
 
+    // Cost filter state (per-million-token values)
+    const [modelMinCost, setModelMinCost] = useState(null);
+    const [modelMaxCost, setModelMaxCost] = useState(null);
+
+    // Tag filter state (local / cloud / free / reasoning / vision)
+    const [modelTagFilters, setModelTagFilters] = useState(() => {
+        const defaults = Object.fromEntries(MODEL_TAG_DEFS.map((t) => [t.key, true]));
+        try {
+            const saved = localStorage.getItem('aida-model-tag-filters');
+            return saved ? { ...defaults, ...JSON.parse(saved) } : defaults;
+        } catch {
+            return defaults;
+        }
+    });
+
+    const [isTagFilterMenuOpen, setIsTagFilterMenuOpen] = useState(false);
+    const [tagFilterPosition, setTagFilterPosition] = useState(null);
+    const tagFilterMenuRef = useRef(null);
+    const tagFilterButtonRef = useRef(null);
+    const tagFilterDropdownRef = useRef(null);
+
     const modelMenuRef = useRef(null);
     const modelSearchRef = useRef(null);
     const modelItemRefs = useRef([]);
@@ -268,22 +297,177 @@ const ChatInput = ({
         }
     }, [modelSearchQuery, onSearchModels]);
 
+    // Restore persisted cost filter on mount
+    useEffect(() => {
+        try {
+            const savedMin = localStorage.getItem('aida-model-min-cost');
+            const savedMax = localStorage.getItem('aida-model-max-cost');
+            if (savedMin !== null) setModelMinCost(Number(savedMin));
+            if (savedMax !== null) setModelMaxCost(Number(savedMax));
+        } catch {
+            // ignore storage errors
+        }
+    }, []);
+
+    // Persist cost filter
+    useEffect(() => {
+        try {
+            if (modelMinCost !== null) localStorage.setItem('aida-model-min-cost', String(modelMinCost));
+            if (modelMaxCost !== null) localStorage.setItem('aida-model-max-cost', String(modelMaxCost));
+        } catch {
+            // ignore storage errors
+        }
+    }, [modelMinCost, modelMaxCost]);
+
+    // Persist tag filter
+    useEffect(() => {
+        try {
+            localStorage.setItem('aida-model-tag-filters', JSON.stringify(modelTagFilters));
+        } catch {
+            // ignore storage errors
+        }
+    }, [modelTagFilters]);
+
+    // Position the portaled tag filter dropdown
+    useEffect(() => {
+        if (!isTagFilterMenuOpen) {
+            setTagFilterPosition(null);
+            return;
+        }
+        const updatePosition = () => {
+            const rect = tagFilterButtonRef.current?.getBoundingClientRect();
+            if (!rect) return;
+            setTagFilterPosition({
+                top: rect.bottom + 4,
+                right: window.innerWidth - rect.right,
+            });
+        };
+        updatePosition();
+        window.addEventListener('resize', updatePosition);
+        window.addEventListener('scroll', updatePosition, true);
+        return () => {
+            window.removeEventListener('resize', updatePosition);
+            window.removeEventListener('scroll', updatePosition, true);
+        };
+    }, [isTagFilterMenuOpen]);
+
+    // Close the tag filter dropdown on outside click / Escape
+    useEffect(() => {
+        if (!isTagFilterMenuOpen) return;
+        const handleClick = (e) => {
+            const insideButton = tagFilterButtonRef.current?.contains(e.target);
+            const insideDropdown = tagFilterDropdownRef.current?.contains(e.target);
+            if (!insideButton && !insideDropdown) {
+                setIsTagFilterMenuOpen(false);
+            }
+        };
+        const handleKey = (e) => {
+            if (e.key === 'Escape') setIsTagFilterMenuOpen(false);
+        };
+        document.addEventListener('mousedown', handleClick);
+        document.addEventListener('keydown', handleKey);
+        return () => {
+            document.removeEventListener('mousedown', handleClick);
+            document.removeEventListener('keydown', handleKey);
+        };
+    }, [isTagFilterMenuOpen]);
+
+    // Build the cost extent from every model that exposes a completion price
+    const allPricedModels = useMemo(() => [
+        ...availableModels,
+        ...(searchedModels?.text || []),
+        ...(searchedModels?.audio || []),
+        ...availableAudioModels,
+        ...chromeAudioModels,
+    ], [availableModels, searchedModels, availableAudioModels, chromeAudioModels]);
+
+    const costExtent = useMemo(() => {
+        const prices = allPricedModels
+            .map((m) => m.pricing?.completion)
+            .filter((p) => typeof p === 'number' && !Number.isNaN(p) && p > 0)
+            .map((p) => p * 1_000_000);
+        if (prices.length === 0) return null;
+        const max = Math.max(...prices);
+        return { min: 0, max: Math.ceil(max * 100) / 100 };
+    }, [allPricedModels]);
+
+    // Clamp stored values into the current extent
+    useEffect(() => {
+        if (!costExtent) return;
+        setModelMinCost((prev) => {
+            if (prev === null) return costExtent.min;
+            return Math.max(costExtent.min, Math.min(prev, costExtent.max));
+        });
+        setModelMaxCost((prev) => {
+            if (prev === null) return costExtent.max;
+            return Math.max(costExtent.min, Math.min(prev, costExtent.max));
+        });
+    }, [costExtent]);
+
+    const passesCostFilter = useCallback((model) => {
+        const raw = model?.pricing?.completion;
+        if (typeof raw !== 'number' || Number.isNaN(raw)) return true;
+        const perM = raw * 1_000_000;
+        const min = modelMinCost ?? costExtent?.min ?? 0;
+        const max = modelMaxCost ?? costExtent?.max ?? Infinity;
+        return perM >= min && perM <= max;
+    }, [modelMinCost, modelMaxCost, costExtent]);
+
+    const getModelTags = useCallback((model) => {
+        const tags = new Set();
+        const value = model?.value || '';
+        if (value.startsWith('ollama:') || value.startsWith('chrome:')) {
+            tags.add('local');
+        } else {
+            tags.add('cloud');
+        }
+        const prompt = model.pricing?.prompt;
+        const completion = model.pricing?.completion;
+        if ((prompt === 0 || prompt === '0') && (completion === 0 || completion === '0')) {
+            tags.add('free');
+        }
+        if (model.category === 'reasoning' || model.reasoning) {
+            tags.add('reasoning');
+        }
+        if (model.category === 'vision' || String(model.modality || '').includes('image')) {
+            tags.add('vision');
+        }
+        return tags;
+    }, []);
+
+    const passesTagFilter = useCallback((model) => {
+        const tags = getModelTags(model);
+        for (const def of MODEL_TAG_DEFS) {
+            if (tags.has(def.key) && !modelTagFilters[def.key]) return false;
+        }
+        return true;
+    }, [getModelTags, modelTagFilters]);
+
+    const passesAllFilters = useCallback((model) => {
+        return passesCostFilter(model) && passesTagFilter(model);
+    }, [passesCostFilter, passesTagFilter]);
+
+    const enabledTagCount = MODEL_TAG_DEFS.filter((t) => modelTagFilters[t.key]).length;
+
     const filteredOllamaModels = useMemo(() => {
         const q = modelSearchQuery.trim().toLowerCase();
-        if (!q) return ollamaModels;
-        return ollamaModels.filter(m =>
-            m.label.toLowerCase().includes(q) || m.value.toLowerCase().includes(q)
-        );
-    }, [ollamaModels, modelSearchQuery]);
+        const base = q
+            ? ollamaModels.filter(m => m.label.toLowerCase().includes(q) || m.value.toLowerCase().includes(q))
+            : ollamaModels;
+        return base.filter(passesAllFilters);
+    }, [ollamaModels, modelSearchQuery, passesAllFilters]);
 
     const filteredChromeModels = useMemo(() => {
         const q = modelSearchQuery.trim().toLowerCase();
+        let base;
         if (!q) {
             const recentSet = new Set(recentModelValues.map(m => m.value));
-            return chromeModels.filter(m => !recentSet.has(m.value));
+            base = chromeModels.filter(m => !recentSet.has(m.value));
+        } else {
+            base = chromeModels.filter(m => m.label.toLowerCase().includes(q));
         }
-        return chromeModels.filter(m => m.label.toLowerCase().includes(q));
-    }, [chromeModels, modelSearchQuery, recentModelValues]);
+        return base.filter(passesAllFilters);
+    }, [chromeModels, modelSearchQuery, recentModelValues, passesAllFilters]);
 
     const selectableChromeModels = useMemo(
         () => filteredChromeModels.filter(m => m.selectable),
@@ -304,8 +488,9 @@ const ChatInput = ({
                 const found = source.find(m => m.value === recent.value);
                 return found ? { ...found, _type: recent.type } : null;
             })
-            .filter(Boolean);
-    }, [recentModelValues, availableModels, availableAudioModels, ollamaModels, chromeModels, chromeAudioModels, modelSearchQuery, isSearchingModels]);
+            .filter(Boolean)
+            .filter(passesAllFilters);
+    }, [recentModelValues, availableModels, availableAudioModels, ollamaModels, chromeModels, chromeAudioModels, modelSearchQuery, isSearchingModels, passesAllFilters]);
 
     const filteredTextModels = useMemo(() => {
         const sourceModels = searchedModels ? searchedModels.text : availableModels;
@@ -316,20 +501,22 @@ const ChatInput = ({
             return true;
         });
 
-        if (searchedModels) return unique;
+        if (searchedModels) return unique.filter(passesAllFilters);
 
         const q = modelSearchQuery.trim().toLowerCase();
         if (!q) {
             const recentSet = new Set(recentModelValues.map(m => m.value));
-            return unique.filter(m => !recentSet.has(m.value));
+            return unique.filter(m => !recentSet.has(m.value)).filter(passesAllFilters);
         }
 
         const words = q.split(/\s+/).filter(Boolean);
-        return unique.filter((m) => {
-            const searchable = `${m.label} ${m.category || ''}`.toLowerCase();
-            return words.every((word) => searchable.includes(word));
-        });
-    }, [availableModels, modelSearchQuery, searchedModels, recentModelValues]);
+        return unique
+            .filter((m) => {
+                const searchable = `${m.label} ${m.category || ''}`.toLowerCase();
+                return words.every((word) => searchable.includes(word));
+            })
+            .filter(passesAllFilters);
+    }, [availableModels, modelSearchQuery, searchedModels, recentModelValues, passesAllFilters]);
 
     const filteredAudioModels = useMemo(() => {
         const sourceModels = [...chromeAudioModels, ...(searchedModels ? searchedModels.audio : availableAudioModels)];
@@ -342,22 +529,24 @@ const ChatInput = ({
 
         if (searchedModels) {
             const q = modelSearchQuery.trim().toLowerCase();
-            if (!q) return unique;
-            return unique.filter(m => !m.chrome || m.label.toLowerCase().includes(q));
+            if (!q) return unique.filter(passesAllFilters);
+            return unique.filter(m => !m.chrome || m.label.toLowerCase().includes(q)).filter(passesAllFilters);
         }
 
         const q = modelSearchQuery.trim().toLowerCase();
         if (!q) {
             const recentSet = new Set(recentModelValues.map(m => m.value));
-            return unique.filter(m => !recentSet.has(m.value));
+            return unique.filter(m => !recentSet.has(m.value)).filter(passesAllFilters);
         }
 
         const words = q.split(/\s+/).filter(Boolean);
-        return unique.filter((m) => {
-            const searchable = `${m.label} ${m.category || ''}`.toLowerCase();
-            return words.every((word) => searchable.includes(word));
-        });
-    }, [availableAudioModels, chromeAudioModels, modelSearchQuery, searchedModels, recentModelValues]);
+        return unique
+            .filter((m) => {
+                const searchable = `${m.label} ${m.category || ''}`.toLowerCase();
+                return words.every((word) => searchable.includes(word));
+            })
+            .filter(passesAllFilters);
+    }, [availableAudioModels, chromeAudioModels, modelSearchQuery, searchedModels, recentModelValues, passesAllFilters]);
 
     const selectableItems = useMemo(() => [
         ...recentModelItems,
@@ -442,7 +631,7 @@ const ChatInput = ({
 
     useEffect(() => {
         setFocusedModelIndex(-1);
-    }, [modelSearchQuery]);
+    }, [modelSearchQuery, modelMinCost, modelMaxCost, modelTagFilters]);
 
     useEffect(() => {
         const el = modelItemRefs.current[focusedModelIndex];
@@ -927,35 +1116,134 @@ const ChatInput = ({
                     isDark={isDark}
                     role="listbox"
                     header={
-                        <div className={`flex items-center gap-2 px-3 py-2 border-b ${isDark ? 'border-gray-700/80 bg-gray-900/40' : 'border-gray-100 bg-gray-50'
-                            }`}>
-                            <HiMagnifyingGlass className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-                            <input
-                                ref={modelSearchRef}
-                                type="text"
-                                value={modelSearchQuery}
-                                onChange={(e) => setModelSearchQuery(e.target.value)}
-                                onKeyDown={handleModelSearchKeyDown}
-                                placeholder="Search models..."
-                                autoComplete="off"
-                                className={`flex-1 bg-transparent text-xs outline-none placeholder-gray-500 ${isDark ? 'text-gray-200' : 'text-gray-800'
-                                    }`}
-                                aria-label="Search AI models"
-                            />
-                            {modelSearchQuery && (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setModelSearchQuery('');
-                                        modelSearchRef.current?.focus();
-                                    }}
-                                    className={`flex-shrink-0 p-0.5 rounded transition-colors ${isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
+                        <div className={`border-b ${isDark ? 'border-gray-700/80 bg-gray-900/40' : 'border-gray-100 bg-gray-50'}`}>
+                            <div className="flex items-center gap-2 px-3 py-2">
+                                <HiMagnifyingGlass className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                                <input
+                                    ref={modelSearchRef}
+                                    type="text"
+                                    value={modelSearchQuery}
+                                    onChange={(e) => setModelSearchQuery(e.target.value)}
+                                    onKeyDown={handleModelSearchKeyDown}
+                                    placeholder="Search models..."
+                                    autoComplete="off"
+                                    className={`flex-1 bg-transparent text-xs outline-none placeholder-gray-500 ${isDark ? 'text-gray-200' : 'text-gray-800'}`}
+                                    aria-label="Search AI models"
+                                />
+                                {modelSearchQuery && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setModelSearchQuery('');
+                                            modelSearchRef.current?.focus();
+                                        }}
+                                        className={`flex-shrink-0 p-0.5 rounded transition-colors ${isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}
+                                        aria-label="Clear search"
+                                    >
+                                        <HiXMark className="w-3 h-3" />
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="flex items-center gap-2 px-3 pb-2">
+                                {costExtent && (
+                                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                        <span className={`text-[10px] font-semibold uppercase tracking-wider flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                            Out
+                                        </span>
+                                        <div className="dual-range flex-1 min-w-0">
+                                            <input
+                                                type="range"
+                                                min={costExtent.min}
+                                                max={costExtent.max}
+                                                step={Math.max(0.01, (costExtent.max - costExtent.min) / 100)}
+                                                value={Math.min(modelMinCost ?? costExtent.min, modelMaxCost ?? costExtent.max)}
+                                                onChange={(e) => {
+                                                    const v = Number(e.target.value);
+                                                    setModelMinCost(Math.min(v, modelMaxCost ?? costExtent.max));
+                                                }}
+                                                aria-label="Minimum model cost per million tokens"
+                                            />
+                                            <input
+                                                type="range"
+                                                min={costExtent.min}
+                                                max={costExtent.max}
+                                                step={Math.max(0.01, (costExtent.max - costExtent.min) / 100)}
+                                                value={modelMaxCost ?? costExtent.max}
+                                                onChange={(e) => {
+                                                    const v = Number(e.target.value);
+                                                    setModelMaxCost(Math.max(v, modelMinCost ?? costExtent.min));
+                                                }}
+                                                aria-label="Maximum model cost per million tokens"
+                                            />
+                                        </div>
+                                        <input
+                                            type="number"
+                                            min={costExtent.min}
+                                            max={modelMaxCost ?? costExtent.max}
+                                            step={0.01}
+                                            value={modelMinCost ?? costExtent.min}
+                                            onChange={(e) => {
+                                                const v = e.target.value === '' ? costExtent.min : Number(e.target.value);
+                                                setModelMinCost(Math.min(Math.max(v, costExtent.min), modelMaxCost ?? costExtent.max));
+                                            }}
+                                            className={`cost-input ${isDark ? 'bg-gray-950 text-gray-200' : 'bg-white text-gray-800'}`}
+                                            aria-label="Minimum cost"
+                                        />
+                                        <span className={`text-[10px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>-</span>
+                                        <input
+                                            type="number"
+                                            min={modelMinCost ?? costExtent.min}
+                                            max={costExtent.max}
+                                            step={0.01}
+                                            value={modelMaxCost ?? costExtent.max}
+                                            onChange={(e) => {
+                                                const v = e.target.value === '' ? costExtent.max : Number(e.target.value);
+                                                setModelMaxCost(Math.max(Math.min(v, costExtent.max), modelMinCost ?? costExtent.min));
+                                            }}
+                                            className={`cost-input ${isDark ? 'bg-gray-950 text-gray-200' : 'bg-white text-gray-800'}`}
+                                            aria-label="Maximum cost"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setModelMinCost(costExtent.min);
+                                                setModelMaxCost(costExtent.max);
+                                            }}
+                                            className={`text-[10px] underline underline-offset-2 flex-shrink-0 ${isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}
+                                        >
+                                            Reset
+                                        </button>
+                                    </div>
+                                )}
+
+                                <div className="relative flex items-center flex-shrink-0" ref={tagFilterMenuRef}>
+                                    <button
+                                        ref={tagFilterButtonRef}
+                                        type="button"
+                                        onClick={() => setIsTagFilterMenuOpen((p) => !p)}
+                                        className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider border transition-colors ${
+                                            enabledTagCount < MODEL_TAG_DEFS.length
+                                                ? (isDark
+                                                    ? 'bg-brand-coral/20 text-brand-coral border-brand-coral/40'
+                                                    : 'bg-brand-coral/10 text-brand-coral border-brand-coral/30')
+                                                : (isDark
+                                                    ? 'bg-gray-800 text-gray-400 border-gray-700 hover:text-gray-200'
+                                                    : 'bg-gray-100 text-gray-500 border-gray-200 hover:text-gray-700')
                                         }`}
-                                    aria-label="Clear search"
-                                >
-                                    <HiXMark className="w-3 h-3" />
-                                </button>
-                            )}
+                                        aria-haspopup="menu"
+                                        aria-expanded={isTagFilterMenuOpen}
+                                        aria-label={`Model filters, ${enabledTagCount} of ${MODEL_TAG_DEFS.length} enabled`}
+                                        title="Filter models by type"
+                                    >
+                                        <HiOutlineFunnel className="w-3 h-3" />
+                                        <span>Filters</span>
+                                        <span className={`font-mono normal-case tracking-normal ${enabledTagCount < MODEL_TAG_DEFS.length ? 'font-bold' : 'opacity-70'}`}>
+                                            {enabledTagCount}/{MODEL_TAG_DEFS.length}
+                                        </span>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     }
                     bodyClassName="overflow-y-auto custom-scrollbar p-2 max-h-[55vh] sm:max-h-96 space-y-1"
@@ -1137,6 +1425,78 @@ const ChatInput = ({
                         </>
                     )}
                 </ToolbarModal>
+
+                {isTagFilterMenuOpen && tagFilterPosition &&
+                    createPortal(
+                        <div
+                            ref={tagFilterDropdownRef}
+                            style={{
+                                position: 'fixed',
+                                top: tagFilterPosition.top,
+                                right: tagFilterPosition.right,
+                                zIndex: 9999,
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => e.stopPropagation()}
+                            className={`w-36 rounded-lg shadow-xl border flex flex-col overflow-hidden ${
+                                isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                            }`}
+                            role="menu"
+                            aria-label="Model filters"
+                        >
+                            <div className={`px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider border-b flex items-center justify-between ${
+                                isDark ? 'text-gray-500 border-gray-700 bg-gray-900/50' : 'text-gray-400 border-gray-100 bg-gray-50'
+                            }`}>
+                                <span>Filters</span>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const allOn = enabledTagCount === MODEL_TAG_DEFS.length;
+                                        const next = Object.fromEntries(MODEL_TAG_DEFS.map((t) => [t.key, !allOn]));
+                                        setModelTagFilters(next);
+                                    }}
+                                    className={`font-semibold normal-case tracking-normal underline underline-offset-2 ${
+                                        isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'
+                                    }`}
+                                >
+                                    {enabledTagCount === MODEL_TAG_DEFS.length ? 'None' : 'All'}
+                                </button>
+                            </div>
+
+                            <div className="max-h-48 overflow-y-auto custom-scrollbar p-1 space-y-0.5">
+                                {MODEL_TAG_DEFS.map((tag) => {
+                                    const isChecked = Boolean(modelTagFilters[tag.key]);
+                                    return (
+                                        <button
+                                            key={tag.key}
+                                            type="button"
+                                            role="menuitemcheckbox"
+                                            aria-checked={isChecked}
+                                            onClick={() => setModelTagFilters((prev) => ({ ...prev, [tag.key]: !prev[tag.key] }))}
+                                            className={`w-full px-2 py-1.5 text-left flex items-center gap-2 min-w-0 rounded transition-colors ${
+                                                isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-100'
+                                            }`}
+                                        >
+                                            <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
+                                                isChecked
+                                                    ? 'bg-brand-coral border-brand-coral'
+                                                    : (isDark ? 'border-gray-500' : 'border-gray-300')
+                                            }`}>
+                                                {isChecked && <HiCheck className="w-3 h-3 text-white" />}
+                                            </div>
+                                            <span className={`truncate text-xs ${isChecked ? 'font-medium' : ''} ${
+                                                isDark ? 'text-gray-200' : 'text-gray-700'
+                                            }`}>
+                                                {tag.label}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>,
+                        document.body
+                    )
+                }
             </>
         );
     };
