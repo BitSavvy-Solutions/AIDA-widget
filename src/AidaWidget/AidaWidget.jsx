@@ -35,6 +35,7 @@ import { CHAT_URL, TRANSCRIPTION_URL, MODELS_URL } from './utils/apiConfig';
 import { getSupportedEfforts, getDefaultEffort, resolveEffort, buildReasoningConfig } from './utils/reasoning';
 
 const DEFAULT_MODELS = [
+    { value: 'nvidia/nemotron-3-ultra-550b-a55b:free', label: 'Nemotron 3 Ultra 550B (Free)', category: 'reasoning' },
     { value: 'deepseek/deepseek-v4.1-flash', label: 'Deepseek 4.1 Flash', category: 'reasoning' },
     { value: 'deepseek/deepseek-v4-pro', label: 'Deepseek 4 Pro', category: 'reasoning' },
     { value: 'deepseek/deepseek-v3.2', label: 'Deepseek 3.2', category: 'reasoning' },
