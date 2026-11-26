@@ -19,7 +19,7 @@ const extractCleanErrorMessage = (rawError) => {
 };
 
 const THINK_OPEN = ' thinking';
-const THINK_CLOSE = ' response';
+const THINK_CLOSE = '';
 const DEFAULT_OLLAMA_URL = 'http://localhost:11434';
 
 const stripDataUrlPrefix = (dataUrl) => {
@@ -83,6 +83,52 @@ export const useChatAPI = ({
 
     const liveReasoningTextRef = useRef('');
     const streamAbortControllerRef = useRef(null);
+
+    // Streaming text is buffered and flushed once per animation frame so a
+    // burst of SSE chunks produces one React render instead of one per chunk.
+    // This is the single biggest win for low-end devices during streaming.
+    const pendingTextRef = useRef('');
+    const flushScheduledRef = useRef(false);
+    const flushFrameRef = useRef(null);
+
+    const scheduleFlush = useCallback((botMessageId, onFlushed) => {
+        if (flushScheduledRef.current) return;
+        flushScheduledRef.current = true;
+        flushFrameRef.current = requestAnimationFrame(() => {
+            flushScheduledRef.current = false;
+            flushFrameRef.current = null;
+            const chunk = pendingTextRef.current;
+            pendingTextRef.current = '';
+            if (!chunk) return;
+            setMessages((prev) => {
+                const updated = prev.map((m) => (m.id === botMessageId ? { ...m, text: m.text + chunk } : m));
+                if (onFlushed) onFlushed(updated);
+                return updated;
+            });
+            setLiveReasoning((prev) => {
+                if (!prev.contentHasStarted) {
+                    return { ...prev, contentHasStarted: true };
+                }
+                return prev;
+            });
+        });
+    }, [setMessages]);
+
+    const flushPendingNow = useCallback((botMessageId, onFlushed) => {
+        if (flushFrameRef.current) {
+            cancelAnimationFrame(flushFrameRef.current);
+            flushFrameRef.current = null;
+        }
+        flushScheduledRef.current = false;
+        const chunk = pendingTextRef.current;
+        pendingTextRef.current = '';
+        if (!chunk) return;
+        setMessages((prev) => {
+            const updated = prev.map((m) => (m.id === botMessageId ? { ...m, text: m.text + chunk } : m));
+            if (onFlushed) onFlushed(updated);
+            return updated;
+        });
+    }, [setMessages]);
 
     const langMap = { eng: "en", fra: "fr", ara: "ar", hin: "hi", tgl: "tl", ukr: "uk", san: "sa", nya: "ny" };
     const supportedLanguages = Object.values(langMap);
@@ -207,6 +253,7 @@ export const useChatAPI = ({
         setLiveReasoning({ text: '', botId: botMessageId, contentHasStarted: false });
         setApiError(null);
         liveReasoningTextRef.current = '';
+        pendingTextRef.current = '';
 
         const modelName = userMessage.model.replace(/^ollama:/, '');
         const ollamaBase = (ollama?.baseUrl || DEFAULT_OLLAMA_URL).replace(/\/+$/, '');
@@ -304,13 +351,14 @@ export const useChatAPI = ({
                                 botId: botMessageId,
                                 contentHasStarted: prev.contentHasStarted || content.length > 0,
                             }));
-                            setMessages((prev) => {
-                                const updated = prev.map((m) =>
-                                    m.id === botMessageId ? { ...m, text: content } : m
-                                );
-                                finalMessages = updated;
-                                return updated;
-                            });
+
+                            // Buffer the delta and flush once per frame.
+                            const prevContentLen = pendingTextRef.current.length;
+                            const delta = content.slice(prevContentLen);
+                            if (delta) {
+                                pendingTextRef.current = content;
+                                scheduleFlush(botMessageId, (updated) => { finalMessages = updated; });
+                            }
                         }
 
                         if (data.done) {
@@ -330,6 +378,9 @@ export const useChatAPI = ({
                 }
                 if (streamError) break;
             }
+
+            // Flush any remaining buffered text before finalizing.
+            flushPendingNow(botMessageId, (updated) => { finalMessages = updated; });
 
             const finalMeta = {
                 model: userMessage.model,
@@ -367,6 +418,7 @@ export const useChatAPI = ({
                 if (!streamError) ollama?.reportRuntimeError?.(friendly);
             }
         } finally {
+            flushPendingNow(botMessageId, (updated) => { finalMessages = updated; });
             if (streamAbortControllerRef.current === abortController) {
                 streamAbortControllerRef.current = null;
             }
@@ -381,6 +433,7 @@ export const useChatAPI = ({
         setLiveReasoning({ text: '', botId: botMessageId, contentHasStarted: false });
         setApiError(null);
         liveReasoningTextRef.current = '';
+        pendingTextRef.current = '';
 
         const abortController = new AbortController();
         streamAbortControllerRef.current = abortController;
@@ -450,13 +503,15 @@ export const useChatAPI = ({
                 const piece = String(chunk ?? '');
                 fullText = piece.startsWith(fullText) ? piece : fullText + piece;
 
-                setMessages((prev) => {
-                    const updated = prev.map((m) => (m.id === botMessageId ? { ...m, text: fullText } : m));
-                    finalMessages = updated;
-                    return updated;
-                });
-                setLiveReasoning((prev) => (prev.contentHasStarted ? prev : { ...prev, contentHasStarted: true }));
+                // Buffer the delta and flush once per frame.
+                const prevLen = pendingTextRef.current.length;
+                if (fullText.length > prevLen) {
+                    pendingTextRef.current = fullText;
+                    scheduleFlush(botMessageId, (updated) => { finalMessages = updated; });
+                }
             }
+
+            flushPendingNow(botMessageId, (updated) => { finalMessages = updated; });
 
             const tokenUsage =
                 (typeof lmSession.inputUsage === 'number' && lmSession.inputUsage > 0)
@@ -492,6 +547,7 @@ export const useChatAPI = ({
                 ));
             }
         } finally {
+            flushPendingNow(botMessageId, (updated) => { finalMessages = updated; });
             try { lmSession?.destroy?.(); } catch { /* ignore */ }
             if (streamAbortControllerRef.current === abortController) {
                 streamAbortControllerRef.current = null;
@@ -515,6 +571,7 @@ export const useChatAPI = ({
         setLiveReasoning({ text: '', botId: botMessageId, contentHasStarted: false });
         setApiError(null);
         liveReasoningTextRef.current = '';
+        pendingTextRef.current = '';
 
         let localCost = 0;
         let localTokenUsage = null;
@@ -620,17 +677,9 @@ export const useChatAPI = ({
                             }
 
                             if (data.delta_content) {
-                                setMessages((prev) => {
-                                    const updated = prev.map((m) => (m.id === botMessageId ? { ...m, text: m.text + data.delta_content } : m));
-                                    finalMessages = updated;
-                                    return updated;
-                                });
-                                setLiveReasoning((prev) => {
-                                    if (!prev.contentHasStarted) {
-                                        return { ...prev, contentHasStarted: true };
-                                    }
-                                    return prev;
-                                });
+                                // Buffer the delta and flush once per frame.
+                                pendingTextRef.current += data.delta_content;
+                                scheduleFlush(botMessageId, (updated) => { finalMessages = updated; });
                             }
 
                             if (data.images && Array.isArray(data.images)) {
@@ -672,6 +721,9 @@ export const useChatAPI = ({
                 if (streamError) break;
             }
 
+            // Flush any remaining buffered text before finalizing.
+            flushPendingNow(botMessageId, (updated) => { finalMessages = updated; });
+
             const finalMeta = {
                 model: userMessage.model,
                 webSearchEnabled: userMessage.webSearchEnabled || false,
@@ -705,6 +757,7 @@ export const useChatAPI = ({
                 setApiError((prev) => prev || { message: error.message || "Network error or API unreachable." });
             }
         } finally {
+            flushPendingNow(botMessageId, (updated) => { finalMessages = updated; });
             if (streamAbortControllerRef.current === abortController) {
                 streamAbortControllerRef.current = null;
             }

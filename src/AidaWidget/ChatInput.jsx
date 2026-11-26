@@ -1,5 +1,5 @@
 // src/AidaWidget/ChatInput.jsx
-import React, { useState, useMemo, useRef, useCallback, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect, useLayoutEffect, memo } from 'react';
 import { createPortal } from 'react-dom';
 import {
     HiPaperAirplane, HiOutlineMicrophone, HiStop, HiArrowPath, HiXMark,
@@ -17,6 +17,11 @@ import ToolbarModal from './ToolbarModal';
 const TOOLBAR_GAP = 8;
 const MODEL_MAX_CHARS_MEDIUM = 20;
 const MODEL_MAX_CHARS_MIN = 10;
+
+// Models render in pages instead of all at once. Mounting 300+ rich rows in
+// one go is what made the picker slow to open on low-end devices. The page
+// grows as the user scrolls (see handleModelListScroll).
+const MODEL_PAGE_SIZE = 40;
 
 const MODEL_TAG_DEFS = [
     { key: 'local', label: 'Local' },
@@ -109,7 +114,8 @@ const AudioCapsule = ({ recording, onDownload, onRetranscribe, onRemove }) => {
     );
 };
 
-const ModularBadges = ({ modality }) => {
+// Memoized: badges only re-render when the modality string actually changes.
+const ModularBadges = memo(function ModularBadges({ modality }) {
     if (!modality) return null;
     const parts = modality.split('->');
     if (parts.length !== 2) return <span className="text-xs opacity-60">{modality}</span>;
@@ -148,7 +154,124 @@ const ModularBadges = ({ modality }) => {
             </div>
         </div>
     );
+});
+
+// Moved to module scope so ModelOption can use it without prop drilling.
+const getModelVisuals = (category, isDark) => {
+    switch (category) {
+        case 'reasoning':
+            return { icon: HiLightBulb, colorClass: 'text-purple-500', bgClass: isDark ? 'bg-purple-500/10' : 'bg-purple-50', borderClass: 'border-purple-500/30' };
+        case 'vision':
+            return { icon: HiPhoto, colorClass: 'text-pink-500', bgClass: isDark ? 'bg-pink-500/10' : 'bg-pink-50', borderClass: 'border-pink-500/30' };
+        case 'audio':
+            return { icon: HiOutlineMicrophone, colorClass: 'text-green-500', bgClass: isDark ? 'bg-green-500/10' : 'bg-green-50', borderClass: 'border-green-500/30' };
+        case 'local':
+            return { icon: HiOutlineCpuChip, colorClass: 'text-teal-400', bgClass: isDark ? 'bg-teal-500/10' : 'bg-teal-50', borderClass: 'border-teal-500/30' };
+        case 'chat':
+        default:
+            return { icon: HiChatBubbleLeftRight, colorClass: 'text-blue-500', bgClass: isDark ? 'bg-blue-500/10' : 'bg-blue-50', borderClass: 'border-blue-500/30' };
+    }
 };
+
+/**
+ * One row in the model picker. Memoized so a keystroke in the search box or
+ * an arrow-key focus change only re-renders the rows whose props changed
+ * (usually two), not the whole list.
+ */
+const ModelOption = memo(function ModelOption({
+    opt,
+    type,
+    idx,
+    isSelected,
+    isFocused,
+    isDark,
+    onSelect,
+    registerItemRef,
+}) {
+    const visuals = getModelVisuals(opt.category || 'chat', isDark);
+    const Icon = visuals.icon;
+
+    let rowClass = 'w-full text-left px-2.5 py-2 text-sm rounded-lg flex items-start gap-2.5 transition-colors outline-none border ';
+    if (isFocused) {
+        rowClass += isDark ? 'bg-white/10 ring-1 ring-inset ring-brand-coral/50 border-brand-coral/50 ' : 'bg-blue-50 ring-1 ring-inset ring-blue-300 border-blue-300 ';
+    } else if (isSelected) {
+        rowClass += isDark ? 'bg-gray-700/50 border-gray-600 ' : 'bg-gray-100 border-gray-200 ';
+    } else {
+        rowClass += isDark ? 'hover:bg-gray-700/30 border-gray-700/50 hover:border-gray-600 ' : 'hover:bg-gray-50 border-gray-200 ';
+    }
+
+    const contextSize = formatContextSize(opt.contextLength ?? opt.context_length);
+    const promptPrice = formatPrice(opt.pricing?.prompt);
+    const completionPrice = formatPrice(opt.pricing?.completion);
+
+    return (
+        <button
+            type="button"
+            ref={(el) => registerItemRef(idx, el)}
+            role="option"
+            aria-selected={isSelected}
+            onClick={() => onSelect(opt, type)}
+            className={rowClass}
+        >
+            <div className={`p-1.5 rounded-md flex-shrink-0 mt-0.5 ${visuals.bgClass} ${visuals.colorClass}`}>
+                <Icon className="w-4 h-4" />
+            </div>
+            <div className="flex flex-col min-w-0 flex-1 gap-0.5">
+                <div className="flex items-center justify-between gap-2">
+                    <span className={`font-semibold text-sm truncate ${isSelected
+                        ? isDark ? 'text-white' : 'text-gray-900'
+                        : isDark ? 'text-gray-200' : 'text-gray-800'
+                        }`}>
+                        {opt.label}
+                    </span>
+                    {isSelected && <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-coral flex-shrink-0" aria-hidden="true" />}
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                    {opt.modality && <ModularBadges modality={opt.modality} />}
+                </div>
+                {(contextSize || promptPrice || completionPrice) && (
+                    <div className={`flex items-center gap-2 flex-wrap text-xs font-mono px-2 py-1 rounded mt-1 ${isDark ? 'bg-gray-900/60 text-gray-300' : 'bg-gray-100 text-gray-600'
+                        }`}>
+                        {contextSize && (
+                            <span className="flex items-center gap-1">
+                                <span className="opacity-60">Context</span>
+                                <span className="text-purple-400 font-semibold">
+                                    {contextSize}
+                                </span>
+                            </span>
+                        )}
+
+                        {contextSize && (promptPrice || completionPrice) && (
+                            <span className="opacity-40">·</span>
+                        )}
+
+                        {promptPrice && (
+                            <span className="flex items-center gap-1">
+                                <span className="opacity-60">In</span>
+                                <span className="text-emerald-400 font-semibold">
+                                    {promptPrice}
+                                </span>
+                            </span>
+                        )}
+
+                        {promptPrice && completionPrice && (
+                            <span className="opacity-40">·</span>
+                        )}
+
+                        {completionPrice && (
+                            <span className="flex items-center gap-1">
+                                <span className="opacity-60">Out</span>
+                                <span className="text-blue-400 font-semibold">
+                                    {completionPrice}
+                                </span>
+                            </span>
+                        )}
+                    </div>
+                )}
+            </div>
+        </button>
+    );
+});
 
 const ChatInput = ({
     handleSendMessage,
@@ -217,6 +340,9 @@ const ChatInput = ({
     const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
     const [modelSearchQuery, setModelSearchQuery] = useState('');
     const [focusedModelIndex, setFocusedModelIndex] = useState(-1);
+
+    // Incremental model list rendering: how many rows are mounted right now.
+    const [visibleModelCount, setVisibleModelCount] = useState(MODEL_PAGE_SIZE);
 
     // Cost filter state (per-million-token values)
     const [modelMinCost, setModelMinCost] = useState(null);
@@ -557,10 +683,29 @@ const ChatInput = ({
         ...filteredAudioModels.map(m => ({ ...m, _type: 'audio' }))
     ], [recentModelItems, filteredOllamaModels, selectableChromeModels, filteredTextModels, filteredAudioModels]);
 
+    // Rows actually mounted right now, capped per section by a shared budget.
+    // Keyboard indices stay based on the full arrays, so navigation is unaffected.
+    const renderedModels = useMemo(() => {
+        let budget = visibleModelCount;
+        const take = (arr) => {
+            const n = Math.min(arr.length, budget);
+            budget -= n;
+            return arr.slice(0, n);
+        };
+        return {
+            recent: take(recentModelItems),
+            ollama: take(filteredOllamaModels),
+            chrome: take(selectableChromeModels),
+            text: take(filteredTextModels),
+            audio: take(filteredAudioModels),
+        };
+    }, [recentModelItems, filteredOllamaModels, selectableChromeModels, filteredTextModels, filteredAudioModels, visibleModelCount]);
+
     const openModelMenu = useCallback(() => {
         modelItemRefs.current = [];
         setModelSearchQuery('');
         setFocusedModelIndex(-1);
+        setVisibleModelCount(MODEL_PAGE_SIZE);
         setIsModelMenuOpen(true);
     }, []);
 
@@ -586,6 +731,25 @@ const ChatInput = ({
         }
         closeModelMenu();
     }, [setSelectedModel, setSelectedAudioModel, closeModelMenu, onModelSelected]);
+
+    // Stable handlers handed to every memoized ModelOption row.
+    const handleSelect = useCallback((opt, type) => {
+        selectModel({ ...opt, _type: type });
+    }, [selectModel]);
+
+    const registerItemRef = useCallback((idx, el) => {
+        if (el) modelItemRefs.current[idx] = el;
+        else delete modelItemRefs.current[idx];
+    }, []);
+
+    // Grow the rendered page when the user scrolls near the end of the list.
+    const handleModelListScroll = useCallback((e) => {
+        if (visibleModelCount >= selectableItems.length) return;
+        const el = e.currentTarget;
+        if (el.scrollTop + el.clientHeight >= el.scrollHeight - 500) {
+            setVisibleModelCount((prev) => prev + MODEL_PAGE_SIZE);
+        }
+    }, [visibleModelCount, selectableItems.length]);
 
     const modelSelectionEnabled = Boolean(features?.modelSelection);
 
@@ -616,8 +780,6 @@ const ChatInput = ({
     useEffect(() => {
         if (!modelSelectionEnabled || modelMenuTrigger <= handledMenuTriggerRef.current) return;
         handledMenuTriggerRef.current = modelMenuTrigger;
-        // On narrow toolbars the model control lives in the overflow menu, so
-        // open that first to give the picker a trigger to render from.
         if (overflowKeys.includes('model')) {
             setIsOverflowOpen(true);
         }
@@ -634,10 +796,22 @@ const ChatInput = ({
         setFocusedModelIndex(-1);
     }, [modelSearchQuery, modelMinCost, modelMaxCost, modelTagFilters]);
 
+    // A new search / filter starts from the first page again.
+    useEffect(() => {
+        setVisibleModelCount(MODEL_PAGE_SIZE);
+    }, [modelSearchQuery, modelMinCost, modelMaxCost, modelTagFilters, searchedModels]);
+
+    // Keep keyboard navigation working past the rendered window.
+    useEffect(() => {
+        if (focusedModelIndex >= visibleModelCount - 1 && focusedModelIndex >= 0) {
+            setVisibleModelCount((prev) => prev + MODEL_PAGE_SIZE);
+        }
+    }, [focusedModelIndex, visibleModelCount]);
+
     useEffect(() => {
         const el = modelItemRefs.current[focusedModelIndex];
         if (el) el.scrollIntoView({ block: 'nearest' });
-    }, [focusedModelIndex]);
+    }, [focusedModelIndex, visibleModelCount]);
 
     useLayoutEffect(() => {
         const el = leftToolbarRef.current;
@@ -770,6 +944,28 @@ const ChatInput = ({
         }
     }, [recordings, adjustInputHeight]);
 
+    // Memoized so unrelated re-renders skip the per-recording DOM lookups.
+    // capsuleRenderTick is what forces a recompute after the capsule span is
+    // inserted into the contenteditable (see the effect above).
+    const recordingPortals = useMemo(() => recordings.map(rec => {
+        const el = document.getElementById(`capsule-${rec.id}`);
+        if (!el) return null;
+        return createPortal(
+            <AudioCapsule
+                recording={rec}
+                onDownload={() => {
+                    const a = document.createElement('a');
+                    a.href = rec.url;
+                    a.download = `${rec.id}.webm`;
+                    a.click();
+                }}
+                onRetranscribe={() => retryTranscription(rec.id)}
+                onRemove={() => removeRecording(rec.id)}
+            />,
+            el
+        );
+    }), [recordings, retryTranscription, removeRecording, capsuleRenderTick]);
+
     const getMessageText = () => {
         const div = inputRef.current;
         if (!div) return '';
@@ -843,25 +1039,9 @@ const ChatInput = ({
         }
     };
 
-    const getModelVisuals = (category) => {
-        switch (category) {
-            case 'reasoning':
-                return { icon: HiLightBulb, colorClass: 'text-purple-500', bgClass: isDark ? 'bg-purple-500/10' : 'bg-purple-50', borderClass: 'border-purple-500/30' };
-            case 'vision':
-                return { icon: HiPhoto, colorClass: 'text-pink-500', bgClass: isDark ? 'bg-pink-500/10' : 'bg-pink-50', borderClass: 'border-pink-500/30' };
-            case 'audio':
-                return { icon: HiOutlineMicrophone, colorClass: 'text-green-500', bgClass: isDark ? 'bg-green-500/10' : 'bg-green-50', borderClass: 'border-green-500/30' };
-            case 'local':
-                return { icon: HiOutlineCpuChip, colorClass: 'text-teal-400', bgClass: isDark ? 'bg-teal-500/10' : 'bg-teal-50', borderClass: 'border-teal-500/30' };
-            case 'chat':
-            default:
-                return { icon: HiChatBubbleLeftRight, colorClass: 'text-blue-500', bgClass: isDark ? 'bg-blue-500/10' : 'bg-blue-50', borderClass: 'border-blue-500/30' };
-        }
-    };
-
     const currentModelObj = [...ollamaModels, ...chromeModels, ...availableModels].find((m) => m.value === selectedModel);
     const selectedModelLabel = currentModelObj?.label || selectedModel;
-    const currentVisuals = getModelVisuals(currentModelObj?.category || 'chat');
+    const currentVisuals = getModelVisuals(currentModelObj?.category || 'chat', isDark);
     const CurrentIcon = currentVisuals.icon;
 
     const renderSendButton = () => {
@@ -976,96 +1156,6 @@ const ChatInput = ({
         </button>
     );
 
-    const renderModelOption = (opt, idx, type) => {
-        const visuals = getModelVisuals(opt.category || 'chat');
-        const Icon = visuals.icon;
-        const isSelected = type === 'text' ? selectedModel === opt.value : selectedAudioModel === opt.value;
-        const isFocused = focusedModelIndex === idx;
-        let rowClass = 'w-full text-left px-2.5 py-2 text-sm rounded-lg flex items-start gap-2.5 transition-colors outline-none border ';
-        if (isFocused) {
-            rowClass += isDark ? 'bg-white/10 ring-1 ring-inset ring-brand-coral/50 border-brand-coral/50 ' : 'bg-blue-50 ring-1 ring-inset ring-blue-300 border-blue-300 ';
-        } else if (isSelected) {
-            rowClass += isDark ? 'bg-gray-700/50 border-gray-600 ' : 'bg-gray-100 border-gray-200 ';
-        } else {
-            rowClass += isDark ? 'hover:bg-gray-700/30 border-gray-700/50 hover:border-gray-600 ' : 'hover:bg-gray-50 border-gray-200 ';
-        }
-
-        const contextSize = formatContextSize(
-            opt.contextLength ?? opt.context_length
-        );
-
-        const promptPrice = formatPrice(opt.pricing?.prompt);
-        const completionPrice = formatPrice(opt.pricing?.completion);
-        return (
-            <button
-                key={opt.value}
-                type="button"
-                ref={(el) => { modelItemRefs.current[idx] = el; }}
-                role="option"
-                aria-selected={isSelected}
-                onClick={() => selectModel({ ...opt, _type: type })}
-                className={rowClass}
-            >
-                <div className={`p-1.5 rounded-md flex-shrink-0 mt-0.5 ${visuals.bgClass} ${visuals.colorClass}`}>
-                    <Icon className="w-4 h-4" />
-                </div>
-                <div className="flex flex-col min-w-0 flex-1 gap-0.5">
-                    <div className="flex items-center justify-between gap-2">
-                        <span className={`font-semibold text-sm truncate ${isSelected
-                            ? isDark ? 'text-white' : 'text-gray-900'
-                            : isDark ? 'text-gray-200' : 'text-gray-800'
-                            }`}>
-                            {opt.label}
-                        </span>
-                        {isSelected && <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-coral flex-shrink-0" aria-hidden="true" />}
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                        {opt.modality && <ModularBadges modality={opt.modality} />}
-                    </div>
-                    {(contextSize || promptPrice || completionPrice) && (
-                        <div className={`flex items-center gap-2 flex-wrap text-xs font-mono px-2 py-1 rounded mt-1 ${isDark ? 'bg-gray-900/60 text-gray-300' : 'bg-gray-100 text-gray-600'
-                            }`}>
-                            {contextSize && (
-                                <span className="flex items-center gap-1">
-                                    <span className="opacity-60">Context</span>
-                                    <span className="text-purple-400 font-semibold">
-                                        {contextSize}
-                                    </span>
-                                </span>
-                            )}
-
-                            {contextSize && (promptPrice || completionPrice) && (
-                                <span className="opacity-40">·</span>
-                            )}
-
-                            {promptPrice && (
-                                <span className="flex items-center gap-1">
-                                    <span className="opacity-60">In</span>
-                                    <span className="text-emerald-400 font-semibold">
-                                        {promptPrice}
-                                    </span>
-                                </span>
-                            )}
-
-                            {promptPrice && completionPrice && (
-                                <span className="opacity-40">·</span>
-                            )}
-
-                            {completionPrice && (
-                                <span className="flex items-center gap-1">
-                                    <span className="opacity-60">Out</span>
-                                    <span className="text-blue-400 font-semibold">
-                                        {completionPrice}
-                                    </span>
-                                </span>
-                            )}
-                        </div>
-                    )}
-                </div>
-            </button>
-        );
-    };
-
     const renderWebSearchButton = () => (
         <button
             type="button"
@@ -1082,6 +1172,140 @@ const ChatInput = ({
             <HiOutlineGlobeAlt className="h-6 w-6" />
         </button>
     );
+
+    // Memoized header element: unrelated re-renders reuse the same element
+    // reference, so React skips re-rendering the whole header subtree.
+    const modelMenuHeader = useMemo(() => (
+        <div className={`border-b ${isDark ? 'border-gray-700/80 bg-gray-900/40' : 'border-gray-100 bg-gray-50'}`}>
+            <div className="flex items-center gap-2 px-3 py-2">
+                <HiMagnifyingGlass className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                <input
+                    ref={modelSearchRef}
+                    type="text"
+                    value={modelSearchQuery}
+                    onChange={(e) => setModelSearchQuery(e.target.value)}
+                    onKeyDown={handleModelSearchKeyDown}
+                    placeholder="Search models..."
+                    autoComplete="off"
+                    className={`flex-1 bg-transparent text-xs outline-none placeholder-gray-500 ${isDark ? 'text-gray-200' : 'text-gray-800'}`}
+                    aria-label="Search AI models"
+                />
+                {modelSearchQuery && (
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setModelSearchQuery('');
+                            modelSearchRef.current?.focus();
+                        }}
+                        className={`flex-shrink-0 p-0.5 rounded transition-colors ${isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}
+                        aria-label="Clear search"
+                    >
+                        <HiXMark className="w-3 h-3" />
+                    </button>
+                )}
+            </div>
+
+            <div className="flex items-center gap-2 px-3 pb-2">
+            {costExtent && (
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                        <span className={`text-[10px] font-semibold uppercase tracking-wider flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                            Out
+                        </span>
+                        <div className="dual-range flex-1 min-w-0">
+                            <input
+                                type="range"
+                                min={costExtent.min}
+                                max={costExtent.max}
+                                step={Math.max(0.01, (costExtent.max - costExtent.min) / 100)}
+                                value={Math.min(modelMinCost ?? costExtent.min, modelMaxCost ?? costExtent.max)}
+                                onChange={(e) => {
+                                    const v = Number(e.target.value);
+                                    setModelMinCost(Math.min(v, modelMaxCost ?? costExtent.max));
+                                }}
+                                aria-label="Minimum model cost per million tokens"
+                            />
+                            <input
+                                type="range"
+                                min={costExtent.min}
+                                max={costExtent.max}
+                                step={Math.max(0.01, (costExtent.max - costExtent.min) / 100)}
+                                value={modelMaxCost ?? costExtent.max}
+                                onChange={(e) => {
+                                    const v = Number(e.target.value);
+                                    setModelMaxCost(Math.max(v, modelMinCost ?? costExtent.min));
+                                }}
+                                aria-label="Maximum model cost per million tokens"
+                            />
+                        </div>
+                        <input
+                            type="number"
+                            min={costExtent.min}
+                            max={modelMaxCost ?? costExtent.max}
+                            step={0.01}
+                            value={modelMinCost ?? costExtent.min}
+                            onChange={(e) => {
+                                const v = e.target.value === '' ? costExtent.min : Number(e.target.value);
+                                setModelMinCost(Math.min(Math.max(v, costExtent.min), modelMaxCost ?? costExtent.max));
+                            }}
+                            className={`cost-input ${isDark ? 'bg-gray-950 text-gray-200' : 'bg-white text-gray-800'}`}
+                            aria-label="Minimum cost"
+                        />
+                        <span className={`text-[10px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>-</span>
+                        <input
+                            type="number"
+                            min={modelMinCost ?? costExtent.min}
+                            max={costExtent.max}
+                            step={0.01}
+                            value={modelMaxCost ?? costExtent.max}
+                            onChange={(e) => {
+                                const v = e.target.value === '' ? costExtent.max : Number(e.target.value);
+                                setModelMaxCost(Math.max(Math.min(v, costExtent.max), modelMinCost ?? costExtent.min));
+                            }}
+                            className={`cost-input ${isDark ? 'bg-gray-950 text-gray-200' : 'bg-white text-gray-800'}`}
+                            aria-label="Maximum cost"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setModelMinCost(costExtent.min);
+                                setModelMaxCost(costExtent.max);
+                            }}
+                            className={`text-[10px] underline underline-offset-2 flex-shrink-0 ${isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                            Reset
+                        </button>
+                    </div>
+                )}
+
+                <div className="relative flex items-center flex-shrink-0" ref={tagFilterMenuRef}>
+                    <button
+                        ref={tagFilterButtonRef}
+                        type="button"
+                        onClick={() => setIsTagFilterMenuOpen((p) => !p)}
+                        className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider border transition-colors ${
+                            enabledTagCount < MODEL_TAG_DEFS.length
+                                ? (isDark
+                                    ? 'bg-brand-coral/20 text-brand-coral border-brand-coral/40'
+                                    : 'bg-brand-coral/10 text-brand-coral border-brand-coral/30')
+                                : (isDark
+                                    ? 'bg-gray-800 text-gray-400 border-gray-700 hover:text-gray-200'
+                                    : 'bg-gray-100 text-gray-500 border-gray-200 hover:text-gray-700')
+                        }`}
+                        aria-haspopup="menu"
+                        aria-expanded={isTagFilterMenuOpen}
+                        aria-label={`Model filters, ${enabledTagCount} of ${MODEL_TAG_DEFS.length} enabled`}
+                        title="Filter models by type"
+                    >
+                        <HiOutlineFunnel className="w-3 h-3" />
+                        <span>Filters</span>
+                        <span className={`font-mono normal-case tracking-normal ${enabledTagCount < MODEL_TAG_DEFS.length ? 'font-bold' : 'opacity-70'}`}>
+                            {enabledTagCount}/{MODEL_TAG_DEFS.length}
+                        </span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    ), [isDark, modelSearchQuery, handleModelSearchKeyDown, costExtent, modelMinCost, modelMaxCost, isTagFilterMenuOpen, enabledTagCount]);
 
     const renderModelControl = () => {
         const modelLabelMaxChars = overflowKeys.includes('model') ? undefined : modelMaxChars;
@@ -1116,137 +1340,8 @@ const ChatInput = ({
                     triggerRef={modelMenuRef}
                     isDark={isDark}
                     role="listbox"
-                    header={
-                        <div className={`border-b ${isDark ? 'border-gray-700/80 bg-gray-900/40' : 'border-gray-100 bg-gray-50'}`}>
-                            <div className="flex items-center gap-2 px-3 py-2">
-                                <HiMagnifyingGlass className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-                                <input
-                                    ref={modelSearchRef}
-                                    type="text"
-                                    value={modelSearchQuery}
-                                    onChange={(e) => setModelSearchQuery(e.target.value)}
-                                    onKeyDown={handleModelSearchKeyDown}
-                                    placeholder="Search models..."
-                                    autoComplete="off"
-                                    className={`flex-1 bg-transparent text-xs outline-none placeholder-gray-500 ${isDark ? 'text-gray-200' : 'text-gray-800'}`}
-                                    aria-label="Search AI models"
-                                />
-                                {modelSearchQuery && (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setModelSearchQuery('');
-                                            modelSearchRef.current?.focus();
-                                        }}
-                                        className={`flex-shrink-0 p-0.5 rounded transition-colors ${isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}
-                                        aria-label="Clear search"
-                                    >
-                                        <HiXMark className="w-3 h-3" />
-                                    </button>
-                                )}
-                            </div>
-
-                            <div className="flex items-center gap-2 px-3 pb-2">
-                                {costExtent && (
-                                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                                        <span className={`text-[10px] font-semibold uppercase tracking-wider flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                                            Out
-                                        </span>
-                                        <div className="dual-range flex-1 min-w-0">
-                                            <input
-                                                type="range"
-                                                min={costExtent.min}
-                                                max={costExtent.max}
-                                                step={Math.max(0.01, (costExtent.max - costExtent.min) / 100)}
-                                                value={Math.min(modelMinCost ?? costExtent.min, modelMaxCost ?? costExtent.max)}
-                                                onChange={(e) => {
-                                                    const v = Number(e.target.value);
-                                                    setModelMinCost(Math.min(v, modelMaxCost ?? costExtent.max));
-                                                }}
-                                                aria-label="Minimum model cost per million tokens"
-                                            />
-                                            <input
-                                                type="range"
-                                                min={costExtent.min}
-                                                max={costExtent.max}
-                                                step={Math.max(0.01, (costExtent.max - costExtent.min) / 100)}
-                                                value={modelMaxCost ?? costExtent.max}
-                                                onChange={(e) => {
-                                                    const v = Number(e.target.value);
-                                                    setModelMaxCost(Math.max(v, modelMinCost ?? costExtent.min));
-                                                }}
-                                                aria-label="Maximum model cost per million tokens"
-                                            />
-                                        </div>
-                                        <input
-                                            type="number"
-                                            min={costExtent.min}
-                                            max={modelMaxCost ?? costExtent.max}
-                                            step={0.01}
-                                            value={modelMinCost ?? costExtent.min}
-                                            onChange={(e) => {
-                                                const v = e.target.value === '' ? costExtent.min : Number(e.target.value);
-                                                setModelMinCost(Math.min(Math.max(v, costExtent.min), modelMaxCost ?? costExtent.max));
-                                            }}
-                                            className={`cost-input ${isDark ? 'bg-gray-950 text-gray-200' : 'bg-white text-gray-800'}`}
-                                            aria-label="Minimum cost"
-                                        />
-                                        <span className={`text-[10px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>-</span>
-                                        <input
-                                            type="number"
-                                            min={modelMinCost ?? costExtent.min}
-                                            max={costExtent.max}
-                                            step={0.01}
-                                            value={modelMaxCost ?? costExtent.max}
-                                            onChange={(e) => {
-                                                const v = e.target.value === '' ? costExtent.max : Number(e.target.value);
-                                                setModelMaxCost(Math.max(Math.min(v, costExtent.max), modelMinCost ?? costExtent.min));
-                                            }}
-                                            className={`cost-input ${isDark ? 'bg-gray-950 text-gray-200' : 'bg-white text-gray-800'}`}
-                                            aria-label="Maximum cost"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setModelMinCost(costExtent.min);
-                                                setModelMaxCost(costExtent.max);
-                                            }}
-                                            className={`text-[10px] underline underline-offset-2 flex-shrink-0 ${isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}
-                                        >
-                                            Reset
-                                        </button>
-                                    </div>
-                                )}
-
-                                <div className="relative flex items-center flex-shrink-0" ref={tagFilterMenuRef}>
-                                    <button
-                                        ref={tagFilterButtonRef}
-                                        type="button"
-                                        onClick={() => setIsTagFilterMenuOpen((p) => !p)}
-                                        className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider border transition-colors ${
-                                            enabledTagCount < MODEL_TAG_DEFS.length
-                                                ? (isDark
-                                                    ? 'bg-brand-coral/20 text-brand-coral border-brand-coral/40'
-                                                    : 'bg-brand-coral/10 text-brand-coral border-brand-coral/30')
-                                                : (isDark
-                                                    ? 'bg-gray-800 text-gray-400 border-gray-700 hover:text-gray-200'
-                                                    : 'bg-gray-100 text-gray-500 border-gray-200 hover:text-gray-700')
-                                        }`}
-                                        aria-haspopup="menu"
-                                        aria-expanded={isTagFilterMenuOpen}
-                                        aria-label={`Model filters, ${enabledTagCount} of ${MODEL_TAG_DEFS.length} enabled`}
-                                        title="Filter models by type"
-                                    >
-                                        <HiOutlineFunnel className="w-3 h-3" />
-                                        <span>Filters</span>
-                                        <span className={`font-mono normal-case tracking-normal ${enabledTagCount < MODEL_TAG_DEFS.length ? 'font-bold' : 'opacity-70'}`}>
-                                            {enabledTagCount}/{MODEL_TAG_DEFS.length}
-                                        </span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    }
+                    header={modelMenuHeader}
+                    onBodyScroll={handleModelListScroll}
                     bodyClassName="overflow-y-auto custom-scrollbar p-2 max-h-[55vh] sm:max-h-96 space-y-1"
                     footer={
                         <div className={`px-3 py-2 border-t flex items-center justify-between gap-2 shrink-0 text-[10px] ${isDark ? 'border-gray-700/80 bg-gray-900/30 text-gray-600' : 'border-gray-100 bg-gray-50 text-gray-500'
@@ -1272,13 +1367,25 @@ const ChatInput = ({
                         </p>
                     ) : (
                         <>
-                            {recentModelItems.length > 0 && (
+                            {renderedModels.recent.length > 0 && (
                                 <div className="mb-2">
                                     <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'
                                         }`}>
                                         Recent Models
                                     </div>
-                                    {recentModelItems.map((opt, idx) => renderModelOption(opt, idx, opt._type))}
+                                    {renderedModels.recent.map((opt, idx) => (
+                                        <ModelOption
+                                            key={opt.value}
+                                            opt={opt}
+                                            type={opt._type}
+                                            idx={idx}
+                                            isSelected={opt._type === 'text' ? selectedModel === opt.value : selectedAudioModel === opt.value}
+                                            isFocused={focusedModelIndex === idx}
+                                            isDark={isDark}
+                                            onSelect={handleSelect}
+                                            registerItemRef={registerItemRef}
+                                        />
+                                    ))}
                                 </div>
                             )}
 
@@ -1334,9 +1441,19 @@ const ChatInput = ({
                                     </p>
                                 )}
 
-                                {ollamaStatus === 'connected' && filteredOllamaModels.map((opt, idx) =>
-                                    renderModelOption(opt, recentModelItems.length + idx, 'text')
-                                )}
+                                {ollamaStatus === 'connected' && renderedModels.ollama.map((opt, idx) => (
+                                    <ModelOption
+                                        key={opt.value}
+                                        opt={opt}
+                                        type="text"
+                                        idx={renderedModels.recent.length + idx}
+                                        isSelected={selectedModel === opt.value}
+                                        isFocused={focusedModelIndex === renderedModels.recent.length + idx}
+                                        isDark={isDark}
+                                        onSelect={handleSelect}
+                                        registerItemRef={registerItemRef}
+                                    />
+                                ))}
 
                                 {ollamaStatus === 'error' && (
                                     <div className={`mx-2 my-1.5 px-2.5 py-2 rounded-lg text-xs flex items-center justify-between gap-2 ${isDark ? 'bg-red-500/10 text-red-300' : 'bg-red-50 text-red-600'
@@ -1387,40 +1504,71 @@ const ChatInput = ({
                                         <HiOutlineCog6Tooth className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
-                                {selectableChromeModels.map((opt, idx) =>
-                                    renderModelOption(opt, recentModelItems.length + filteredOllamaModels.length + idx, 'text')
-                                )}
+                                {renderedModels.chrome.map((opt, idx) => (
+                                    <ModelOption
+                                        key={opt.value}
+                                        opt={opt}
+                                        type="text"
+                                        idx={renderedModels.recent.length + renderedModels.ollama.length + idx}
+                                        isSelected={selectedModel === opt.value}
+                                        isFocused={focusedModelIndex === renderedModels.recent.length + renderedModels.ollama.length + idx}
+                                        isDark={isDark}
+                                        onSelect={handleSelect}
+                                        registerItemRef={registerItemRef}
+                                    />
+                                ))}
                                 {disabledChromeModels.map(renderDisabledChromeOption)}
                             </div>
 
-                            {filteredTextModels.length > 0 && (
+                            {renderedModels.text.length > 0 && (
                                 <div className="mb-2">
                                     <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'
                                         }`}>
                                         Text Models
                                     </div>
-                                    {filteredTextModels.map((opt, idx) =>
-                                        renderModelOption(
-                                            opt,
-                                            recentModelItems.length + filteredOllamaModels.length + selectableChromeModels.length + idx,
-                                            'text'
-                                        )
-                                    )}
+                                    {renderedModels.text.map((opt, idx) => (
+                                        <ModelOption
+                                            key={opt.value}
+                                            opt={opt}
+                                            type="text"
+                                            idx={renderedModels.recent.length + renderedModels.ollama.length + renderedModels.chrome.length + idx}
+                                            isSelected={selectedModel === opt.value}
+                                            isFocused={focusedModelIndex === renderedModels.recent.length + renderedModels.ollama.length + renderedModels.chrome.length + idx}
+                                            isDark={isDark}
+                                            onSelect={handleSelect}
+                                            registerItemRef={registerItemRef}
+                                        />
+                                    ))}
                                 </div>
                             )}
-                            {filteredAudioModels.length > 0 && (
+                            {renderedModels.audio.length > 0 && (
                                 <div>
                                     <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500 bg-gray-900/50' : 'text-gray-400 bg-gray-50'
                                         }`}>
                                         Audio Models
                                     </div>
-                                    {filteredAudioModels.map((opt, idx) =>
-                                        renderModelOption(
-                                            opt,
-                                            recentModelItems.length + filteredOllamaModels.length + selectableChromeModels.length + filteredTextModels.length + idx,
-                                            'audio'
-                                        )
-                                    )}
+                                    {renderedModels.audio.map((opt, idx) => (
+                                        <ModelOption
+                                            key={opt.value}
+                                            opt={opt}
+                                            type="audio"
+                                            idx={renderedModels.recent.length + renderedModels.ollama.length + renderedModels.chrome.length + renderedModels.text.length + idx}
+                                            isSelected={selectedAudioModel === opt.value}
+                                            isFocused={focusedModelIndex === renderedModels.recent.length + renderedModels.ollama.length + renderedModels.chrome.length + renderedModels.text.length + idx}
+                                            isDark={isDark}
+                                            onSelect={handleSelect}
+                                            registerItemRef={registerItemRef}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+
+                            {visibleModelCount < selectableItems.length && (
+                                <div className="flex items-center justify-center py-3">
+                                    <HiArrowPath className="w-4 h-4 animate-spin text-gray-500" />
+                                    <span className="ml-2 text-[10px] text-gray-500">
+                                        Loading more models...
+                                    </span>
                                 </div>
                             )}
                         </>
@@ -1502,12 +1650,17 @@ const ChatInput = ({
         />
     );
 
-    const toolbarItems = [
+    // Stable identity: the render closures are recreated each render, but the
+    // array identity only changes when the feature set changes. This is what
+    // stops the overflow layout effect from running on every keystroke.
+    const featureKey = `${features.webSearch}-${features.modelSelection}`;
+    const toolbarItems = useMemo(() => [
         ...(features.webSearch ? [{ key: 'websearch', label: 'Web Search', render: renderWebSearchButton }] : []),
         ...(features.modelSelection ? [{ key: 'model', label: 'Model', render: renderModelControl }] : []),
         { key: 'reasoning', label: 'Reasoning Effort', render: renderReasoningControl },
         { key: 'context', label: 'Context Limit', render: renderContextControl },
-    ];
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    ], [featureKey, isWebSearchEnabled, isLocalModelSelected, reasoningEfforts, reasoningEffort, defaultReasoningEffort, isReasoningDefault, contextLimit, selectedModel, selectedModelLabel, isModelMenuOpen, isTagFilterMenuOpen, enabledTagCount, modelMaxChars, overflowKeys, currentVisuals, chromeStatus, ollamaStatus, modelSearchQuery, focusedModelIndex, costExtent, modelMinCost, modelMaxCost, renderedModels, isSearchingModels, selectableItems.length, visibleModelCount, recordings, isRecording, autoSendCountdown, autoRecordCountdown, elapsedTime, isNearingTimeLimit, isTranscribing, isLoading, attachmentCount, isOverflowOpen, disabledChromeModels, tagFilterPosition, handleModelListScroll]);
 
     const visibleItems = toolbarItems.filter((item) => !overflowKeys.includes(item.key));
     const overflowMenuItems = toolbarItems
@@ -1518,6 +1671,9 @@ const ChatInput = ({
             return 0;
         });
 
+    // The overflow layout effect now depends on a stable tick instead of the
+    // toolbarItems array. It only re-runs when the toolbar actually resizes
+    // or when the overflow state itself changes, not on every keystroke.
     useLayoutEffect(() => {
         const container = leftToolbarRef.current;
         if (!container || container.clientWidth <= 0) return;
@@ -1646,7 +1802,11 @@ const ChatInput = ({
             setOverflowKeys(nextOverflowKeys);
             setModelMaxChars(nextModelMaxChars);
         }
-    }, [toolbarItems, overflowKeys, modelMaxChars, toolbarResizeTick]);
+        // toolbarItems is read via a ref-like closure; the tick is what
+        // triggers re-measurement. eslint is disabled because listing every
+        // dependency of the render closures would defeat the purpose.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [toolbarResizeTick, overflowKeys, modelMaxChars, featureKey]);
 
     return (
         <div
@@ -1685,24 +1845,7 @@ const ChatInput = ({
                 />
             </div>
 
-            {recordings.map(rec => {
-                const el = document.getElementById(`capsule-${rec.id}`);
-                if (!el) return null;
-                return createPortal(
-                    <AudioCapsule
-                        recording={rec}
-                        onDownload={() => {
-                            const a = document.createElement('a');
-                            a.href = rec.url;
-                            a.download = `${rec.id}.webm`;
-                            a.click();
-                        }}
-                        onRetranscribe={() => retryTranscription(rec.id)}
-                        onRemove={() => removeRecording(rec.id)}
-                    />,
-                    el
-                );
-            })}
+            {recordingPortals}
 
             <div className="flex items-center justify-between">
                 <div ref={leftToolbarRef} className="relative flex items-center min-w-0 flex-1 mr-2 gap-2">

@@ -1,5 +1,5 @@
 // src/AidaWidget/AidaWidget.jsx
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import SevenSegmentDisplay from './SevenSegmentDisplay';
 import ChatHeader from './ChatHeader';
 import ChatDisplay from './ChatDisplay';
@@ -33,6 +33,9 @@ import {
 
 import { CHAT_URL, TRANSCRIPTION_URL, MODELS_URL } from './utils/apiConfig';
 import { getSupportedEfforts, getDefaultEffort, resolveEffort, buildReasoningConfig } from './utils/reasoning';
+
+// Memoized so the input subtree is skipped on every streaming token.
+const MemoizedChatInput = memo(ChatInput);
 
 const DEFAULT_MODELS = [
     { value: 'nvidia/nemotron-3-ultra-550b-a55b:free', label: 'Nemotron 3 Ultra 550B (Free)', category: 'reasoning' },
@@ -1046,7 +1049,7 @@ const AidaWidget = (props) => {
                         inputRef={inputRef}
                         inputSelectionRef={inputSelectionRef}
                     />
-                    <ChatInput
+                    <MemoizedChatInput
                         handleSendMessage={stableHandleSendMessage}
                         handleRecordButtonClick={handleRecordButtonClick}
                         inputRef={inputRef}

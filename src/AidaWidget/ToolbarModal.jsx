@@ -17,6 +17,7 @@ const ToolbarModal = ({
     footer,
     children,
     bodyClassName = 'flex-1 min-h-0 overflow-y-auto custom-scrollbar',
+    onBodyScroll, // NEW: called when the modal body scrolls
     isDark = true,
     triggerRef,
     clipContent = true,
@@ -63,7 +64,7 @@ const ToolbarModal = ({
                 }`}
             >
                 {header}
-                <div className={bodyClassName}>{children}</div>
+                    <div className={bodyClassName} onScroll={onBodyScroll}>{children}</div>
                 {footer}
             </div>
         </div>
