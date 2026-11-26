@@ -10,7 +10,7 @@ import { HiCheck } from 'react-icons/hi2';
  *   [x] (icon) Label        (gear)
  *
  * Props:
- *  - items: [{ id, label, checked, icon?: Component, iconColor?: string }]
+ *  - items: [{ id, label, checked, count?, icon?: Component, iconColor?: string }]
  *  - onToggle(id): fired when a row is clicked
  *  - onItemAction(id), itemActionIcon, itemActionTitle: optional per-row
  *    trailing button (e.g. the tag "customize" gear)
@@ -22,6 +22,10 @@ import { HiCheck } from 'react-icons/hi2';
  *
  * Label color is inherited from the parent menu, so the same list works
  * inside themed headers and standalone portaled dropdowns.
+ *
+ * `count` is optional. When provided, it renders right-aligned in a small
+ * monospace font (used by the model filter dropdown to show how many
+ * models match each tag). Rows without a count render exactly as before.
  */
 const CheckboxList = ({
     items = [],
@@ -73,7 +77,7 @@ const CheckboxList = ({
                             }`}>
                                 {checked && <HiCheck className="w-3 h-3 text-white" />}
                             </div>
-                            <div className="flex items-center gap-2 min-w-0">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
                                 {Icon && (
                                     <Icon
                                         className="w-4 h-4 shrink-0"
@@ -83,6 +87,16 @@ const CheckboxList = ({
                                 <span className={`truncate text-xs ${checked ? 'font-medium' : ''}`}>
                                     {item.label}
                                 </span>
+                                {item.count !== undefined && (
+                                    <span
+                                        className={`ml-auto shrink-0 font-mono text-[10px] ${
+                                            isDark ? 'text-gray-500' : 'text-gray-400'
+                                        }`}
+                                        title={`${item.count} models match`}
+                                    >
+                                        {item.count}
+                                    </span>
+                                )}
                             </div>
                         </button>
                         {hasAction && (
