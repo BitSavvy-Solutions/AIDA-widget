@@ -6,9 +6,10 @@ import {
     HiChevronDown, HiOutlineGlobeAlt, HiLightBulb, HiPhoto, HiChatBubbleLeftRight,
     HiArrowTopRightOnSquare, HiPaperClip, HiEye, HiMagnifyingGlass,
     HiOutlineDocument, HiOutlineRectangleStack, HiPlay, HiPause, HiArrowDownTray,
-    HiOutlineCpuChip, HiOutlineCog6Tooth, HiChevronUp, HiCheck, HiOutlineFunnel,
+    HiOutlineCpuChip, HiOutlineCog6Tooth, HiChevronUp, HiOutlineFunnel,
 } from 'react-icons/hi2';
 import AttachmentButton from './AttachmentButton';
+import CheckboxList from './CheckboxList';
 import ContextSelector from './ContextSelector';
 import ReasoningSelector from './ReasoningSelector';
 import ToolbarModal from './ToolbarModal';
@@ -1436,10 +1437,13 @@ const ChatInput = ({
                                 right: tagFilterPosition.right,
                                 zIndex: 9999,
                             }}
+                            onPointerDown={(e) => e.stopPropagation()}
                             onMouseDown={(e) => e.stopPropagation()}
                             onClick={(e) => e.stopPropagation()}
                             className={`w-36 rounded-lg shadow-xl border flex flex-col overflow-hidden ${
-                                isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                                isDark
+                                    ? 'bg-gray-800 border-gray-700 text-gray-200'
+                                    : 'bg-white border-gray-200 text-gray-700'
                             }`}
                             role="menu"
                             aria-label="Model filters"
@@ -1463,36 +1467,15 @@ const ChatInput = ({
                                 </button>
                             </div>
 
-                            <div className="max-h-48 overflow-y-auto custom-scrollbar p-1 space-y-0.5">
-                                {MODEL_TAG_DEFS.map((tag) => {
-                                    const isChecked = Boolean(modelTagFilters[tag.key]);
-                                    return (
-                                        <button
-                                            key={tag.key}
-                                            type="button"
-                                            role="menuitemcheckbox"
-                                            aria-checked={isChecked}
-                                            onClick={() => setModelTagFilters((prev) => ({ ...prev, [tag.key]: !prev[tag.key] }))}
-                                            className={`w-full px-2 py-1.5 text-left flex items-center gap-2 min-w-0 rounded transition-colors ${
-                                                isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-100'
-                                            }`}
-                                        >
-                                            <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
-                                                isChecked
-                                                    ? 'bg-brand-coral border-brand-coral'
-                                                    : (isDark ? 'border-gray-500' : 'border-gray-300')
-                                            }`}>
-                                                {isChecked && <HiCheck className="w-3 h-3 text-white" />}
-                                            </div>
-                                            <span className={`truncate text-xs ${isChecked ? 'font-medium' : ''} ${
-                                                isDark ? 'text-gray-200' : 'text-gray-700'
-                                            }`}>
-                                                {tag.label}
-                                            </span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
+                            <CheckboxList
+                                items={MODEL_TAG_DEFS.map((tag) => ({
+                                    id: tag.key,
+                                    label: tag.label,
+                                    checked: Boolean(modelTagFilters[tag.key]),
+                                }))}
+                                onToggle={(key) => setModelTagFilters((prev) => ({ ...prev, [key]: !prev[key] }))}
+                                isDark={isDark}
+                            />
                         </div>,
                         document.body
                     )

@@ -2,12 +2,13 @@
 import React, { useState, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
 import {
     HiPlus, HiOutlineSun, HiOutlineMoon, HiClock, HiEllipsisVertical,
-    HiMinusSmall, HiOutlineArrowsPointingOut, HiPencilSquare, HiCheck,
+    HiMinusSmall, HiOutlineArrowsPointingOut, HiPencilSquare,
     HiOutlineTag, HiOutlineCog6Tooth, HiOutlineShare,
     HiOutlineAdjustmentsHorizontal
 } from 'react-icons/hi2';
 import SevenSegmentDisplay from './SevenSegmentDisplay';
 import HeaderInfoDisplay from './headerInfo/HeaderInfoDisplay';
+import CheckboxList from './CheckboxList';
 import {
     ProjectIconPicker,
     PROJECT_ICON_OPTIONS,
@@ -301,30 +302,23 @@ const ChatHeader = ({
                                             <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--aida-header-border)', backgroundColor: 'rgba(0,0,0,0.1)' }}>
                                                 <span className="text-xs font-semibold uppercase tracking-wider opacity-70">Tags</span>
                                             </div>
-                                            <div className="max-h-56 overflow-y-auto custom-scrollbar p-1 space-y-0.5">
-                                                {projects.length === 0 && <div className="px-3 py-4 text-xs italic text-center opacity-60">No tags created yet</div>}
-                                                {projects.map(project => {
-                                                    const isSelected = sessionTagIds.includes(project.id);
-                                                    const Icon = PROJECT_ICON_OPTIONS.find(opt => opt.key === project.iconKey)?.Icon || NotebookIcon;
-                                                    const color = project.iconColor || DEFAULT_PROJECT_ICON_COLOR;
-                                                    return (
-                                                        <div key={project.id} className="flex items-center gap-1 group rounded pr-1 aida-menu-item">
-                                                            <button onClick={() => handleToggleTag(project.id)} className="flex-1 px-2 py-1.5 text-left flex items-center gap-2 min-w-0">
-                                                                <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${isSelected ? 'bg-brand-coral border-brand-coral' : 'border-gray-400 group-hover:border-gray-500'}`}>
-                                                                    {isSelected && <HiCheck className="w-3 h-3 text-white" />}
-                                                                </div>
-                                                                <div className="flex items-center gap-2 min-w-0">
-                                                                    <Icon className="w-4 h-4 shrink-0" style={{ color }} />
-                                                                    <span className={`truncate text-xs ${isSelected ? 'font-medium' : ''}`}>{project.title}</span>
-                                                                </div>
-                                                            </button>
-                                                            <button onClick={(e) => { e.stopPropagation(); setEditingProjectId(project.id); }} className="p-1.5 rounded opacity-0 group-hover:opacity-100 transition-all aida-menu-item" title="Customize Tag">
-                                                                <HiOutlineCog6Tooth className="w-3.5 h-3.5" />
-                                                            </button>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
+                                            <CheckboxList
+                                                items={projects.map((project) => ({
+                                                    id: project.id,
+                                                    label: project.title,
+                                                    checked: sessionTagIds.includes(project.id),
+                                                    icon: PROJECT_ICON_OPTIONS.find((opt) => opt.key === project.iconKey)?.Icon || NotebookIcon,
+                                                    iconColor: project.iconColor || DEFAULT_PROJECT_ICON_COLOR,
+                                                }))}
+                                                onToggle={handleToggleTag}
+                                                onItemAction={setEditingProjectId}
+                                                itemActionIcon={HiOutlineCog6Tooth}
+                                                itemActionTitle="Customize Tag"
+                                                emptyMessage="No tags created yet"
+                                                maxHeightClass="max-h-56"
+                                                rowHoverClass="aida-menu-item"
+                                                isDark={theme === 'dark'}
+                                            />
                                             <div className="p-2 border-t" style={{ borderColor: 'var(--aida-header-border)', backgroundColor: 'rgba(0,0,0,0.1)' }}>
                                                 <div className="flex items-center gap-1">
                                                     <input
