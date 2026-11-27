@@ -241,7 +241,10 @@ const AidaWidget = (props) => {
         }
         const fallbackModels = (models && models.length > 0) ? models : DEFAULT_MODELS;
         const found = fallbackModels.find((m) => m.value === saved);
-        return found || fallbackModels[0];
+        if (found) return found;
+        // Keep models picked from the model explorer even when they are not in
+        // the default list. Full metadata is resolved once the models API responds.
+        return saved ? { value: saved } : fallbackModels[0];
     });
 
     const [selectedAudioModel, setSelectedAudioModel] = useState(() => {
@@ -866,6 +869,36 @@ const AidaWidget = (props) => {
         window.addEventListener('aida-open-chat', handler);
         return () => window.removeEventListener('aida-open-chat', handler);
     }, [isOpen, setCurrentSessionId, toggleChatVisibility, historyEnabled]);
+
+    // The host page (model explorer "Use model" button) asks the widget to
+    // switch models. Payload is a model id string or a normalized model object.
+    useEffect(() => {
+        const handler = (e) => {
+            let { model } = e.detail || {};
+            if (!model) return;
+
+            if (typeof model === 'string') {
+                handleSetSelectedModel(model);
+                return;
+            }
+
+            // Tolerate raw backend objects that use id instead of value.
+            if (!model.value && model.id) model = { ...model, value: model.id };
+            if (!model.value) return;
+
+            // Transcription models go to the audio selector.
+            const inputs = String(model.modality || '').split('->')[0] || '';
+            const isAudio = model.category === 'audio'
+                || inputs.split('+').map((t) => t.trim()).includes('audio');
+            if (isAudio) {
+                handleSetSelectedAudioModel(model);
+            } else {
+                handleSetSelectedModel(model);
+            }
+        };
+        window.addEventListener('aida-select-model', handler);
+        return () => window.removeEventListener('aida-select-model', handler);
+    }, [handleSetSelectedModel, handleSetSelectedAudioModel]);
 
     const resetChat = () => {
         saveCurrentChatToHistory();

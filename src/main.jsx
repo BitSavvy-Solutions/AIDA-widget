@@ -46,10 +46,19 @@ function openChat(chatId) {
   window.dispatchEvent(new CustomEvent('aida-open-chat', { detail: { chatId } }));
 }
 
+/**
+ * Tell the widget to switch to a specific model. Accepts either a model id
+ * string or a model object in the widget's normalized shape
+ * ({ value, label, category, modality, contextLength, pricing, reasoning }).
+ */
+function selectModel(model) {
+  window.dispatchEvent(new CustomEvent('aida-select-model', { detail: { model } }));
+}
+
 // Expose a stable API on window so the frontend can call these directly
 if (typeof window !== 'undefined') {
-  window.AidaWidget = { render, pushContext, openChat };
+  window.AidaWidget = { render, pushContext, openChat, selectModel };
 }
 
 // Export both render and pushContext
-export { render, pushContext, openChat };
+export { render, pushContext, openChat, selectModel };
