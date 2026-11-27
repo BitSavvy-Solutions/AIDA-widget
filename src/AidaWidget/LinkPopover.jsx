@@ -188,7 +188,7 @@ const LinkPopover = ({
                                             close();
                                         }}
                                     >
-                                        <HiEye className="w-4 h-4 flex-shrink-0 opacity-70" />
+                                        <HiInformationCircle className="w-4 h-4 flex-shrink-0 opacity-70" />
                                         <span>Open here</span>
                                     </button>
                                 )}

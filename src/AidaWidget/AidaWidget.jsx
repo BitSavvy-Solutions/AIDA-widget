@@ -89,6 +89,7 @@ const defaultProps = {
     audioModels: [],
     memoryAdapter: null,
     historyUrl: null,
+    modelPageBaseUrl: null,
     features: {
         resizable: true,
         modelSelection: true,
@@ -114,6 +115,7 @@ const AidaWidget = (props) => {
         audioModels,
         memoryAdapter,
         historyUrl,
+        modelPageBaseUrl,
     } = { ...defaultProps, ...props };
 
     const attachmentsEnabled = Boolean(features?.imageUpload);
@@ -652,6 +654,24 @@ const AidaWidget = (props) => {
         toggleChatVisibility,
     ]);
 
+    // Opens the model details page, e.g. /model/google/gemini-4-neon.
+    // Navigates the same way the chat history link does. Local models
+    // (Ollama, Chromium) have no detail page and are skipped by the UI.
+    const handleOpenModelPage = useCallback((modelValue) => {
+        if (!modelValue) return;
+        const cleanValue = String(modelValue).replace(/:online$/, '');
+        if (cleanValue.startsWith('ollama:') || cleanValue.startsWith('chrome:')) return;
+
+        const base = modelPageBaseUrl || window.location.href;
+        try {
+            const target = new URL(`/model/${cleanValue}`, base);
+            if (target.href === window.location.href) return;
+            window.location.assign(target.href);
+        } catch {
+            // ignore malformed values
+        }
+    }, [modelPageBaseUrl]);
+
     useEffect(() => {
         autoSendCallbackRef.current = handleAutoSend;
     }, [handleAutoSend]);
@@ -1098,6 +1118,7 @@ const AidaWidget = (props) => {
                         searchedModels={searchedModels}
                         recentModelValues={recentModelValues}
                         onModelSelected={addRecentModel}
+                        onOpenModelPage={handleOpenModelPage}
                         ollamaModels={ollama.models}
                         ollamaStatus={ollama.status}
                         chromeModels={chromeAI.chatModels}

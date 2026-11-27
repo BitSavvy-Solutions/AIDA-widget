@@ -6,7 +6,7 @@ import {
     HiChevronDown, HiOutlineGlobeAlt, HiLightBulb, HiPhoto, HiChatBubbleLeftRight,
     HiMagnifyingGlass, HiOutlineDocument, HiOutlineRectangleStack, HiPlay, HiPause,
     HiArrowDownTray, HiOutlineCpuChip, HiOutlineCog6Tooth, HiChevronUp,
-    HiOutlineArrowsUpDown,
+    HiOutlineArrowsUpDown, HiInformationCircle,
 } from 'react-icons/hi2';
 import AttachmentButton from './AttachmentButton';
 import ContextSelector from './ContextSelector';
@@ -162,6 +162,11 @@ const getModelVisuals = (category, isDark) => {
  * One row in the model picker. Memoized so a keystroke in the search box or
  * an arrow-key focus change only re-renders the rows whose props changed
  * (usually two), not the whole list.
+ *
+ * The row is a div with role="option" rather than a button, because it now
+ * contains a nested eye button that opens the model details page. Nested
+ * buttons are invalid HTML, so selection is handled via onClick and
+ * Enter/Space on the row itself.
  */
 const ModelOption = memo(function ModelOption({
     opt,
@@ -171,12 +176,19 @@ const ModelOption = memo(function ModelOption({
     isFocused,
     isDark,
     onSelect,
+    onOpenModelPage,
     registerItemRef,
 }) {
     const visuals = getModelVisuals(opt.category || 'chat', isDark);
     const Icon = visuals.icon;
 
-    let rowClass = 'w-full text-left px-2.5 py-2 text-sm rounded-lg flex items-start gap-2.5 transition-colors outline-none border ';
+    const modelValue = String(opt.value || '');
+    const isLocal = modelValue.startsWith('ollama:') || modelValue.startsWith('chrome:');
+    // Only hosted text models have a details page on the site.
+    // Local models and audio models are skipped.
+    const canOpenDetails = Boolean(onOpenModelPage) && type === 'text' && !isLocal;
+
+    let rowClass = 'w-full text-left px-2.5 py-2 text-sm rounded-lg flex items-start gap-2.5 transition-colors outline-none border cursor-pointer ';
     if (isFocused) {
         rowClass += isDark ? 'bg-white/10 ring-1 ring-inset ring-brand-coral/50 border-brand-coral/50 ' : 'bg-blue-50 ring-1 ring-inset ring-blue-300 border-blue-300 ';
     } else if (isSelected) {
@@ -190,12 +202,18 @@ const ModelOption = memo(function ModelOption({
     const completionPrice = formatPrice(opt.pricing?.completion);
 
     return (
-        <button
-            type="button"
+        <div
             ref={(el) => registerItemRef(idx, el)}
             role="option"
             aria-selected={isSelected}
+            tabIndex={-1}
             onClick={() => onSelect(opt, type)}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelect(opt, type);
+                }
+            }}
             className={rowClass}
         >
             <div className={`p-1.5 rounded-md flex-shrink-0 mt-0.5 ${visuals.bgClass} ${visuals.colorClass}`}>
@@ -209,7 +227,28 @@ const ModelOption = memo(function ModelOption({
                         }`}>
                         {opt.label}
                     </span>
-                    {isSelected && <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-coral flex-shrink-0" aria-hidden="true" />}
+                    <span className="flex items-center gap-1.5 flex-shrink-0">
+                        {canOpenDetails && (
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onOpenModelPage(modelValue);
+                                }}
+                                onKeyDown={(e) => e.stopPropagation()}
+                                className={`flex items-center justify-center w-7 h-7 rounded-lg border transition-colors ${
+                                    isDark
+                                        ? 'border-gray-600 text-gray-300 hover:bg-gray-600/60 hover:text-white'
+                                        : 'border-gray-300 text-gray-500 hover:bg-gray-100 hover:text-gray-800'
+                                }`}
+                                aria-label={`Open details page for ${opt.label}`}
+                                title={`View ${opt.label} details`}
+                            >
+                                <HiInformationCircle className="w-4 h-4" />
+                            </button>
+                        )}
+                        {isSelected && <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-coral" aria-hidden="true" />}
+                    </span>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                     {opt.modality && <ModularBadges modality={opt.modality} />}
@@ -220,41 +259,27 @@ const ModelOption = memo(function ModelOption({
                         {contextSize && (
                             <span className="flex items-center gap-1">
                                 <span className="opacity-60">Context</span>
-                                <span className="text-purple-400 font-semibold">
-                                    {contextSize}
-                                </span>
+                                <span className="text-purple-400 font-semibold">{contextSize}</span>
                             </span>
                         )}
-
-                        {contextSize && (promptPrice || completionPrice) && (
-                            <span className="opacity-40">·</span>
-                        )}
-
+                        {contextSize && (promptPrice || completionPrice) && <span className="opacity-40">·</span>}
                         {promptPrice && (
                             <span className="flex items-center gap-1">
                                 <span className="opacity-60">In</span>
-                                <span className="text-emerald-400 font-semibold">
-                                    {promptPrice}
-                                </span>
+                                <span className="text-emerald-400 font-semibold">{promptPrice}</span>
                             </span>
                         )}
-
-                        {promptPrice && completionPrice && (
-                            <span className="opacity-40">·</span>
-                        )}
-
+                        {promptPrice && completionPrice && <span className="opacity-40">·</span>}
                         {completionPrice && (
                             <span className="flex items-center gap-1">
                                 <span className="opacity-60">Out</span>
-                                <span className="text-blue-400 font-semibold">
-                                    {completionPrice}
-                                </span>
+                                <span className="text-blue-400 font-semibold">{completionPrice}</span>
                             </span>
                         )}
                     </div>
                 )}
             </div>
-        </button>
+        </div>
     );
 });
 
@@ -307,6 +332,7 @@ const ChatInput = ({
     searchedModels,
     recentModelValues = [],
     onModelSelected,
+    onOpenModelPage,
     ollamaModels = [],
     ollamaStatus = 'disconnected',
     chromeModels = [],
@@ -1308,6 +1334,7 @@ const ChatInput = ({
                                             isFocused={focusedModelIndex === idx}
                                             isDark={isDark}
                                             onSelect={handleSelect}
+                                            onOpenModelPage={onOpenModelPage}
                                             registerItemRef={registerItemRef}
                                         />
                                     ))}
@@ -1376,6 +1403,7 @@ const ChatInput = ({
                                         isFocused={focusedModelIndex === renderedModels.recent.length + idx}
                                         isDark={isDark}
                                         onSelect={handleSelect}
+                                        onOpenModelPage={onOpenModelPage}
                                         registerItemRef={registerItemRef}
                                     />
                                 ))}
@@ -1439,6 +1467,7 @@ const ChatInput = ({
                                         isFocused={focusedModelIndex === renderedModels.recent.length + renderedModels.ollama.length + idx}
                                         isDark={isDark}
                                         onSelect={handleSelect}
+                                        onOpenModelPage={onOpenModelPage}
                                         registerItemRef={registerItemRef}
                                     />
                                 ))}
@@ -1461,6 +1490,7 @@ const ChatInput = ({
                                             isFocused={focusedModelIndex === renderedModels.recent.length + renderedModels.ollama.length + renderedModels.chrome.length + idx}
                                             isDark={isDark}
                                             onSelect={handleSelect}
+                                            onOpenModelPage={onOpenModelPage}
                                             registerItemRef={registerItemRef}
                                         />
                                     ))}
@@ -1482,6 +1512,7 @@ const ChatInput = ({
                                             isFocused={focusedModelIndex === renderedModels.recent.length + renderedModels.ollama.length + renderedModels.chrome.length + renderedModels.text.length + idx}
                                             isDark={isDark}
                                             onSelect={handleSelect}
+                                            onOpenModelPage={onOpenModelPage}
                                             registerItemRef={registerItemRef}
                                         />
                                     ))}
