@@ -138,7 +138,7 @@ const AidaWidget = (props) => {
     useEffect(() => {
         const loadModels = async () => {
             try {
-                const res = await fetch(MODELS_URL);
+                const res = await fetch(`${MODELS_URL}?full=true`);
                 if (!res.ok) throw new Error('Failed to fetch models');
                 const data = await res.json();
 

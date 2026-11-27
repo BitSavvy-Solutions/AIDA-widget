@@ -19,7 +19,7 @@ const extractCleanErrorMessage = (rawError) => {
 };
 
 const THINK_OPEN = ' thinking';
-const THINK_CLOSE = '';
+const THINK_CLOSE = ' response';
 const DEFAULT_OLLAMA_URL = 'http://localhost:11434';
 
 const stripDataUrlPrefix = (dataUrl) => {
@@ -86,8 +86,15 @@ export const useChatAPI = ({
 
     // Streaming text is buffered and flushed once per animation frame so a
     // burst of SSE chunks produces one React render instead of one per chunk.
-    // This is the single biggest win for low-end devices during streaming.
+    //
+    // pendingTextRef holds the delta that has not been committed to state yet.
+    // flushedLenRef tracks how many characters of the cumulative source text
+    // have already been committed, so cumulative sources (Ollama, Chrome AI)
+    // can compute a correct delta on every chunk. The hosted-model path
+    // appends data.delta_content directly and does not need fullTextRef.
     const pendingTextRef = useRef('');
+    const flushedLenRef = useRef(0);
+    const fullTextRef = useRef('');
     const flushScheduledRef = useRef(false);
     const flushFrameRef = useRef(null);
 
@@ -100,6 +107,7 @@ export const useChatAPI = ({
             const chunk = pendingTextRef.current;
             pendingTextRef.current = '';
             if (!chunk) return;
+            flushedLenRef.current += chunk.length;
             setMessages((prev) => {
                 const updated = prev.map((m) => (m.id === botMessageId ? { ...m, text: m.text + chunk } : m));
                 if (onFlushed) onFlushed(updated);
@@ -123,12 +131,24 @@ export const useChatAPI = ({
         const chunk = pendingTextRef.current;
         pendingTextRef.current = '';
         if (!chunk) return;
+        flushedLenRef.current += chunk.length;
         setMessages((prev) => {
             const updated = prev.map((m) => (m.id === botMessageId ? { ...m, text: m.text + chunk } : m));
             if (onFlushed) onFlushed(updated);
             return updated;
         });
     }, [setMessages]);
+
+    const resetStreamBuffers = useCallback(() => {
+        pendingTextRef.current = '';
+        flushedLenRef.current = 0;
+        fullTextRef.current = '';
+        if (flushFrameRef.current) {
+            cancelAnimationFrame(flushFrameRef.current);
+            flushFrameRef.current = null;
+        }
+        flushScheduledRef.current = false;
+    }, []);
 
     const langMap = { eng: "en", fra: "fr", ara: "ar", hin: "hi", tgl: "tl", ukr: "uk", san: "sa", nya: "ny" };
     const supportedLanguages = Object.values(langMap);
@@ -253,7 +273,7 @@ export const useChatAPI = ({
         setLiveReasoning({ text: '', botId: botMessageId, contentHasStarted: false });
         setApiError(null);
         liveReasoningTextRef.current = '';
-        pendingTextRef.current = '';
+        resetStreamBuffers();
 
         const modelName = userMessage.model.replace(/^ollama:/, '');
         const ollamaBase = (ollama?.baseUrl || DEFAULT_OLLAMA_URL).replace(/\/+$/, '');
@@ -352,11 +372,13 @@ export const useChatAPI = ({
                                 contentHasStarted: prev.contentHasStarted || content.length > 0,
                             }));
 
-                            // Buffer the delta and flush once per frame.
-                            const prevContentLen = pendingTextRef.current.length;
-                            const delta = content.slice(prevContentLen);
+                            // `content` is cumulative. Compute the delta against
+                            // what has already been flushed, then buffer only
+                            // that delta so the flush appends it once.
+                            fullTextRef.current = content;
+                            const delta = fullTextRef.current.slice(flushedLenRef.current);
                             if (delta) {
-                                pendingTextRef.current = content;
+                                pendingTextRef.current += delta;
                                 scheduleFlush(botMessageId, (updated) => { finalMessages = updated; });
                             }
                         }
@@ -433,7 +455,7 @@ export const useChatAPI = ({
         setLiveReasoning({ text: '', botId: botMessageId, contentHasStarted: false });
         setApiError(null);
         liveReasoningTextRef.current = '';
-        pendingTextRef.current = '';
+        resetStreamBuffers();
 
         const abortController = new AbortController();
         streamAbortControllerRef.current = abortController;
@@ -503,10 +525,12 @@ export const useChatAPI = ({
                 const piece = String(chunk ?? '');
                 fullText = piece.startsWith(fullText) ? piece : fullText + piece;
 
-                // Buffer the delta and flush once per frame.
-                const prevLen = pendingTextRef.current.length;
-                if (fullText.length > prevLen) {
-                    pendingTextRef.current = fullText;
+                // `fullText` is cumulative. Compute the delta against what has
+                // already been flushed, then buffer only that delta.
+                fullTextRef.current = fullText;
+                const delta = fullTextRef.current.slice(flushedLenRef.current);
+                if (delta) {
+                    pendingTextRef.current += delta;
                     scheduleFlush(botMessageId, (updated) => { finalMessages = updated; });
                 }
             }
@@ -571,7 +595,7 @@ export const useChatAPI = ({
         setLiveReasoning({ text: '', botId: botMessageId, contentHasStarted: false });
         setApiError(null);
         liveReasoningTextRef.current = '';
-        pendingTextRef.current = '';
+        resetStreamBuffers();
 
         let localCost = 0;
         let localTokenUsage = null;
@@ -677,7 +701,8 @@ export const useChatAPI = ({
                             }
 
                             if (data.delta_content) {
-                                // Buffer the delta and flush once per frame.
+                                // Hosted model sends true deltas, so append
+                                // directly to the pending buffer.
                                 pendingTextRef.current += data.delta_content;
                                 scheduleFlush(botMessageId, (updated) => { finalMessages = updated; });
                             }
