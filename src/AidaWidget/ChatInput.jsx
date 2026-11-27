@@ -1521,17 +1521,18 @@ const ChatInput = ({
         />
     );
 
-    // Stable identity: the render closures are recreated each render, but the
-    // array identity only changes when the feature set changes. This is what
-    // stops the overflow layout effect from running on every keystroke.
     const featureKey = `${features.webSearch}-${features.modelSelection}`;
-    const toolbarItems = useMemo(() => [
+
+    // Plain array, rebuilt each render. The overflow layout effect below
+    // depends on stable keys (toolbarResizeTick, overflowKeys, modelMaxChars,
+    // featureKey) rather than on this array's identity, so rebuilding it is
+    // cheap and does not trigger re-measurement on every keystroke.
+    const toolbarItems = [
         ...(features.webSearch ? [{ key: 'websearch', label: 'Web Search', render: renderWebSearchButton }] : []),
         ...(features.modelSelection ? [{ key: 'model', label: 'Model', render: renderModelControl }] : []),
         { key: 'reasoning', label: 'Reasoning Effort', render: renderReasoningControl },
         { key: 'context', label: 'Context Limit', render: renderContextControl },
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    ], [featureKey, isWebSearchEnabled, isLocalModelSelected, reasoningEfforts, reasoningEffort, defaultReasoningEffort, isReasoningDefault, contextLimit, selectedModel, selectedModelLabel, isModelMenuOpen, modelMaxChars, overflowKeys, currentVisuals, chromeStatus, ollamaStatus, modelSearchQuery, focusedModelIndex, costExtent, modelMinCost, modelMaxCost, recordings, isRecording, autoSendCountdown, autoRecordCountdown, elapsedTime, isNearingTimeLimit, isTranscribing, isLoading, attachmentCount, isOverflowOpen, disabledChromeModels, handleModelListScroll, sortMode, currentSortMode, cycleSortMode]);
+    ];
 
     const visibleItems = toolbarItems.filter((item) => !overflowKeys.includes(item.key));
     const overflowMenuItems = toolbarItems
@@ -1542,9 +1543,11 @@ const ChatInput = ({
             return 0;
         });
 
-    // The overflow layout effect now depends on a stable tick instead of the
+    // The overflow layout effect depends on a stable tick instead of the
     // toolbarItems array. It only re-runs when the toolbar actually resizes
     // or when the overflow state itself changes, not on every keystroke.
+    // toolbarItems is read from the current render closure; only its stable
+    // keys are used, so the closure is safe here.
     useLayoutEffect(() => {
         const container = leftToolbarRef.current;
         if (!container || container.clientWidth <= 0) return;
@@ -1673,9 +1676,8 @@ const ChatInput = ({
             setOverflowKeys(nextOverflowKeys);
             setModelMaxChars(nextModelMaxChars);
         }
-        // toolbarItems is read via a ref-like closure; the tick is what
-        // triggers re-measurement. eslint is disabled because listing every
-        // dependency of the render closures would defeat the purpose.
+        // toolbarItems is read from the current render closure; only its
+        // stable keys are used. The tick is what triggers re-measurement.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [toolbarResizeTick, overflowKeys, modelMaxChars, featureKey]);
 
